@@ -1,0 +1,32 @@
+[project]
+name = "viewroyal"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "curl-cffi>=0.14.0",
+    "fastembed>=0.7.3",
+    "google-genai>=1.59.0",
+    "marker-pdf>=1.6.1",
+    "openai>=2.15.0",
+    "pandas>=2.3.3",
+    "psycopg2-binary>=2.9.11",
+    "pydub>=0.25.1",
+    "pymupdf>=1.26.7",
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "senko",
+    "supabase>=2.27.2",
+    "surya-ocr>=0.13.1",
+    "tqdm>=4.67.1",
+    "yt-dlp>=2025.12.8",
+]
+
+[tool.uv.sources]
+senko = { git = "https://github.com/narcotic-sh/senko" }
+# Note: Local transcription/diarization uses scribe via uvx (not a Python dependency)
+# Run: uvx --from git+https://github.com/trailofbits/scribe --python 3.13 scribe

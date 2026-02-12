@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+build/
+dist/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Cloudflare
+.wrangler/
+
+# React Router
+.react-router/
+
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info
+.venv/
+wheels/
+
+# Pipeline working directories
+viewroyal_archive/
+batch_workspace/
+batch_embeddings_workspace/
+models/
+reports/
+logs/
+embeddings_*.csv
+
+# uv
+uv.lock

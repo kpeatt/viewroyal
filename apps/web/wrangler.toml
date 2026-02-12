@@ -1,0 +1,12 @@
+name = "viewroyal-intelligence"
+compatibility_date = "2026-02-12"
+compatibility_flags = ["nodejs_compat"]
+main = "./workers/app.ts"
+
+routes = [
+  { pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" }
+]
+
+[vars]
+VIMEO_PROXY_URL = "https://vimeo-proxy.kpeatt.workers.dev"
+VIMEO_PROXY_FALLBACK_URL = "https://vimeo-proxy.onrender.com"

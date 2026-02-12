@@ -1,0 +1,10 @@
+name = "vimeo-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-02-12"
+compatibility_flags = ["nodejs_compat"]
+
+[browser]
+binding = "BROWSER"
+
+[vars]
+ALLOWED_ORIGINS = "https://viewroyal.ai,http://localhost:5173,http://localhost:5199"

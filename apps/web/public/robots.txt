@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /speaker-alias
+Disallow: /voice-fingerprints
+
+Sitemap: https://viewroyal.ai/sitemap.xml
