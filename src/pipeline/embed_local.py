@@ -1,5 +1,5 @@
 """
-Local embedding generation using fastembed (nomic-embed-text-v1.5).
+Local embedding generation using fastembed (nomic-ai/nomic-embed-text-v1.5-Q).
 Generates 768-dim embeddings and writes them directly to Supabase via psycopg2 COPY.
 
 Usage:
@@ -159,9 +159,9 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
 
     print(f"  {total} rows to process" + (f" (min {min_words} words)" if min_words else ""))
 
-    # Initialize model (downloads on first run, ~275MB)
-    print("  Loading nomic-embed-text-v1.5...")
-    model = TextEmbedding("nomic-embed-text-v1.5", max_length=512)
+    # Initialize model (downloads on first run)
+    print("  Loading nomic-ai/nomic-embed-text-v1.5-Q...")
+    model = TextEmbedding("nomic-ai/nomic-embed-text-v1.5-Q", max_length=512)
     print("  Model ready.")
 
     # Fetch rows
