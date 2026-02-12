@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { generateQueryEmbedding } from "../lib/embeddings.server";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -10,7 +10,7 @@ const SUPABASE_KEY =
 
 // Server-side Supabase client with service role key — lazily initialized
 // to avoid calling setInterval in global scope (breaks Cloudflare Workers)
-let _supabase: ReturnType<typeof createClient> | null = null;
+let _supabase: SupabaseClient | null = null;
 function getSupabase() {
   if (!_supabase) {
     _supabase = createClient(SUPABASE_URL!, SUPABASE_KEY!);

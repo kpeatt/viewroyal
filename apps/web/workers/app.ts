@@ -1,4 +1,9 @@
+/// <reference types="@cloudflare/workers-types" />
 import { createRequestHandler } from "react-router";
+
+interface Env {
+  [key: string]: unknown;
+}
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -15,7 +20,7 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     return requestHandler(request, {
       cloudflare: { env, ctx },
     });

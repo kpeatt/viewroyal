@@ -114,7 +114,7 @@ export function useVideoPlayer({
         }
       } else {
         // Regular video file
-        video.src = directVideoUrl;
+        video.src = directVideoUrl!;
       }
     }
 

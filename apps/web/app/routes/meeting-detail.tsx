@@ -229,7 +229,7 @@ export default function MeetingDetail({ loaderData }: any) {
     });
     fetch(`/api/vimeo-url?${params}`)
       .then((res) => res.json())
-      .then((data) => setVimeoData(data))
+      .then((data: any) => setVimeoData(data))
       .catch(() => setVimeoData(null));
   }, [rawMeeting.video_url, rawMeeting.id]);
 

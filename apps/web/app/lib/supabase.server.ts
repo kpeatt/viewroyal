@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createServerClient, parseCookieHeader, serializeCookieHeader } from '@supabase/ssr';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -10,7 +10,7 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // 1. Admin Client (Bypasses RLS) - LAZILY INITIALIZED
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
+let _supabaseAdmin: SupabaseClient | null = null;
 export function getSupabaseAdminClient() {
   if (!_supabaseAdmin) {
     _supabaseAdmin = createClient(supabaseUrl || "", supabaseKey || "");

@@ -1,4 +1,5 @@
-import { createBrowserClient, type SupabaseClient } from "@supabase/ssr";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // This file is intended for the browser.
 // The server build fails if `createBrowserClient` is called in the global scope

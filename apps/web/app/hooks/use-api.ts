@@ -8,6 +8,7 @@ import * as searchService from "../services/search";
 import * as electionService from "../services/elections";
 import * as siteService from "../services/site";
 import * as analyticsService from "../services/analytics";
+import supabase from "../lib/supabase";
 
 /**
  * A generic hook for fetching data from an API service function.
@@ -50,54 +51,61 @@ export function useApi() {
       list: meetingService.getMeetings,
       get: meetingService.getMeetingById,
       useList: (options?: meetingService.GetMeetingsOptions) =>
-        useQuery(meetingService.getMeetings, options),
-      useGet: (id: string) => useQuery(meetingService.getMeetingById, id),
+        useQuery(meetingService.getMeetings, supabase, options),
+      useGet: (id: string) =>
+        useQuery(meetingService.getMeetingById, supabase, id),
     },
     people: {
       list: peopleService.getPeopleWithStats,
       get: peopleService.getPersonProfile,
-      useList: () => useQuery(peopleService.getPeopleWithStats),
-      useGet: (id: string) => useQuery(peopleService.getPersonProfile, id),
+      useList: () => useQuery(peopleService.getPeopleWithStats, supabase),
+      useGet: (id: string) =>
+        useQuery(peopleService.getPersonProfile, supabase, id),
     },
     organizations: {
       list: orgService.getOrganizations,
       get: orgService.getOrganizationById,
-      useList: () => useQuery(orgService.getOrganizations),
+      useList: () => useQuery(orgService.getOrganizations, supabase),
     },
     matters: {
       list: matterService.getMatters,
       get: matterService.getMatterById,
       getHotTopics: matterService.getHotTopics,
-      useList: () => useQuery(matterService.getMatters),
-      useGet: (id: string) => useQuery(matterService.getMatterById, id),
-      useHotTopics: () => useQuery(matterService.getHotTopics),
+      useList: () => useQuery(matterService.getMatters, supabase),
+      useGet: (id: string) =>
+        useQuery(matterService.getMatterById, supabase, id),
+      useHotTopics: () => useQuery(matterService.getHotTopics, supabase),
     },
 
     search: {
       global: searchService.globalSearch,
-      useGlobal: (q: string) => useQuery(searchService.globalSearch, q),
+      useGlobal: (q: string) =>
+        useQuery(searchService.globalSearch, supabase, q),
     },
     elections: {
       list: electionService.getElections,
       get: electionService.getElectionById,
-      useList: () => useQuery(electionService.getElections),
-      useGet: (id: string) => useQuery(electionService.getElectionById, id),
+      useList: () => useQuery(electionService.getElections, supabase),
+      useGet: (id: string) =>
+        useQuery(electionService.getElectionById, supabase, id),
     },
     site: {
       getHomeData: siteService.getHomeData,
-      useHomeData: () => useQuery(siteService.getHomeData),
+      useHomeData: () => useQuery(siteService.getHomeData, supabase),
     },
     analytics: {
       getVotingAlignment: analyticsService.getVotingAlignment,
-      useVotingAlignment: () => useQuery(analyticsService.getVotingAlignment),
+      useVotingAlignment: () =>
+        useQuery(analyticsService.getVotingAlignment, supabase),
     },
     fiscal: {
       get: matterService.getFiscalData,
-      useGet: () => useQuery(matterService.getFiscalData),
+      useGet: () => useQuery(matterService.getFiscalData, supabase),
     },
     decisions: {
       getDivided: meetingService.getDividedDecisions,
-      useDivided: () => useQuery(meetingService.getDividedDecisions),
+      useDivided: () =>
+        useQuery(meetingService.getDividedDecisions, supabase),
     },
   };
 }

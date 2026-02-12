@@ -81,7 +81,7 @@ export async function action({ request }: Route.ActionArgs) {
     });
   }
 
-  const { question, context } = await request.json();
+  const { question, context } = (await request.json()) as { question?: string; context?: string };
   if (!question) {
     return new Response("Question is required", { status: 400 });
   }

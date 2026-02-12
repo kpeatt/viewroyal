@@ -3,15 +3,41 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { Link } from "react-router";
-import { Mail, ArrowLeft } from "lucide-react";
+import {
+  Mail,
+  ArrowLeft,
+  Calendar,
+  Gavel,
+  Activity,
+  Timer,
+  MessageSquare,
+  Github,
+} from "lucide-react";
+import { createSupabaseServerClient } from "../lib/supabase.server";
+import { getAboutStats } from "../services/site";
 import aboutContent from "../content/about.md?raw";
 
-export async function loader() {
-  return { content: aboutContent };
+export async function loader({ request }: { request: Request }) {
+  let stats = null;
+  try {
+    const { supabase } = createSupabaseServerClient(request);
+    stats = await getAboutStats(supabase);
+  } catch (error) {
+    console.error("Error loading about stats:", error);
+  }
+  return { content: aboutContent, stats };
 }
 
+const statItems = [
+  { key: "meetings", label: "Meetings Analyzed", icon: Calendar },
+  { key: "motions", label: "Motions Tracked", icon: Gavel },
+  { key: "matters", label: "Matters Followed", icon: Activity },
+  { key: "hours", label: "Video Hours Transcribed", icon: Timer },
+  { key: "segments", label: "Transcript Segments", icon: MessageSquare },
+] as const;
+
 export default function About() {
-  const { content } = useLoaderData<typeof loader>();
+  const { content, stats } = useLoaderData<typeof loader>();
 
   return (
     <div className="min-h-screen bg-zinc-50 pb-20">
@@ -28,6 +54,26 @@ export default function About() {
       </div>
 
       <div className="container mx-auto max-w-4xl px-4 -mt-10">
+        {/* Stats Grid */}
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            {statItems.map(({ key, label, icon: Icon }) => (
+              <div
+                key={key}
+                className="bg-white rounded-2xl p-4 shadow-lg border border-zinc-200 text-center"
+              >
+                <Icon className="h-5 w-5 text-blue-500 mx-auto mb-2" />
+                <div className="text-2xl font-black text-zinc-900">
+                  {stats[key].toLocaleString()}
+                </div>
+                <div className="text-xs font-medium text-zinc-500 mt-1">
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="bg-white rounded-3xl p-8 md:p-12 shadow-xl border border-zinc-200 mb-12">
           <article
             className="prose prose-zinc lg:prose-lg max-w-none

@@ -25,7 +25,6 @@ export default [
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
   route("speaker-alias", "routes/speaker-alias.tsx"),
-  route("voice-fingerprints", "routes/voice-fingerprints.tsx"),
   route("admin/people", "routes/admin-people.tsx"),
 
   // API routes

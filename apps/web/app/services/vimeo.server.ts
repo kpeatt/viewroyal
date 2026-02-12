@@ -85,7 +85,7 @@ export async function getVimeoThumbnail(
       `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(videoUrl)}`,
     );
     if (!response.ok) return null;
-    const data = await response.json();
+    const data: any = await response.json();
     const thumbnailUrl = data.thumbnail_url || null;
 
     if (thumbnailUrl) {
@@ -362,7 +362,7 @@ export async function getVimeoVideoData(
         return null;
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
       let directUrl = null;
 
       console.log(
@@ -525,7 +525,7 @@ async function getDirectUrlViaPlayerConfig(
       return null;
     }
 
-    const config = await response.json();
+    const config: any = await response.json();
 
     // Look for HLS manifest URL in the CDN config
     const hlsCdns = config?.request?.files?.hls?.cdns;
@@ -606,7 +606,7 @@ async function getDirectUrlViaProxy(
       return null;
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
 
     if (data.error) {
       console.warn(`[Vimeo] Proxy error: ${data.error}`);

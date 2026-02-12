@@ -40,6 +40,42 @@ export async function getPublicNotices() {
 }
 
 
+export async function getAboutStats(supabase: SupabaseClient) {
+  const [meetingsRes, motionsRes, mattersRes, segmentsRes, hoursRes] =
+    await Promise.all([
+      supabase
+        .from("meetings")
+        .select("*", { count: "exact", head: true }),
+      supabase
+        .from("motions")
+        .select("*", { count: "exact", head: true }),
+      supabase
+        .from("matters")
+        .select("*", { count: "exact", head: true }),
+      supabase
+        .from("transcript_segments")
+        .select("*", { count: "exact", head: true }),
+      supabase
+        .from("meetings")
+        .select("video_duration_seconds")
+        .not("video_duration_seconds", "is", null),
+    ]);
+
+  const totalSeconds = (hoursRes.data || []).reduce(
+    (sum: number, m: { video_duration_seconds: number }) =>
+      sum + (m.video_duration_seconds || 0),
+    0,
+  );
+
+  return {
+    meetings: meetingsRes.count || 0,
+    motions: motionsRes.count || 0,
+    matters: mattersRes.count || 0,
+    segments: segmentsRes.count || 0,
+    hours: Math.round(totalSeconds / 3600),
+  };
+}
+
 export async function getHomeData(supabase: SupabaseClient) {
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Vancouver",

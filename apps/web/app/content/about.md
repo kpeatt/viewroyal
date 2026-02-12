@@ -39,6 +39,6 @@ Just me. If you want to support the project, feel free to email me with some ide
 
 ---
 
-### Interested in the code or want to help?
-ViewRoyal.ai is open to collaboration and feedback.
-Contact: [kyle@viewroyal.ai](mailto:kyle@viewroyal.ai)
+### Open Source
+
+ViewRoyal.ai is open source and available on [GitHub](https://github.com/kpeatt/viewroyal) under the MIT license. Contributions, feedback, and ideas are welcome — feel free to open an issue or submit a pull request.
