@@ -18,6 +18,10 @@ dist/
 .idea/
 .vscode/
 
+# Docker (not used)
+Dockerfile
+.dockerignore
+
 # Cloudflare
 .wrangler/
 
@@ -40,5 +44,19 @@ reports/
 logs/
 embeddings_*.csv
 
+# MCP config (local paths/keys)
+.mcp.json
+
 # uv
 uv.lock
+requirements.txt
+scripts
+sql/migrations
+src/analysis
+src/legacy
+src/maintenance/archive
+src/maintenance/audit
+src/maintenance/db
+src/maintenance/manual
+GEMINI.md
+TASKLIST.md
