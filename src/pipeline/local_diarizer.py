@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -127,6 +128,31 @@ class LocalDiarizer:
 
         return best_match
 
+    @staticmethod
+    def _get_audio_duration(audio_path: str) -> Optional[float]:
+        """Get audio duration in seconds via ffprobe."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "csv=p=0",
+                    audio_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return float(result.stdout.strip())
+        except Exception:
+            pass
+        return None
+
     def _prepare_audio(
         self, audio_path: str, limit_duration: Optional[int] = None
     ) -> Optional[str]:
@@ -189,11 +215,13 @@ class LocalDiarizer:
 
         Returns list of segments with start, end, text.
         """
-        print("    [Transcription] Running parakeet-mlx...")
+        duration = self._get_audio_duration(wav_path)
+        duration_str = f" ({duration / 60:.0f}min audio)" if duration else ""
+        print(f"    [Transcription] Running parakeet-mlx...{duration_str}")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             try:
-                result = subprocess.run(
+                proc = subprocess.Popen(
                     [
                         "uvx",
                         "parakeet-mlx>=0.4,<1",
@@ -203,13 +231,53 @@ class LocalDiarizer:
                         "--output-dir",
                         tmp_dir,
                     ],
-                    capture_output=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
                     text=True,
-                    timeout=3600,
                 )
 
-                if result.returncode != 0:
-                    print(f"    [!] Parakeet failed: {result.stderr}")
+                start_time = time.time()
+                # Estimate ~0.1x realtime on Apple Silicon (10min audio ≈ 1min)
+                estimated_seconds = (duration * 0.1) if duration else None
+
+                # Stream stderr and show elapsed progress
+                last_update = 0
+                while proc.poll() is None:
+                    time.sleep(0.5)
+                    elapsed = time.time() - start_time
+                    # Update progress every 2 seconds
+                    if elapsed - last_update >= 2:
+                        last_update = elapsed
+                        if estimated_seconds:
+                            pct = min(elapsed / estimated_seconds, 0.99)
+                            bar_len = 30
+                            filled = int(bar_len * pct)
+                            bar = "█" * filled + "░" * (bar_len - filled)
+                            eta = max(0, estimated_seconds - elapsed)
+                            print(
+                                f"\r    [Transcription] {bar} {pct:5.1%}  "
+                                f"elapsed {elapsed:.0f}s / ~{estimated_seconds:.0f}s  "
+                                f"ETA ~{eta:.0f}s",
+                                end="",
+                                flush=True,
+                            )
+                        else:
+                            print(
+                                f"\r    [Transcription] elapsed {elapsed:.0f}s...",
+                                end="",
+                                flush=True,
+                            )
+
+                elapsed = time.time() - start_time
+                print(
+                    f"\r    [Transcription] Done in {elapsed:.1f}s"
+                    + " " * 40
+                )
+
+                stdout, stderr = proc.communicate()
+
+                if proc.returncode != 0:
+                    print(f"    [!] Parakeet failed: {stderr}")
                     return []
 
                 # Find output JSON
@@ -235,11 +303,43 @@ class LocalDiarizer:
                 return segments
 
             except subprocess.TimeoutExpired:
+                proc.kill()
                 print("    [!] Transcription timed out")
                 return []
             except Exception as e:
                 print(f"    [!] Transcription error: {e}")
                 return []
+
+    def _load_raw_transcript(self, audio_path: str) -> Optional[list]:
+        """Load cached raw transcript (parakeet STT output) if it exists."""
+        raw_path = os.path.splitext(audio_path)[0] + "_raw_transcript.json"
+        if not os.path.exists(raw_path):
+            return None
+
+        try:
+            with open(raw_path, "r") as f:
+                data = json.load(f)
+            if isinstance(data, list) and data:
+                print(
+                    f"    [Cache] Loaded raw transcript ({len(data)} segments) from {os.path.basename(raw_path)}"
+                )
+                return data
+        except Exception as e:
+            print(f"    [!] Failed to load raw transcript: {e}")
+
+        return None
+
+    def _save_raw_transcript(self, audio_path: str, segments: list) -> None:
+        """Save raw transcript (parakeet STT output) separately for reuse."""
+        raw_path = os.path.splitext(audio_path)[0] + "_raw_transcript.json"
+        try:
+            with open(raw_path, "w") as f:
+                json.dump(segments, f, indent=2)
+            print(
+                f"    [Cache] Saved raw transcript to {os.path.basename(raw_path)}"
+            )
+        except Exception as e:
+            print(f"    [!] Failed to save raw transcript: {e}")
 
     def diarize_audio(
         self,
@@ -248,6 +348,7 @@ class LocalDiarizer:
         limit_duration: Optional[int] = None,
         existing_transcript: Optional[list] = None,
         force_regenerate: bool = False,
+        rediarize: bool = False,
     ) -> Optional[str]:
         """
         Transcribe and diarize audio, with voice fingerprint matching.
@@ -257,7 +358,8 @@ class LocalDiarizer:
             context: Ignored, kept for API compatibility
             limit_duration: Optional duration limit for testing
             existing_transcript: Optional list of segments to reuse (skips STT)
-            force_regenerate: If True, ignore cached results and regenerate
+            force_regenerate: If True, regenerate both transcription and diarization
+            rediarize: If True, re-run only diarization using cached raw transcript
 
         Returns:
             JSON string with speaker-attributed transcript
@@ -271,6 +373,7 @@ class LocalDiarizer:
             os.path.exists(output_json_path)
             and not existing_transcript
             and not force_regenerate
+            and not rediarize
         ):
             print(
                 f"    [Cache] Found existing transcript at {os.path.basename(output_json_path)}"
@@ -291,6 +394,14 @@ class LocalDiarizer:
                         return json.dumps(cached, indent=2)
             except Exception as e:
                 print(f"    [!] Cache read failed: {e}, reprocessing...")
+
+        # For rediarize mode, load cached raw transcript automatically
+        if rediarize and not existing_transcript:
+            existing_transcript = self._load_raw_transcript(audio_path)
+            if not existing_transcript:
+                print(
+                    "    [!] No cached raw transcript found for rediarize — will run full pipeline"
+                )
 
         # Prepare audio
         wav_path = self._prepare_audio(audio_path, limit_duration)
@@ -339,7 +450,7 @@ class LocalDiarizer:
                             f"    [Match] {speaker_id} -> {match['person_name']} ({match['similarity']:.2%})"
                         )
 
-            # Run transcription (or use existing)
+            # Run transcription (or use existing/cached)
             if existing_transcript:
                 print("    [Transcription] Using existing segments (skipping STT)...")
                 transcription = []
@@ -360,6 +471,9 @@ class LocalDiarizer:
                         )
             else:
                 transcription = self._run_transcription(wav_path)
+                # Save raw transcript separately for future re-diarization
+                if transcription:
+                    self._save_raw_transcript(audio_path, transcription)
 
             if not transcription:
                 print("    [!] Transcription failed or empty")
@@ -382,7 +496,7 @@ class LocalDiarizer:
                         ),  # Max 15 sec
                     }
 
-            # Save result
+            # Save combined result
             result_data = {
                 "segments": final_transcript,
                 "speaker_centroids": {

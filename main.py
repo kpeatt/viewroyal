@@ -45,10 +45,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--local",
+        "--rediarize",
         action="store_true",
-        default=True,
-        help="Use local diarization (default).",
+        help="Re-run diarization only, reusing cached raw transcripts (skips STT).",
     )
 
     args = parser.parse_args()
@@ -56,14 +55,16 @@ if __name__ == "__main__":
     # Use centralized ARCHIVE_ROOT as default
     output_dir = args.input_dir if args.input_dir else ARCHIVE_ROOT
 
-    # Initialize Archiver with local preference
-    app = Archiver(use_local=args.local)
+    app = Archiver()
 
-    if args.process_only:
+    if args.process_only or args.rediarize:
         if app.ai_enabled:
-            print(f"Processing existing audio files in {output_dir}...")
+            mode = "Re-diarizing" if args.rediarize else "Processing"
+            print(f"{mode} existing audio files in {output_dir}...")
             # pylint: disable=protected-access
-            app._process_audio_files(limit=args.limit, output_dir=output_dir)
+            app._process_audio_files(
+                limit=args.limit, output_dir=output_dir, rediarize=args.rediarize
+            )
         else:
             print("[Error] AI processing not enabled.")
     else:
@@ -73,4 +74,5 @@ if __name__ == "__main__":
             limit=args.limit,
             download_audio=args.download_audio,
             skip_diarization=args.skip_diarization,
+            rediarize=args.rediarize,
         )

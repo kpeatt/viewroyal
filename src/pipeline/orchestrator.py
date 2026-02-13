@@ -6,47 +6,37 @@ from supabase import create_client
 from src.core import config, parser, utils
 from src.core.paths import ARCHIVE_ROOT
 
-from .diarizer import GeminiDiarizer
 from .local_diarizer import LocalDiarizer
 from .scraper import CivicWebScraper
 from .vimeo import VimeoClient
 
 
 class Archiver:
-    def __init__(self, use_local=False):
+    def __init__(self):
         self.scraper = CivicWebScraper()
         self.vimeo_client = VimeoClient()
-        self.use_local = use_local
         self.ai_enabled = False
         self.diarizer = None
 
-        # 1. Setup Diarizer
-        if self.use_local:
-            try:
-                # Initialize supabase client for fingerprint matching
-                supabase_client = None
-                if config.SUPABASE_URL and config.SUPABASE_KEY:
-                    try:
-                        supabase_client = create_client(
-                            config.SUPABASE_URL, config.SUPABASE_KEY
-                        )
-                    except Exception as e:
-                        print(
-                            f"[!] Failed to initialize Supabase for fingerprints: {e}"
-                        )
+        # Setup local diarizer (senko + parakeet) with fingerprint matching
+        try:
+            supabase_client = None
+            if config.SUPABASE_URL and config.SUPABASE_KEY:
+                try:
+                    supabase_client = create_client(
+                        config.SUPABASE_URL, config.SUPABASE_KEY
+                    )
+                except Exception as e:
+                    print(
+                        f"[!] Failed to initialize Supabase for fingerprints: {e}"
+                    )
 
-                self.diarizer = LocalDiarizer(
-                    supabase_client=supabase_client, use_parakeet=config.USE_PARAKEET
-                )
-                self.ai_enabled = True
-            except Exception as e:
-                print(f"[!] Failed to initialize LocalDiarizer: {e}")
-        else:
-            try:
-                self.diarizer = GeminiDiarizer()
-                self.ai_enabled = True
-            except ValueError:
-                print("[Warning] No GEMINI_API_KEY found. Diarization disabled.")
+            self.diarizer = LocalDiarizer(
+                supabase_client=supabase_client, use_parakeet=config.USE_PARAKEET
+            )
+            self.ai_enabled = True
+        except Exception as e:
+            print(f"[!] Failed to initialize LocalDiarizer: {e}")
 
     def run(
         self,
@@ -55,12 +45,13 @@ class Archiver:
         limit=None,
         download_audio=False,
         skip_diarization=False,
+        rediarize=False,
     ):
         print("=== View Royal Archiver ===")
         print(f"Archive Root: {ARCHIVE_ROOT}")
 
         # Phase 1: Documents
-        if not skip_docs:
+        if not skip_docs and not rediarize:
             print("\n--- Phase 1: Documents ---")
             try:
                 self.scraper.scrape_recursive()
@@ -70,17 +61,19 @@ class Archiver:
             print("\n--- Phase 1: Documents (SKIPPED) ---")
 
         # Phase 2: Vimeo Download
-        video_map = self.vimeo_client.get_video_map(limit=limit)
-        if video_map:
-            print("\n--- Phase 2: Matching & Downloading Vimeo Content ---")
-            self._download_vimeo_content(
-                video_map, include_video, download_audio, limit, ARCHIVE_ROOT
-            )
+        if not rediarize:
+            video_map = self.vimeo_client.get_video_map(limit=limit)
+            if video_map:
+                print("\n--- Phase 2: Matching & Downloading Vimeo Content ---")
+                self._download_vimeo_content(
+                    video_map, include_video, download_audio, limit, ARCHIVE_ROOT
+                )
 
         # Phase 3: Processing
         if self.ai_enabled and not skip_diarization:
-            print("\n--- Phase 3: Processing Audio (Diarization) ---")
-            self._process_audio_files(limit, ARCHIVE_ROOT)
+            label = "Re-diarizing" if rediarize else "Diarization"
+            print(f"\n--- Phase 3: Processing Audio ({label}) ---")
+            self._process_audio_files(limit, ARCHIVE_ROOT, rediarize=rediarize)
 
         print("\n[SUCCESS] Archiving Complete.")
 
@@ -187,82 +180,103 @@ class Archiver:
 
                 matches += 1
 
-    def _process_audio_files(self, limit=None, output_dir=ARCHIVE_ROOT):
-        processed_count = 0
+    def _collect_audio_files(self, output_dir=ARCHIVE_ROOT, rediarize=False):
+        """Collect audio files that need processing."""
+        audio_files = []
         for root, dirs, files in os.walk(output_dir):
             for file in files:
                 if file.lower().endswith((".mp3", ".m4a", ".wav")):
                     audio_path = os.path.join(root, file)
-
-                    if limit and processed_count >= limit:
-                        return
-
-                    # Detect if we are in strict archive structure
-                    parent_dir = os.path.basename(root)
-                    grandparent_dir = os.path.basename(os.path.dirname(root))
-                    date_key = utils.extract_date_from_string(grandparent_dir)
-
-                    is_archive = date_key is not None and parent_dir == "Audio"
-
-                    # Always use the audio filename for the transcript JSON
                     json_path = os.path.splitext(audio_path)[0] + ".json"
-
-                    if os.path.exists(json_path):
+                    if os.path.exists(json_path) and not rediarize:
                         continue
+                    audio_files.append(audio_path)
+        return audio_files
 
-                    print(f"[Diarization] Processing {os.path.basename(audio_path)}...")
+    def _process_audio_files(self, limit=None, output_dir=ARCHIVE_ROOT, rediarize=False):
+        audio_files = self._collect_audio_files(output_dir, rediarize)
 
-                    # Context extraction
-                    context_str = ""
-                    if is_archive:
-                        try:
-                            meeting_root = os.path.dirname(root)
+        if limit:
+            audio_files = audio_files[:limit]
 
-                            # USE parser instead of extractor
-                            agenda_text = ""
-                            cached_agenda = os.path.join(meeting_root, "agenda.md")
-                            if os.path.exists(cached_agenda):
-                                with open(cached_agenda, "r", encoding="utf-8") as f:
-                                    agenda_text = f.read()
-                            else:
-                                agenda_folder = os.path.join(meeting_root, "Agenda")
-                                pdf_files = glob.glob(
-                                    os.path.join(agenda_folder, "*.pdf")
-                                )
-                                if pdf_files:
-                                    agenda_text = parser.get_pdf_text(pdf_files[0])
+        if not audio_files:
+            print("  No audio files to process.")
+            return
 
-                            minutes_text = ""
-                            cached_minutes = os.path.join(meeting_root, "minutes.md")
-                            if os.path.exists(cached_minutes):
-                                with open(cached_minutes, "r", encoding="utf-8") as f:
-                                    minutes_text = f.read()
-                            else:
-                                minutes_folder = os.path.join(meeting_root, "Minutes")
-                                pdf_files = glob.glob(
-                                    os.path.join(minutes_folder, "*.pdf")
-                                )
-                                if pdf_files:
-                                    minutes_text = parser.get_pdf_text(pdf_files[0])
+        mode = "Re-diarize" if rediarize else "Process"
+        print(f"  Found {len(audio_files)} audio file(s) to {mode.lower()}.\n")
 
-                            if agenda_text:
-                                context_str += agenda_text
-                            if minutes_text:
-                                context_str += "\n" + minutes_text
-                        except Exception as e:
-                            print(f"    [!] Failed to extract context: {e}")
+        for i, audio_path in enumerate(audio_files, 1):
+            root = os.path.dirname(audio_path)
 
-                    # If we are in "limit" mode (testing), limit audio processing to 5 minutes (300s)
-                    duration_limit = 300 if limit else None
+            # Detect if we are in strict archive structure
+            parent_dir = os.path.basename(root)
+            grandparent_dir = os.path.basename(os.path.dirname(root))
+            date_key = utils.extract_date_from_string(grandparent_dir)
 
-                    transcript_json = self.diarizer.diarize_audio(
-                        audio_path, context=context_str, limit_duration=duration_limit
-                    )
+            is_archive = date_key is not None and parent_dir == "Audio"
 
-                    if transcript_json:
-                        with open(json_path, "w", encoding="utf-8") as f:
-                            f.write(transcript_json)
-                        print(
-                            f"    [+] Saved transcript to {os.path.basename(json_path)}"
+            json_path = os.path.splitext(audio_path)[0] + ".json"
+
+            label = "Re-diarizing" if rediarize else "Processing"
+            print(f"[{i}/{len(audio_files)}] {label} {os.path.basename(audio_path)}...")
+
+            # Context extraction
+            context_str = ""
+            if is_archive:
+                try:
+                    meeting_root = os.path.dirname(root)
+
+                    agenda_text = ""
+                    cached_agenda = os.path.join(meeting_root, "agenda.md")
+                    if os.path.exists(cached_agenda):
+                        with open(cached_agenda, "r", encoding="utf-8") as f:
+                            agenda_text = f.read()
+                    else:
+                        agenda_folder = os.path.join(meeting_root, "Agenda")
+                        pdf_files = glob.glob(
+                            os.path.join(agenda_folder, "*.pdf")
                         )
-                        processed_count += 1
+                        if pdf_files:
+                            agenda_text = parser.get_pdf_text(pdf_files[0])
+
+                    minutes_text = ""
+                    cached_minutes = os.path.join(meeting_root, "minutes.md")
+                    if os.path.exists(cached_minutes):
+                        with open(cached_minutes, "r", encoding="utf-8") as f:
+                            minutes_text = f.read()
+                    else:
+                        minutes_folder = os.path.join(meeting_root, "Minutes")
+                        pdf_files = glob.glob(
+                            os.path.join(minutes_folder, "*.pdf")
+                        )
+                        if pdf_files:
+                            minutes_text = parser.get_pdf_text(pdf_files[0])
+
+                    if agenda_text:
+                        context_str += agenda_text
+                    if minutes_text:
+                        context_str += "\n" + minutes_text
+                except Exception as e:
+                    print(f"    [!] Failed to extract context: {e}")
+
+            # If we are in "limit" mode (testing), limit audio processing to 5 minutes (300s)
+            duration_limit = 300 if limit else None
+
+            transcript_json = self.diarizer.diarize_audio(
+                audio_path,
+                context=context_str,
+                limit_duration=duration_limit,
+                rediarize=rediarize,
+            )
+
+            if transcript_json:
+                # LocalDiarizer already saves the full result (segments +
+                # centroids + samples) to the JSON file. Only write here
+                # if the file wasn't created by the diarizer.
+                if not os.path.exists(json_path):
+                    with open(json_path, "w", encoding="utf-8") as f:
+                        f.write(transcript_json)
+                print(
+                    f"    [+] Saved transcript to {os.path.basename(json_path)}"
+                )
