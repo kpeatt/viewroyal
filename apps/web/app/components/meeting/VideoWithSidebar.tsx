@@ -24,7 +24,6 @@ import {
   Drawer,
   DrawerContent,
   DrawerTitle,
-  DrawerTrigger,
 } from "../ui/drawer";
 import type {
   AgendaItem,
@@ -87,8 +86,6 @@ export function VideoWithSidebar({
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const [activeSnapPoint, setActiveSnapPoint] = useState<string | number | null>(0.5);
-  const drawerContainerRef = useRef<HTMLDivElement>(null);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
   const mobileTranscriptRef = useRef<HTMLDivElement>(null);
   const isScrollingProgrammatically = useRef(false);
@@ -194,8 +191,8 @@ export function VideoWithSidebar({
   }
 
   return (
-    <div ref={drawerContainerRef} className="bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
-      <div className="flex flex-col lg:flex-row lg:aspect-video">
+    <div className="bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
+      <div className="flex flex-col lg:flex-row lg:aspect-video lg:max-h-[70vh]">
         {/* Video Player */}
         <div
           className={cn("relative", sidebarCollapsed ? "flex-1" : "lg:w-2/3")}
@@ -618,41 +615,41 @@ export function VideoWithSidebar({
       </div>
 
       {/* Mobile Sidebar Drawer */}
-      <Drawer open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen} snapPoints={[0.5, 0.95]} activeSnapPoint={activeSnapPoint} setActiveSnapPoint={setActiveSnapPoint}>
+      <Drawer open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
         <div className="lg:hidden flex justify-center gap-2 py-2 bg-zinc-900">
-          <DrawerTrigger asChild>
-            <button
-              onClick={() => setSidebarMode("agenda")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border transition-colors",
-                sidebarMode === "agenda"
-                  ? "bg-zinc-700 text-white border-zinc-600"
-                  : "bg-zinc-800 text-zinc-400 border-zinc-700",
-              )}
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Agenda
-            </button>
-          </DrawerTrigger>
-          <DrawerTrigger asChild>
-            <button
-              onClick={() => {
-                setSidebarMode("transcript");
-                setAutoScrollEnabled(true);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border transition-colors",
-                sidebarMode === "transcript"
-                  ? "bg-zinc-700 text-white border-zinc-600"
-                  : "bg-zinc-800 text-zinc-400 border-zinc-700",
-              )}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              Transcript
-            </button>
-          </DrawerTrigger>
+          <button
+            onClick={() => {
+              setSidebarMode("agenda");
+              setMobileDrawerOpen(true);
+            }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border transition-colors",
+              sidebarMode === "agenda"
+                ? "bg-zinc-700 text-white border-zinc-600"
+                : "bg-zinc-800 text-zinc-400 border-zinc-700",
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Agenda
+          </button>
+          <button
+            onClick={() => {
+              setSidebarMode("transcript");
+              setAutoScrollEnabled(true);
+              setMobileDrawerOpen(true);
+            }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border transition-colors",
+              sidebarMode === "transcript"
+                ? "bg-zinc-700 text-white border-zinc-600"
+                : "bg-zinc-800 text-zinc-400 border-zinc-700",
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Transcript
+          </button>
         </div>
-        <DrawerContent className="bg-zinc-800 border-zinc-700" container={drawerContainerRef.current}>
+        <DrawerContent className="bg-zinc-800 border-zinc-700">
           <DrawerTitle className="sr-only">
             {sidebarMode === "agenda" ? "Agenda" : "Transcript"}
           </DrawerTitle>
@@ -721,7 +718,6 @@ export function VideoWithSidebar({
                   } else {
                     videoPlayer.seekTo(time);
                   }
-                  setActiveSnapPoint(0.5);
                 }}
               />
             ) : (
@@ -735,7 +731,6 @@ export function VideoWithSidebar({
                   } else {
                     videoPlayer.seekTo(time);
                   }
-                  setActiveSnapPoint(0.5);
                 }}
                 resolveSpeakerName={resolveSpeakerName}
                 autoScrollEnabled={autoScrollEnabled}

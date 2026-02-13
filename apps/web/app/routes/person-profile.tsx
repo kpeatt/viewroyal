@@ -612,7 +612,7 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
             </div>
 
             <Tabs defaultValue="activity" className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-2 rounded-xl border border-zinc-200 shadow-sm sticky top-20 z-10 gap-2">
+              <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-2 rounded-xl border border-zinc-200 shadow-sm sticky top-20 z-10 gap-2 overflow-x-auto">
                 <TabsList className="bg-transparent border-none">
                   <TabsTrigger
                     value="activity"
