@@ -300,10 +300,10 @@ export default function Matters({ loaderData }: Route.ComponentProps) {
               <Link
                 key={matter.id}
                 to={`/matters/${matter.id}`}
-                className="group block bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all"
+                className="group block bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all overflow-hidden"
               >
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="space-y-2 flex-1">
+                  <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       {matter.identifier && (
                         <Badge className="bg-zinc-100 text-zinc-900 hover:bg-zinc-100 font-mono font-bold">
