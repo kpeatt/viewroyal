@@ -46,6 +46,8 @@ class Archiver:
         download_audio=False,
         skip_diarization=False,
         rediarize=False,
+        skip_ingest=False,
+        skip_embed=False,
     ):
         print("=== View Royal Archiver ===")
         print(f"Archive Root: {ARCHIVE_ROOT}")
@@ -70,10 +72,25 @@ class Archiver:
                 )
 
         # Phase 3: Processing
+        diarized_folders = set()
         if self.ai_enabled and not skip_diarization:
             label = "Re-diarizing" if rediarize else "Diarization"
             print(f"\n--- Phase 3: Processing Audio ({label}) ---")
-            self._process_audio_files(limit, ARCHIVE_ROOT, rediarize=rediarize)
+            diarized_folders = self._process_audio_files(limit, ARCHIVE_ROOT, rediarize=rediarize)
+
+        # Phase 4: Ingestion
+        if not skip_ingest:
+            print("\n--- Phase 4: Database Ingestion ---")
+            self._ingest_meetings(diarized_folders=diarized_folders)
+        else:
+            print("\n--- Phase 4: Database Ingestion (SKIPPED) ---")
+
+        # Phase 5: Embeddings
+        if not skip_embed:
+            print("\n--- Phase 5: Embedding Generation ---")
+            self._embed_new_content()
+        else:
+            print("\n--- Phase 5: Embedding Generation (SKIPPED) ---")
 
         print("\n[SUCCESS] Archiving Complete.")
 
@@ -199,9 +216,11 @@ class Archiver:
         if limit:
             audio_files = audio_files[:limit]
 
+        processed_folders = set()
+
         if not audio_files:
             print("  No audio files to process.")
-            return
+            return processed_folders
 
         mode = "Re-diarize" if rediarize else "Process"
         print(f"  Found {len(audio_files)} audio file(s) to {mode.lower()}.\n")
@@ -280,3 +299,97 @@ class Archiver:
                 print(
                     f"    [+] Saved transcript to {os.path.basename(json_path)}"
                 )
+                # Track the meeting root folder (grandparent of Audio/)
+                meeting_root = os.path.dirname(os.path.dirname(audio_path))
+                processed_folders.add(meeting_root)
+
+        return processed_folders
+
+    def _ingest_meetings(self, diarized_folders=None, target_folder=None, force_update=False, ai_provider="gemini"):
+        from src.pipeline.ingester import MeetingIngester
+        from src.maintenance.audit.check_occurred_meetings import find_meetings_needing_reingest
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, skipping ingestion.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+        ingester = MeetingIngester(config.SUPABASE_URL, supabase_key, config.GEMINI_API_KEY)
+        diarized_folders = diarized_folders or set()
+
+        # Single-folder targeted mode
+        if target_folder:
+            needs_refine = force_update
+            try:
+                ingester.process_meeting(
+                    target_folder,
+                    force_update=force_update,
+                    force_refine=needs_refine,
+                    ai_provider=ai_provider,
+                )
+            except Exception as e:
+                print(f"  [!] {target_folder}: {e}")
+            return
+
+        # Detect meetings with updated files (disk vs DB)
+        updated_meetings = find_meetings_needing_reingest(supabase)
+        updated_paths = {m["archive_path"] for m in updated_meetings}
+
+        if updated_meetings:
+            print(f"  Detected {len(updated_meetings)} meeting(s) with new documents:")
+            for m in updated_meetings:
+                reasons = ", ".join(m["reasons"])
+                print(f"    {m['meeting_date']} {m['meeting_type']}: {reasons}")
+
+        if diarized_folders:
+            print(f"  {len(diarized_folders)} meeting(s) freshly diarized.")
+
+        # Walk archive and process
+        for root, dirs, files in os.walk(ARCHIVE_ROOT):
+            if "Agenda" not in dirs and "Audio" not in dirs:
+                continue
+
+            rel_path = root
+
+            if force_update or root in diarized_folders or rel_path in updated_paths:
+                needs_refine = force_update or rel_path in updated_paths
+                try:
+                    ingester.process_meeting(
+                        root,
+                        force_update=True,
+                        force_refine=needs_refine,
+                        ai_provider=ai_provider,
+                    )
+                except Exception as e:
+                    print(f"  [!] {root}: {e}")
+            else:
+                try:
+                    ingester.process_meeting(root, ai_provider=ai_provider)
+                except Exception as e:
+                    print(f"  [!] {root}: {e}")
+
+    def _embed_new_content(self, force=False):
+        from src.pipeline.embed_local import embed_table, TABLE_CONFIG
+
+        for table in TABLE_CONFIG:
+            try:
+                embed_table(table, force=force)
+            except Exception as e:
+                print(f"  [!] Embedding failed for {table}: {e}")
+
+    def _resolve_target(self, target: str) -> str:
+        """Resolve a --target value to a folder path. Accepts DB ID or path."""
+        if target.isdigit():
+            supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+            supabase = create_client(config.SUPABASE_URL, supabase_key)
+            result = supabase.table("meetings").select("archive_path").eq("id", int(target)).single().execute()
+            if not result.data or not result.data.get("archive_path"):
+                raise ValueError(f"Meeting ID {target} not found or has no archive_path")
+            path = result.data["archive_path"]
+            print(f"  Resolved meeting #{target} → {path}")
+            return path
+
+        if not os.path.isdir(target):
+            raise ValueError(f"Not a directory: {target}")
+        return target

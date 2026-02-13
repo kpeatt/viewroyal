@@ -14,6 +14,10 @@ VIMEO_ACCESS_TOKEN = os.environ.get("VIMEO_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+SUPABASE_DB_PASSWORD = os.environ.get("SUPABASE_DB_PASSWORD")
 
 # AI Settings
 USE_PARAKEET = os.environ.get("USE_PARAKEET", "false").lower() == "true"

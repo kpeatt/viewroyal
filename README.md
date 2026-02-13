@@ -57,16 +57,18 @@ Create a `.env` file in the project root:
 ```env
 # Database
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-service-role-key
+SUPABASE_KEY=your-anon-key
+SUPABASE_SECRET_KEY=your-service-role-key
 DATABASE_URL=postgresql://postgres:your-password@db.your-project.supabase.co:5432/postgres
+SUPABASE_DB_PASSWORD=your-db-password
 
 # Web app (also needs these in apps/web/.env or root .env)
-SUPABASE_SECRET_KEY=your-service-role-key
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-anon-key
 
 # AI & Video
 GEMINI_API_KEY=your-google-ai-key
+OPENAI_API_KEY=your-openai-key
 VIMEO_TOKEN=your-vimeo-api-token
 ```
 
@@ -97,23 +99,83 @@ pnpm deploy     # build + deploy to Cloudflare Workers
 
 ## Data Pipeline
 
-The pipeline scrapes, transcribes, and processes council meetings into structured data.
+The pipeline scrapes, transcribes, and processes council meetings into structured data. A single `python main.py` command runs all 5 phases with smart change detection.
 
-### Archive & Ingest
+### Full Pipeline (5 Phases)
 
 ```bash
-# Scrape documents from CivicWeb + download Vimeo audio
+# Run everything: scrape → download audio → diarize → ingest → embed
 uv run python main.py --download-audio
-
-# Scrape documents only (fastest)
-uv run python main.py --videos-only
-
-# Ingest archive into database
-uv run python src/pipeline/ingest.py
-
-# Ingest a specific meeting
-uv run python src/pipeline/ingest.py "viewroyal_archive/Council/2023-11-21 Regular Council"
 ```
+
+| Phase | What it does |
+|-------|-------------|
+| 1. Documents | Scrape agendas & minutes PDFs from CivicWeb |
+| 2. Vimeo Download | Match meetings to Vimeo videos, download audio |
+| 3. Diarization | Transcribe + speaker-diarize audio files locally |
+| 4. Ingestion | AI refinement + upsert meetings, items, motions, votes to DB |
+| 5. Embeddings | Generate OpenAI `text-embedding-3-small` vectors for semantic search |
+
+Phase 4 uses **smart change detection**: it compares disk state (new agenda/minutes/transcript files) against DB flags (`has_agenda`, `has_minutes`, `has_transcript`) and automatically re-ingests meetings that have new data. Freshly diarized meetings from Phase 3 are also force-updated.
+
+### Selective Execution
+
+```bash
+# Original behavior (Phases 1-3 only, no DB writes)
+uv run python main.py --download-audio --skip-ingest --skip-embed
+
+# Only run ingestion with change detection (Phase 4)
+uv run python main.py --ingest-only
+
+# Force-update all meetings during ingestion
+uv run python main.py --ingest-only --update
+
+# Only generate embeddings for rows missing them (Phase 5)
+uv run python main.py --embed-only
+
+# Process audio → ingest → embed (skip scraping/download)
+uv run python main.py --process-only
+
+# Re-diarize cached transcripts → re-ingest → embed
+uv run python main.py --rediarize --limit 5
+```
+
+### Targeting a Single Meeting
+
+Re-process a specific meeting by DB ID or folder path:
+
+```bash
+# By database ID (looks up archive_path automatically)
+uv run python main.py --target 42
+
+# By folder path
+uv run python main.py --target "viewroyal_archive/Council/2024/01/2024-01-16 Regular Council"
+
+# Re-diarize + re-ingest a specific meeting
+uv run python main.py --target 42 --rediarize
+
+# Target but skip embedding
+uv run python main.py --target 42 --skip-embed
+```
+
+### All CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--download-audio` | Download audio files (MP3) from Vimeo |
+| `--include-video` | Download MP4 video files |
+| `--videos-only` | Skip document scraping (Phase 1) |
+| `--skip-diarization` | Skip audio processing (Phase 3) |
+| `--skip-ingest` | Skip database ingestion (Phase 4) |
+| `--skip-embed` | Skip embedding generation (Phase 5) |
+| `--process-only` | Only diarize existing audio (skip Phases 1-2) |
+| `--rediarize` | Re-run diarization reusing cached raw transcripts |
+| `--ingest-only` | Only run Phase 4 (with change detection) |
+| `--embed-only` | Only run Phase 5 |
+| `--target <id\|path>` | Target a single meeting (force re-processes) |
+| `--update` | Force update existing meetings (with `--ingest-only`) |
+| `--limit N` | Limit number of items to process (testing) |
+| `--input-dir DIR` | Override archive directory |
 
 ### Batch Processing
 
@@ -127,9 +189,9 @@ uv run python src/pipeline/batch.py download
 uv run python src/pipeline/batch.py ingest
 ```
 
-### Embeddings
+### Standalone Embeddings
 
-Generate semantic search vectors locally using nomic-embed-text-v1.5:
+Embeddings can also be run standalone with more options:
 
 ```bash
 # Embed all tables (transcript segments filtered to 15+ words by default)
@@ -145,7 +207,15 @@ uv run python src/pipeline/embed_local.py --table all --force
 uv run python src/pipeline/embed_local.py --table transcript_segments --min-words 20
 ```
 
-Requires `DATABASE_URL` in `.env` for direct Postgres access.
+### Maintenance & Audits
+
+```bash
+# Check for meetings with new documents that need re-ingestion
+uv run python src/maintenance/audit/check_occurred_meetings.py
+
+# Actually re-ingest them
+uv run python src/maintenance/audit/check_occurred_meetings.py --reingest --refine
+```
 
 ### Analysis
 
