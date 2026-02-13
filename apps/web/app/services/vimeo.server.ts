@@ -590,7 +590,7 @@ async function getDirectUrlViaProxy(
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // Browser rendering can take 30s+
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // Browser rendering typically takes 10-15s
 
     const response = await fetch(`${VIMEO_PROXY_URL}/api/vimeo-url`, {
       method: "POST",
@@ -685,16 +685,24 @@ async function getDirectUrlFallback(
   videoUrl: string,
 ): Promise<{ video: string; audio?: string } | null> {
   try {
-    // Try player config first (works for unrestricted videos, no external deps)
-    const configResult = await getDirectUrlViaPlayerConfig(videoUrl).catch(
+    // Race player config and primary proxy in parallel for speed.
+    // Player config is fast (~1s) when it works, proxy takes ~15s.
+    // By racing them, we get the fastest available result.
+    const configPromise = getDirectUrlViaPlayerConfig(videoUrl).catch(
       () => null,
     );
+    const proxyPromise = getDirectUrlViaProxy(videoUrl).catch(() => null);
+
+    // Wait for player config first (fast path, <1s when it works)
+    const configResult = await configPromise;
     if (configResult) {
+      console.log("[Vimeo] Player config succeeded (fast path)");
       return configResult;
     }
 
-    // Try primary proxy service (Cloudflare Browser Rendering)
-    const proxyResult = await getDirectUrlViaProxy(videoUrl).catch(() => null);
+    // Player config failed — wait for the already-in-flight proxy
+    console.log("[Vimeo] Player config failed, waiting for proxy...");
+    const proxyResult = await proxyPromise;
     if (proxyResult) {
       return proxyResult;
     }
