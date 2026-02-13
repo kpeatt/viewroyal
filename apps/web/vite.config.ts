@@ -47,6 +47,7 @@ export default defineConfig(({ mode }) => {
         env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || "",
       ),
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY || ""),
+      "process.env.OPENAI_API_KEY": JSON.stringify(env.OPENAI_API_KEY || ""),
       "process.env.VIMEO_TOKEN": JSON.stringify(env.VIMEO_TOKEN || ""),
       "process.env.VIMEO_PROXY_URL": JSON.stringify(env.VIMEO_PROXY_URL || ""),
       "process.env.VIMEO_PROXY_FALLBACK_URL": JSON.stringify(

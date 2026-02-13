@@ -18,7 +18,8 @@ pnpm dev               # http://localhost:5173
 | `SUPABASE_SECRET_KEY` | Service role key (bypasses RLS) |
 | `VITE_SUPABASE_URL` | Supabase URL (exposed to client) |
 | `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY` | Anon key (exposed to client) |
-| `GEMINI_API_KEY` | Google Generative AI key (RAG Q&A, embeddings) |
+| `GEMINI_API_KEY` | Google Generative AI key (RAG Q&A) |
+| `OPENAI_API_KEY` | OpenAI key (query embeddings via text-embedding-3-small) |
 | `VIMEO_TOKEN` | Vimeo API token (optional, for direct API access) |
 | `VIMEO_PROXY_URL` | Primary vimeo-proxy Worker URL |
 | `VIMEO_PROXY_FALLBACK_URL` | Fallback proxy URL |
@@ -40,7 +41,7 @@ pnpm dev               # http://localhost:5173
 - **Framework:** React Router 7 (SSR) with React 19
 - **Styling:** Tailwind CSS 4, shadcn/ui (Radix primitives)
 - **Database:** Supabase (PostgreSQL + pgvector)
-- **AI:** Google Gemini for RAG Q&A and query embeddings
+- **AI:** Google Gemini for RAG Q&A, OpenAI for vector embeddings
 - **Video:** Vimeo with HLS playback via hls.js
 - **Deployment:** Cloudflare Workers (primary), Docker (alternative)
 

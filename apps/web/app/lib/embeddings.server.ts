@@ -1,56 +1,48 @@
-import { GoogleGenerativeAI, TaskType } from "@google/generative-ai";
+import OpenAI from "openai";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const EMBEDDING_MODEL = "gemini-embedding-001";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 768;
 
-let genAI: GoogleGenerativeAI | null = null;
+let client: OpenAI | null = null;
 
-function getClient(): GoogleGenerativeAI | null {
-  if (!GEMINI_API_KEY) {
+function getClient(): OpenAI | null {
+  if (!OPENAI_API_KEY) {
     return null;
   }
-  if (!genAI) {
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  if (!client) {
+    client = new OpenAI({ apiKey: OPENAI_API_KEY });
   }
-  return genAI;
+  return client;
 }
 
 /**
- * Check if vector search is available (GEMINI_API_KEY is configured)
+ * Check if vector search is available (OPENAI_API_KEY is configured)
  */
 export function isVectorSearchAvailable(): boolean {
-  return !!GEMINI_API_KEY;
+  return !!OPENAI_API_KEY;
 }
 
 /**
- * Generate a query embedding using Google's gemini-embedding-001 model.
- * Uses RETRIEVAL_QUERY task type for optimal search performance.
+ * Generate a query embedding using OpenAI's text-embedding-3-small model.
  *
  * @param query The search query text
  * @returns 768-dimensional embedding vector, or null if unavailable
  */
 export async function generateQueryEmbedding(query: string): Promise<number[] | null> {
-  const client = getClient();
-  if (!client) {
+  const openai = getClient();
+  if (!openai) {
     return null;
   }
 
   try {
-    const model = client.getGenerativeModel({ model: EMBEDDING_MODEL });
-    const result = await model.embedContent({
-      content: { parts: [{ text: query }], role: "user" },
-      taskType: TaskType.RETRIEVAL_QUERY,
-      outputDimensionality: EMBEDDING_DIMENSIONS,
-    } as Parameters<typeof model.embedContent>[0]);
+    const response = await openai.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: query,
+      dimensions: EMBEDDING_DIMENSIONS,
+    });
 
-    const embedding = result.embedding.values;
-
-    if (embedding.length !== EMBEDDING_DIMENSIONS) {
-      console.warn(`Unexpected embedding dimensions: ${embedding.length}, expected ${EMBEDDING_DIMENSIONS}`);
-    }
-
-    return embedding;
+    return response.data[0].embedding;
   } catch (error) {
     console.error("Failed to generate query embedding:", error);
     return null;

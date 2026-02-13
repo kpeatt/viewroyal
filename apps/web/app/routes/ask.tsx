@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import type { Route } from "./+types/ask";
 import { useSearchParams, Link } from "react-router";
 import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -19,6 +20,11 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "../components/ui/hover-card";
 import type { AgentEvent } from "../services/rag.server";
 
 // Human-friendly labels for tool calls
@@ -88,12 +94,88 @@ const ResearchStep = ({
   return null;
 };
 
-const SourceIcon = ({ type }: { type?: string }) => {
-  if (type === "transcript") return <Mic className="h-3 w-3 text-zinc-400" />;
+const SourceIcon = ({ type, className }: { type?: string; className?: string }) => {
+  const cls = className || "h-3 w-3 text-zinc-400";
+  if (type === "transcript") return <Mic className={cls} />;
   if (type === "motion" || type === "vote")
-    return <Gavel className="h-3 w-3 text-zinc-400" />;
-  return <FileText className="h-3 w-3 text-zinc-400" />;
+    return <Gavel className={cls} />;
+  return <FileText className={cls} />;
 };
+
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  transcript: "Transcript",
+  motion: "Motion",
+  vote: "Vote",
+  matter: "Matter",
+  agenda_item: "Agenda Item",
+};
+
+function CitationBadge({ num, source }: { num: number; source: any }) {
+  const label = SOURCE_TYPE_LABEL[source?.type] || "Source";
+  const meetingLink = source?.meeting_id ? `/meetings/${source.meeting_id}` : "#";
+  return (
+    <HoverCard openDelay={200} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <Link
+          to={meetingLink}
+          className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold leading-none !no-underline hover:!no-underline hover:bg-blue-200 transition-colors align-super ml-0.5 cursor-pointer"
+        >
+          {num}
+        </Link>
+      </HoverCardTrigger>
+      <HoverCardContent side="top" align="center" className="w-72 p-3">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <SourceIcon type={source?.type} className="h-3.5 w-3.5 text-zinc-400" />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            {label}
+          </span>
+          {source?.meeting_date && (
+            <span className="text-[10px] text-zinc-400 ml-auto">
+              {source.meeting_date}
+            </span>
+          )}
+        </div>
+        {source?.speaker_name && (
+          <p className="text-xs font-semibold text-zinc-700 mb-0.5">
+            {source.speaker_name}
+          </p>
+        )}
+        <p className="text-xs text-zinc-600 line-clamp-3">
+          {source?.title || "View source"}
+        </p>
+        <Link
+          to={meetingLink}
+          className="flex items-center gap-1 mt-2 text-[10px] font-medium text-blue-600 hover:text-blue-700 no-underline"
+        >
+          View in meeting <ExternalLink className="h-2.5 w-2.5" />
+        </Link>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+/**
+ * Walk react-markdown children and replace "[N]" text fragments with CitationBadge components.
+ */
+function processCitationsInChildren(children: React.ReactNode, sources: any[]): React.ReactNode {
+  return Array.isArray(children) ? children.map((child, i) => processCitationNode(child, sources, i)) : processCitationNode(children, sources, 0);
+}
+
+function processCitationNode(node: React.ReactNode, sources: any[], key: number): React.ReactNode {
+  if (typeof node !== "string") return node;
+  // Split string on citation patterns like [1], [2], [1][2]
+  const parts = node.split(/(\[\d+\])/g);
+  if (parts.length === 1) return node;
+  return parts.map((part, i) => {
+    const m = part.match(/^\[(\d+)\]$/);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      const source = sources[num - 1];
+      if (source) return <CitationBadge key={`${key}-cite-${i}`} num={num} source={source} />;
+    }
+    return part;
+  });
+}
 
 export default function AskPage({ loaderData }: Route.ComponentProps) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -233,16 +315,15 @@ export default function AskPage({ loaderData }: Route.ComponentProps) {
   const isResearching = isStreaming && !answer;
   const stepCount = agentSteps.filter((s) => s.type === "tool_call").length;
 
-  // Replace [1], [2] etc. with markdown links to meeting pages
-  const answerWithCitations = useMemo(() => {
-    if (!answer || sources.length === 0) return answer;
-    return answer.replace(/\[(\d+)\]/g, (match, num) => {
-      const idx = parseInt(num, 10) - 1;
-      const source = sources[idx];
-      if (!source?.meeting_id) return match;
-      return `[${num}](/meetings/${source.meeting_id} "${source.meeting_date} — ${(source.title || "").replace(/"/g, "'")}")`;
-    });
-  }, [answer, sources]);
+  // Custom ReactMarkdown components that render citation badges inline
+  const markdownComponents = useMemo<Components>(() => ({
+    p: ({ children }) => {
+      return <p>{processCitationsInChildren(children, sources)}</p>;
+    },
+    li: ({ children }) => {
+      return <li>{processCitationsInChildren(children, sources)}</li>;
+    },
+  }), [sources]);
 
   // Determine which layout to show
   // We show the "Results" layout if:
@@ -333,7 +414,7 @@ export default function AskPage({ loaderData }: Route.ComponentProps) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="prose prose-base prose-zinc prose-blue max-w-none prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline">
-                      <ReactMarkdown>{answerWithCitations}</ReactMarkdown>
+                      <ReactMarkdown components={markdownComponents}>{answer}</ReactMarkdown>
                     </div>
                     {isResearching && (
                       <div className="flex items-center gap-2 text-sm text-zinc-400">
@@ -367,7 +448,7 @@ export default function AskPage({ loaderData }: Route.ComponentProps) {
                 )}
               </div>
 
-              {/* Sources — collapsible, default open */}
+              {/* Sources — compact list */}
               {sources.length > 0 && !isStreaming && (
                 <div>
                   <button
@@ -390,7 +471,7 @@ export default function AskPage({ loaderData }: Route.ComponentProps) {
                     )}
                   >
                     <div className="overflow-hidden">
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                      <div className="flex flex-wrap gap-1.5">
                         {sources.map((source: any, i: number) => (
                           <Link
                             key={`${source.type}-${source.id}-${i}`}
@@ -399,28 +480,16 @@ export default function AskPage({ loaderData }: Route.ComponentProps) {
                                 ? `/meetings/${source.meeting_id}`
                                 : "#"
                             }
-                            className="flex items-start gap-2 p-2.5 bg-white rounded-lg border border-zinc-200 hover:border-blue-200 hover:bg-blue-50/50 transition-colors group"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-zinc-200 hover:border-blue-200 hover:bg-blue-50/50 transition-colors group text-xs"
                           >
-                            <div className="shrink-0 w-6 h-6 rounded-md bg-zinc-100 group-hover:bg-blue-100 flex items-center justify-center text-xs font-bold text-zinc-500 group-hover:text-blue-600">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center text-[10px] font-bold text-blue-700 shrink-0">
                               {i + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <SourceIcon type={source.type} />
-                                <span className="text-xs font-medium text-zinc-600">
-                                  {source.meeting_date}
-                                </span>
-                              </div>
-                              <p className="text-xs text-zinc-500 truncate mt-0.5">
-                                {source.speaker_name && (
-                                  <span className="font-medium">
-                                    {source.speaker_name}:{" "}
-                                  </span>
-                                )}
-                                {source.title}
-                              </p>
-                            </div>
-                            <ExternalLink className="h-3.5 w-3.5 text-zinc-400 group-hover:text-blue-500 shrink-0 mt-0.5" />
+                            </span>
+                            <SourceIcon type={source.type} />
+                            <span className="text-zinc-500 max-w-[180px] truncate">
+                              {source.meeting_date}
+                              {source.speaker_name ? ` — ${source.speaker_name}` : ""}
+                            </span>
                           </Link>
                         ))}
                       </div>

@@ -1086,22 +1086,21 @@ Respond with a single JSON object. No markdown fences.`;
   const uniqueSources = Array.from(sourceMap.values());
   yield { type: "sources", sources: uniqueSources };
 
-  // Build numbered source reference for the model
-  const sourceReference = uniqueSources
+  // Build numbered evidence list — each source gets a number, and its content is
+  // presented under that number. This ensures the model can ONLY cite valid [N] numbers.
+  const numberedEvidence = uniqueSources
     .map(
       (s, i) =>
-        `[${i + 1}] ${s.meeting_date} — ${s.title}${s.speaker_name ? ` (${s.speaker_name})` : ""}`,
+        `[${i + 1}] (${s.type}, ${s.meeting_date}${s.speaker_name ? `, ${s.speaker_name}` : ""}) ${s.title}`,
     )
     .join("\n");
 
-  // Always run final synthesis with full raw evidence
   const finalUserPrompt = `Question: ${question}
 
-Raw Evidence from Council Records:
-${history.join("\n\n---\n\n")}
+Evidence from Council Records (each item has a citation number):
+${numberedEvidence}
 
-Source Reference (use these numbers for inline citations):
-${sourceReference}
+IMPORTANT: You have exactly ${uniqueSources.length} sources numbered [1] through [${uniqueSources.length}]. Only use citation numbers within this range. Do NOT use any number higher than [${uniqueSources.length}].
 
 Synthesize a final answer based *only* on the evidence above. Use [1], [2], etc. to cite sources inline.`;
 

@@ -1,6 +1,6 @@
 """
-Local embedding generation using fastembed (nomic-ai/nomic-embed-text-v1.5-Q).
-Generates 768-dim embeddings and writes them directly to Supabase via psycopg2 COPY.
+Bulk embedding generation using OpenAI text-embedding-3-small (768-dim).
+Writes embeddings directly to Supabase via psycopg2 COPY.
 
 Usage:
     uv run python src/pipeline/embed_local.py --table all
@@ -23,6 +23,10 @@ load_dotenv()
 DATABASE_URL = os.environ.get("DATABASE_URL")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_DIMENSIONS = 768
 
 # Table -> (text_columns, select_columns)
 TABLE_CONFIG = {
@@ -46,9 +50,18 @@ TABLE_CONFIG = {
         "select": "id, summary",
         "text_fn": lambda r: (r[1] or "").strip(),
     },
+    "bylaws": {
+        "select": "id, title, plain_english_summary",
+        "text_fn": lambda r: f"{r[1] or ''}\n{r[2] or ''}".strip(),
+    },
+    "bylaw_chunks": {
+        "select": "id, text_content",
+        "text_fn": lambda r: (r[1] or "").strip(),
+    },
 }
 
-BATCH_SIZE = 256  # rows per embedding batch (fastembed handles this efficiently)
+# OpenAI allows up to 2048 inputs per request, but smaller batches are safer
+API_BATCH_SIZE = 128
 DB_BATCH_SIZE = 500  # rows per database update
 DEFAULT_MIN_WORDS = {
     "transcript_segments": 15,  # skip short procedural utterances
@@ -56,23 +69,76 @@ DEFAULT_MIN_WORDS = {
     "motions": 0,
     "matters": 0,
     "meetings": 0,
+    "bylaws": 0,
+    "bylaw_chunks": 0,
 }
 
 
+def get_openai_client():
+    """Get an OpenAI client."""
+    from openai import OpenAI
+
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY not set in .env")
+    return OpenAI(api_key=OPENAI_API_KEY)
+
+
+def generate_embeddings(client, texts: list[str]) -> list[list[float]]:
+    """Generate embeddings for a batch of texts via OpenAI API."""
+    response = client.embeddings.create(
+        model=EMBEDDING_MODEL,
+        input=texts,
+        dimensions=EMBEDDING_DIMENSIONS,
+    )
+    return [item.embedding for item in response.data]
+
+
+POOLER_REGION = os.environ.get("SUPABASE_POOLER_REGION", "us-east-2")
+
+
+def _extract_project_id(url: str) -> str | None:
+    """Extract Supabase project ID from a DATABASE_URL or SUPABASE_URL."""
+    import re
+    m = re.search(r"([a-z]{20})\.supabase", url)
+    return m.group(1) if m else None
+
+
+def _make_session_pooler_url(project_id: str, password: str) -> str:
+    """Build a session-mode pooler URL (IPv4-accessible, supports named cursors)."""
+    from urllib.parse import quote_plus
+    return (
+        f"postgresql://postgres.{project_id}:{quote_plus(password)}"
+        f"@aws-1-{POOLER_REGION}.pooler.supabase.com:5432/postgres"
+    )
+
+
 def get_db_connection():
-    """Get a direct psycopg2 connection to the database."""
+    """Get a psycopg2 connection. Falls back to session pooler (IPv4) if direct connection fails."""
     import psycopg2
+    from urllib.parse import urlparse
 
     if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL)
+        try:
+            conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+            return conn
+        except psycopg2.OperationalError:
+            # Direct connection is IPv6-only; try the session pooler (IPv4)
+            parsed = urlparse(DATABASE_URL)
+            project_id = _extract_project_id(DATABASE_URL)
+            if project_id and parsed.password:
+                pooler_url = _make_session_pooler_url(project_id, parsed.password)
+                print("  Direct connection failed (IPv6), trying session pooler (IPv4)...")
+                return psycopg2.connect(pooler_url, connect_timeout=10)
+            raise
 
     # Derive from Supabase URL: https://PROJECT_ID.supabase.co
     if SUPABASE_URL:
-        project_id = SUPABASE_URL.replace("https://", "").split(".")[0]
+        project_id = _extract_project_id(SUPABASE_URL)
         db_password = os.environ.get("SUPABASE_DB_PASSWORD")
-        if db_password:
-            conn_str = f"postgresql://postgres:{db_password}@db.{project_id}.supabase.co:5432/postgres"
-            return psycopg2.connect(conn_str)
+        if project_id and db_password:
+            return psycopg2.connect(
+                _make_session_pooler_url(project_id, db_password), connect_timeout=10
+            )
 
     raise RuntimeError(
         "Set DATABASE_URL or both SUPABASE_URL + SUPABASE_DB_PASSWORD in .env"
@@ -80,15 +146,14 @@ def get_db_connection():
 
 
 def fetch_rows_needing_embeddings(conn, table: str, force: bool = False):
-    """Fetch rows that need embeddings using psycopg2 cursor."""
+    """Fetch rows that need embeddings. Uses client-side cursor (pooler-compatible)."""
     config = TABLE_CONFIG[table]
     query = f"SELECT {config['select']} FROM {table}"
     if not force:
         query += " WHERE embedding IS NULL"
     query += " ORDER BY id"
 
-    cur = conn.cursor(name=f"fetch_{table}")  # server-side cursor for large tables
-    cur.itersize = 2000
+    cur = conn.cursor()
     cur.execute(query)
     return cur, config["text_fn"]
 
@@ -132,15 +197,15 @@ def update_embeddings_batch(conn, table: str, updates: list):
 
 def embed_table(table: str, force: bool = False, min_words: int = None):
     """Generate and store embeddings for a single table."""
-    from fastembed import TextEmbedding
-
     if min_words is None:
         min_words = DEFAULT_MIN_WORDS.get(table, 0)
 
     print(f"\n{'='*60}")
     print(f"Embedding: {table}")
+    print(f"  Model: {EMBEDDING_MODEL} ({EMBEDDING_DIMENSIONS} dims)")
     print(f"{'='*60}")
 
+    client = get_openai_client()
     conn = get_db_connection()
 
     # Count rows needing embeddings
@@ -159,11 +224,6 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
 
     print(f"  {total} rows to process" + (f" (min {min_words} words)" if min_words else ""))
 
-    # Initialize model (downloads on first run)
-    print("  Loading nomic-ai/nomic-embed-text-v1.5-Q...")
-    model = TextEmbedding("nomic-ai/nomic-embed-text-v1.5-Q", max_length=512)
-    print("  Model ready.")
-
     # Fetch rows
     row_cursor, text_fn = fetch_rows_needing_embeddings(conn, table, force)
 
@@ -181,15 +241,13 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
             skipped += 1
             continue
 
-        # fastembed nomic model expects "search_document: " prefix for documents
         batch_ids.append(row[0])
-        batch_texts.append(f"search_document: {text}")
+        batch_texts.append(text)
 
-        if len(batch_texts) >= BATCH_SIZE:
-            # Generate embeddings
-            embeddings = list(model.embed(batch_texts))
+        if len(batch_texts) >= API_BATCH_SIZE:
+            embeddings = generate_embeddings(client, batch_texts)
             for row_id, emb in zip(batch_ids, embeddings):
-                db_buffer.append((row_id, emb.tolist()))
+                db_buffer.append((row_id, emb))
 
             processed += len(batch_texts)
             batch_ids = []
@@ -211,9 +269,9 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
 
     # Final batch
     if batch_texts:
-        embeddings = list(model.embed(batch_texts))
+        embeddings = generate_embeddings(client, batch_texts)
         for row_id, emb in zip(batch_ids, embeddings):
-            db_buffer.append((row_id, emb.tolist()))
+            db_buffer.append((row_id, emb))
         processed += len(batch_texts)
 
     if db_buffer:
@@ -227,7 +285,7 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Local embedding generation")
+    parser = argparse.ArgumentParser(description="Bulk embedding generation via OpenAI")
     parser.add_argument(
         "--table",
         default="all",

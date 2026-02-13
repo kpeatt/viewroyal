@@ -29,6 +29,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.562.0",
     "openai": "^6.17.0",
+    "radix-ui": "^1.4.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-leaflet": "^5.0.0",
