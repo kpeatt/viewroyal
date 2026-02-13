@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Form,
   useSubmit,
@@ -23,6 +23,10 @@ import {
   Target,
   Scissors,
   Loader2,
+  CheckCircle,
+  AudioWaveform,
+  Plus,
+  ChevronsUpDown,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -75,6 +79,12 @@ type SpeakerAlias = {
   id: number;
   speaker_label: string;
   person_id: number;
+};
+
+type FingerprintMatch = {
+  person_id: number;
+  person_name: string;
+  similarity: number;
 };
 
 export async function loader({ request }: { request: Request }) {
@@ -162,6 +172,8 @@ export async function loader({ request }: { request: Request }) {
   // Load speaker centroids and samples from meeting meta (for voice fingerprinting)
   let speakerCentroids: Record<string, number[]> = {};
   let speakerSamples: Record<string, { start: number; end: number }> = {};
+  let fingerprintMatches: Record<string, FingerprintMatch> = {};
+  let speakerMapping: Record<string, string> = {};
   if (meetingId) {
     const { data: meetingMeta } = await serverClient
       .from("meetings")
@@ -171,6 +183,8 @@ export async function loader({ request }: { request: Request }) {
 
     speakerCentroids = (meetingMeta?.meta as any)?.speaker_centroids || {};
     speakerSamples = (meetingMeta?.meta as any)?.speaker_samples || {};
+    fingerprintMatches = (meetingMeta?.meta as any)?.fingerprint_matches || {};
+    speakerMapping = (meetingMeta?.meta as any)?.speaker_mapping || {};
   }
 
   // Load existing voice fingerprints for people
@@ -190,6 +204,8 @@ export async function loader({ request }: { request: Request }) {
     aliases,
     speakerCentroids,
     speakerSamples,
+    fingerprintMatches,
+    speakerMapping,
     peopleWithFingerprints: Array.from(peopleWithFingerprints),
   };
 }
@@ -454,6 +470,241 @@ export async function action({ request }: { request: Request }) {
   return { success: true };
 }
 
+// --- PersonTypeahead component ---
+function PersonTypeahead({
+  people,
+  activePersonIds,
+  assignedPerson,
+  onSelect,
+  onCreateNew,
+  compact = false,
+}: {
+  people: Person[];
+  activePersonIds: Set<number>;
+  assignedPerson: Person | null;
+  onSelect: (personId: string) => void;
+  onCreateNew: (name: string) => void;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Build grouped, filtered list
+  const lowerQuery = query.toLowerCase();
+  const filtered = people.filter((p) =>
+    p.name.toLowerCase().includes(lowerQuery),
+  );
+
+  const activeCouncil = filtered.filter(
+    (p) => activePersonIds.has(p.id) && p.is_councillor,
+  );
+  const activeOther = filtered.filter(
+    (p) => activePersonIds.has(p.id) && !p.is_councillor,
+  );
+  const council = filtered.filter(
+    (p) => !activePersonIds.has(p.id) && p.is_councillor,
+  );
+  const others = filtered.filter(
+    (p) => !activePersonIds.has(p.id) && !p.is_councillor,
+  );
+
+  type GroupedItem =
+    | { type: "header"; label: string }
+    | { type: "person"; person: Person }
+    | { type: "create"; name: string };
+
+  const items: GroupedItem[] = [];
+  if (activeCouncil.length + activeOther.length > 0) {
+    items.push({ type: "header", label: "Active in Meeting" });
+    for (const p of activeCouncil) items.push({ type: "person", person: p });
+    for (const p of activeOther) items.push({ type: "person", person: p });
+  }
+  if (council.length > 0) {
+    items.push({ type: "header", label: "Council" });
+    for (const p of council) items.push({ type: "person", person: p });
+  }
+  if (others.length > 0) {
+    items.push({ type: "header", label: "Others" });
+    for (const p of others) items.push({ type: "person", person: p });
+  }
+  if (query.trim().length > 0) {
+    items.push({ type: "create", name: query.trim() });
+  }
+
+  const selectableItems = items.filter((i) => i.type !== "header");
+
+  // Clamp highlight
+  const clampedIdx = Math.min(highlightIdx, selectableItems.length - 1);
+
+  const selectItem = (item: GroupedItem) => {
+    if (item.type === "person") {
+      onSelect(item.person.id.toString());
+    } else if (item.type === "create") {
+      onCreateNew(item.name);
+    }
+    setOpen(false);
+    setQuery("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.min(i + 1, selectableItems.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (selectableItems[clampedIdx]) {
+        selectItem(selectableItems[clampedIdx]);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setQuery("");
+    }
+  };
+
+  // Track selectableIndex for highlighting
+  let selectableIndex = -1;
+
+  return (
+    <div ref={containerRef} className="relative flex-1">
+      {!open ? (
+        <button
+          type="button"
+          className={cn(
+            "w-full flex items-center justify-between gap-1 border rounded text-left",
+            compact ? "h-7 px-2 text-xs" : "h-8 px-2.5 text-sm",
+            assignedPerson
+              ? "bg-white border-blue-200 text-blue-700 font-medium"
+              : "bg-zinc-50 border-zinc-200 text-zinc-500",
+          )}
+          onClick={() => {
+            setOpen(true);
+            setHighlightIdx(0);
+            setTimeout(() => inputRef.current?.focus(), 0);
+          }}
+        >
+          <span className="truncate">
+            {assignedPerson ? assignedPerson.name : "Assign person..."}
+          </span>
+          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+        </button>
+      ) : (
+        <div>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              className={cn(
+                "w-full border rounded pl-6 pr-2 outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400",
+                compact ? "h-7 text-xs" : "h-8 text-sm",
+              )}
+              placeholder="Search people..."
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHighlightIdx(0);
+              }}
+              onKeyDown={handleKeyDown}
+            />
+          </div>
+          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
+            {items.length === 0 && query.trim().length === 0 && (
+              <div className="px-3 py-2 text-xs text-zinc-400">
+                No people found.
+              </div>
+            )}
+            {items.map((item, i) => {
+              if (item.type === "header") {
+                return (
+                  <div
+                    key={`h-${item.label}`}
+                    className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider bg-zinc-50 sticky top-0"
+                  >
+                    {item.label}
+                  </div>
+                );
+              }
+
+              selectableIndex++;
+              const isHighlighted = selectableIndex === clampedIdx;
+
+              if (item.type === "create") {
+                return (
+                  <button
+                    key="create-new"
+                    type="button"
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-xs flex items-center gap-1.5 border-t border-zinc-100",
+                      isHighlighted
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-blue-600 hover:bg-blue-50",
+                    )}
+                    onMouseEnter={() => setHighlightIdx(selectableIndex)}
+                    onClick={() => selectItem(item)}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Create &ldquo;{item.name}&rdquo;
+                  </button>
+                );
+              }
+
+              const p = item.person;
+              const isActive = activePersonIds.has(p.id);
+              const currentSelIdx = selectableIndex;
+
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={cn(
+                    "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2",
+                    isHighlighted
+                      ? "bg-blue-50 text-blue-900"
+                      : "text-zinc-700 hover:bg-zinc-50",
+                  )}
+                  onMouseEnter={() => setHighlightIdx(currentSelIdx)}
+                  onClick={() => selectItem(item)}
+                >
+                  <span className="truncate flex-1">{p.name}</span>
+                  {isActive && (
+                    <span className="text-[9px] text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-medium shrink-0">
+                      active
+                    </span>
+                  )}
+                  {p.is_councillor && (
+                    <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded font-medium shrink-0">
+                      council
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SpeakerAliasTool({ loaderData }: any) {
   const {
     meetings,
@@ -463,6 +714,8 @@ export default function SpeakerAliasTool({ loaderData }: any) {
     aliases,
     speakerCentroids,
     speakerSamples,
+    fingerprintMatches,
+    speakerMapping,
     peopleWithFingerprints,
   } = loaderData;
 
@@ -493,7 +746,7 @@ export default function SpeakerAliasTool({ loaderData }: any) {
   };
 
   // Sort people: Active speakers (aliased) first
-  const activePersonIds = new Set(aliases?.map((a: any) => a.person_id) || []);
+  const activePersonIds = new Set<number>(aliases?.map((a: any) => a.person_id) || []);
   const sortedPeople = [...(people || [])].sort((a: any, b: any) => {
     const aActive = activePersonIds.has(a.id);
     const bActive = activePersonIds.has(b.id);
@@ -508,10 +761,10 @@ export default function SpeakerAliasTool({ loaderData }: any) {
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const [bulkMode, setBulkMode] = useState<"label" | "person" | null>(null);
   const [isCreatingPerson, setIsCreatingPerson] = useState(false);
-  const [creatingForSpeaker, setCreatingForSpeaker] = useState<string | null>(
-    null,
-  );
   const [showCorrected, setShowCorrected] = useState(true);
+  const [activeTab, setActiveTab] = useState<"voiceid" | "aliases">(
+    Object.keys(speakerCentroids || {}).length > 0 ? "voiceid" : "aliases",
+  );
   const [splitSegment, setSplitSegment] = useState<Segment | null>(null);
   const [splitText1, setSplitText1] = useState("");
   const [splitText2, setSplitText2] = useState("");
@@ -649,7 +902,6 @@ export default function SpeakerAliasTool({ loaderData }: any) {
     }
 
     submit(formData, { method: "post" });
-    setCreatingForSpeaker(null);
   };
 
   const handleScrollToCurrent = () => {
@@ -851,205 +1103,392 @@ export default function SpeakerAliasTool({ loaderData }: any) {
               )}
             </div>
 
-            <div className="p-4 border-b bg-zinc-50">
-              <h3 className="font-bold text-sm mb-3">Detected Speakers</h3>
-              <ScrollArea className="h-[280px] pr-4">
-                <div className="space-y-2">
-                  {uniqueSpeakers.map((speaker) => {
-                    const alias = aliases.find(
-                      (a: any) => a.speaker_label === speaker,
-                    );
-                    const assignedPerson = alias
-                      ? people.find((p: any) => p.id === alias.person_id)
-                      : null;
-                    const centroid = findCentroid(speaker);
-                    const hasCentroid = !!centroid;
-                    const personHasFingerprint =
-                      assignedPerson &&
-                      peopleWithFingerprints?.includes(assignedPerson.id);
+            <div className="border-b bg-zinc-50 flex flex-col">
+              {/* Tab switcher */}
+              <div className="flex border-b">
+                <button
+                  className={cn(
+                    "flex-1 px-4 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+                    activeTab === "voiceid"
+                      ? "text-blue-700 border-b-2 border-blue-600 bg-white"
+                      : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100",
+                  )}
+                  onClick={() => setActiveTab("voiceid")}
+                >
+                  <AudioWaveform className="h-3.5 w-3.5" />
+                  Voice ID
+                  {Object.keys(speakerCentroids || {}).length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] ml-1 px-1.5 py-0">
+                      {Object.keys(speakerCentroids).length}
+                    </Badge>
+                  )}
+                </button>
+                <button
+                  className={cn(
+                    "flex-1 px-4 py-2.5 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5",
+                    activeTab === "aliases"
+                      ? "text-blue-700 border-b-2 border-blue-600 bg-white"
+                      : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100",
+                  )}
+                  onClick={() => setActiveTab("aliases")}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Aliases
+                  <Badge variant="secondary" className="text-[10px] ml-1 px-1.5 py-0">
+                    {uniqueSpeakers.length}
+                  </Badge>
+                </button>
+              </div>
 
-                    // Find sample for this speaker (try multiple key formats)
-                    const numMatch = speaker.match(/(\d+)/);
-                    const num = numMatch ? parseInt(numMatch[1], 10) : null;
-                    const sampleKeys =
-                      num !== null
-                        ? [
-                            speaker,
-                            `SPEAKER_${num.toString().padStart(2, "0")}`,
-                            `SPEAKER_${num}`,
-                            `Speaker_${num}`,
-                          ]
-                        : [speaker];
-                    const sample = sampleKeys.reduce(
-                      (found, key) => found || speakerSamples?.[key],
-                      null as any,
-                    );
-                    const hasSample = sample?.start !== undefined;
-
-                    const playSample = () => {
-                      if (!hasSample) return;
-
-                      // Scroll video into view
-                      if (videoPlayer.videoRef.current) {
-                        (
-                          videoPlayer.videoRef.current as HTMLElement
-                        ).scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        });
-                      }
-
-                      // Use the hook's seekTo which handles enabling video automatically
-                      videoPlayer.seekTo(sample.start);
-                    };
-
-                    return (
-                      <div
-                        key={speaker}
-                        className={cn(
-                          "flex flex-col gap-1.5 p-2 rounded border text-sm transition-colors",
-                          assignedPerson
-                            ? personHasFingerprint
-                              ? "bg-green-50/50 border-green-200"
-                              : "bg-blue-50/50 border-blue-200"
-                            : "bg-white border-zinc-200",
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          {/* Play button */}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className={cn(
-                              "h-7 w-7 p-0 shrink-0",
-                              hasSample
-                                ? "text-blue-600 hover:text-blue-800 hover:bg-blue-100"
-                                : "text-zinc-300 cursor-not-allowed",
-                            )}
-                            onClick={playSample}
-                            disabled={!hasSample}
-                            title={
-                              hasSample ? `Play sample` : "No sample available"
-                            }
-                          >
-                            <Play className="h-4 w-4" />
-                          </Button>
-
-                          {/* Speaker info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-zinc-900 text-xs">
-                                {speaker}
-                              </span>
-                              {hasCentroid && (
-                                <span title="Voice embedding available">
-                                  <Volume2 className="h-3 w-3 text-green-600 shrink-0" />
-                                </span>
-                              )}
-                              {assignedPerson && (
-                                <span className="text-[10px] text-blue-700 font-semibold flex items-center gap-0.5 bg-blue-100 px-1.5 py-0.5 rounded">
-                                  <User className="h-2.5 w-2.5" />
-                                  {assignedPerson.name}
-                                  {personHasFingerprint && (
-                                    <span className="text-green-600 ml-0.5">
-                                      ✓
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] shrink-0"
-                          >
-                            {
-                              segments.filter(
-                                (s: any) => s.speaker_name === speaker,
-                              ).length
-                            }
-                          </Badge>
+              <ScrollArea className="h-[280px]">
+                <div className="p-4 space-y-2">
+                  {/* Voice ID Tab */}
+                  {activeTab === "voiceid" && (
+                    <>
+                      {Object.keys(speakerCentroids || {}).length === 0 ? (
+                        <div className="text-center text-zinc-400 text-sm py-8">
+                          No voice centroids available for this meeting.
                         </div>
+                      ) : (
+                        Object.keys(speakerCentroids)
+                          .sort()
+                          .map((centroidKey) => {
+                            // Resolve the transcript speaker_name that maps to this centroid
+                            const numMatch = centroidKey.match(/(\d+)/);
+                            const num = numMatch ? parseInt(numMatch[1], 10) : null;
 
-                        {/* Assignment dropdown */}
-                        <div className="flex gap-2 pl-9">
-                          {creatingForSpeaker === speaker ? (
-                            <div className="flex flex-1 gap-1">
-                              <Input
-                                autoFocus
-                                className="h-7 text-xs"
-                                placeholder="New Person Name..."
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleAliasAssign(
-                                      speaker,
-                                      null,
-                                      e.currentTarget.value,
-                                    );
-                                  }
-                                  if (e.key === "Escape") {
-                                    setCreatingForSpeaker(null);
-                                  }
-                                }}
-                              />
+                            // Use speaker_mapping from meta if available, otherwise try format variations
+                            const mappedLabel = speakerMapping?.[centroidKey] || null;
+                            const labelFormats =
+                              num !== null
+                                ? [
+                                    ...(mappedLabel ? [mappedLabel] : []),
+                                    centroidKey,
+                                    `SPEAKER_${num.toString().padStart(2, "0")}`,
+                                    `SPEAKER_${num}`,
+                                    `Speaker_${num}`,
+                                    `speaker_${num}`,
+                                  ]
+                                : [...(mappedLabel ? [mappedLabel] : []), centroidKey];
+
+                            // Find the first format that actually has segments
+                            const matchedSegmentLabel = labelFormats.find(
+                              (fmt) => segments.some((s: any) => s.speaker_name === fmt),
+                            ) || centroidKey;
+
+                            // Find sample (same key-format matching)
+                            const sampleKeys =
+                              num !== null
+                                ? [
+                                    centroidKey,
+                                    `SPEAKER_${num.toString().padStart(2, "0")}`,
+                                    `SPEAKER_${num}`,
+                                    `Speaker_${num}`,
+                                  ]
+                                : [centroidKey];
+                            const sample = sampleKeys.reduce(
+                              (found, key) => found || speakerSamples?.[key],
+                              null as any,
+                            );
+                            const hasSample = sample?.start !== undefined;
+
+                            // Find auto-match suggestion
+                            const autoMatch = (fingerprintMatches as Record<string, FingerprintMatch>)?.[centroidKey] || null;
+
+                            // Find existing alias (try matched label and format variations)
+                            const alias = labelFormats.reduce(
+                              (found, fmt) =>
+                                found || aliases.find((a: any) => a.speaker_label === fmt),
+                              null as SpeakerAlias | null,
+                            );
+                            const assignedPerson = alias
+                              ? people.find((p: any) => p.id === alias.person_id)
+                              : null;
+
+                            // Count segments using the matched label
+                            const segmentCount = segments.filter(
+                              (s: any) => s.speaker_name === matchedSegmentLabel,
+                            ).length;
+
+                            // Check fingerprint status
+                            const personHasFingerprint =
+                              assignedPerson &&
+                              peopleWithFingerprints?.includes(assignedPerson.id);
+
+                            const playSample = () => {
+                              if (!hasSample) return;
+                              if (videoPlayer.videoRef.current) {
+                                (videoPlayer.videoRef.current as HTMLElement).scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }
+                              videoPlayer.seekTo(sample.start);
+                            };
+
+                            return (
+                              <div
+                                key={centroidKey}
+                                className={cn(
+                                  "flex flex-col gap-1.5 p-2 rounded border text-sm transition-colors",
+                                  assignedPerson
+                                    ? personHasFingerprint
+                                      ? "bg-green-50/50 border-green-200"
+                                      : "bg-blue-50/50 border-blue-200"
+                                    : "bg-white border-zinc-200",
+                                )}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {/* Play button */}
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className={cn(
+                                      "h-7 w-7 p-0 shrink-0",
+                                      hasSample
+                                        ? "text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                                        : "text-zinc-300 cursor-not-allowed",
+                                    )}
+                                    onClick={playSample}
+                                    disabled={!hasSample}
+                                    title={hasSample ? "Play sample" : "No sample available"}
+                                  >
+                                    <Play className="h-4 w-4" />
+                                  </Button>
+
+                                  {/* Speaker info */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-zinc-900 text-xs font-mono">
+                                        {centroidKey}
+                                      </span>
+                                      {matchedSegmentLabel !== centroidKey && segmentCount > 0 && (
+                                        <span className="text-[10px] text-zinc-400 font-mono" title={`Transcript label: ${matchedSegmentLabel}`}>
+                                          → {matchedSegmentLabel}
+                                        </span>
+                                      )}
+                                      {/* Fingerprint status indicator */}
+                                      {assignedPerson && personHasFingerprint && (
+                                        <span title="Person assigned + fingerprint saved">
+                                          <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                        </span>
+                                      )}
+                                      {assignedPerson && !personHasFingerprint && (
+                                        <span title="Person assigned, no fingerprint yet">
+                                          <User className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                        </span>
+                                      )}
+                                      {assignedPerson && (
+                                        <span className="text-[10px] text-blue-700 font-semibold flex items-center gap-0.5 bg-blue-100 px-1.5 py-0.5 rounded truncate">
+                                          {assignedPerson.name}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] shrink-0 cursor-pointer hover:bg-zinc-100"
+                                    title={`Filter transcript to ${matchedSegmentLabel}`}
+                                    onClick={() => {
+                                      setFilterSpeaker(matchedSegmentLabel);
+                                      setIsFilterEnabled(true);
+                                    }}
+                                  >
+                                    {segmentCount}
+                                  </Badge>
+                                </div>
+
+                                {/* Auto-match suggestion */}
+                                {autoMatch && !assignedPerson && (
+                                  <div className="flex items-center gap-2 pl-9">
+                                    <button
+                                      className="flex items-center gap-1.5 text-[11px] bg-amber-50 border border-amber-200 text-amber-800 px-2 py-1 rounded hover:bg-amber-100 transition-colors"
+                                      onClick={() => {
+                                        handleAliasAssign(
+                                          matchedSegmentLabel,
+                                          autoMatch.person_id.toString(),
+                                        );
+                                      }}
+                                      title={`Accept auto-match: ${autoMatch.person_name}`}
+                                    >
+                                      <AudioWaveform className="h-3 w-3" />
+                                      {autoMatch.person_name}
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[9px] px-1 py-0 ml-0.5",
+                                          autoMatch.similarity >= 0.9
+                                            ? "border-green-400 text-green-700"
+                                            : autoMatch.similarity >= 0.8
+                                              ? "border-amber-400 text-amber-700"
+                                              : "border-zinc-300 text-zinc-600",
+                                        )}
+                                      >
+                                        {Math.round(autoMatch.similarity * 100)}%
+                                      </Badge>
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Assignment typeahead */}
+                                <div className="flex gap-2 pl-9">
+                                  <PersonTypeahead
+                                    people={people}
+                                    activePersonIds={activePersonIds}
+                                    assignedPerson={assignedPerson || null}
+                                    onSelect={(personId) =>
+                                      handleAliasAssign(matchedSegmentLabel, personId)
+                                    }
+                                    onCreateNew={(name) =>
+                                      handleAliasAssign(matchedSegmentLabel, null, name)
+                                    }
+                                    compact
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </>
+                  )}
+
+                  {/* Aliases Tab (existing behavior) */}
+                  {activeTab === "aliases" && (
+                    <>
+                      {uniqueSpeakers.map((speaker) => {
+                        const alias = aliases.find(
+                          (a: any) => a.speaker_label === speaker,
+                        );
+                        const assignedPerson = alias
+                          ? people.find((p: any) => p.id === alias.person_id)
+                          : null;
+                        const centroid = findCentroid(speaker);
+                        const hasCentroid = !!centroid;
+                        const personHasFingerprint =
+                          assignedPerson &&
+                          peopleWithFingerprints?.includes(assignedPerson.id);
+
+                        // Find sample for this speaker (try multiple key formats)
+                        const numMatch = speaker.match(/(\d+)/);
+                        const num = numMatch ? parseInt(numMatch[1], 10) : null;
+                        const sampleKeys =
+                          num !== null
+                            ? [
+                                speaker,
+                                `SPEAKER_${num.toString().padStart(2, "0")}`,
+                                `SPEAKER_${num}`,
+                                `Speaker_${num}`,
+                              ]
+                            : [speaker];
+                        const sample = sampleKeys.reduce(
+                          (found, key) => found || speakerSamples?.[key],
+                          null as any,
+                        );
+                        const hasSample = sample?.start !== undefined;
+
+                        const playSample = () => {
+                          if (!hasSample) return;
+                          if (videoPlayer.videoRef.current) {
+                            (
+                              videoPlayer.videoRef.current as HTMLElement
+                            ).scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                          }
+                          videoPlayer.seekTo(sample.start);
+                        };
+
+                        return (
+                          <div
+                            key={speaker}
+                            className={cn(
+                              "flex flex-col gap-1.5 p-2 rounded border text-sm transition-colors",
+                              assignedPerson
+                                ? personHasFingerprint
+                                  ? "bg-green-50/50 border-green-200"
+                                  : "bg-blue-50/50 border-blue-200"
+                                : "bg-white border-zinc-200",
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              {/* Play button */}
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 w-7 p-0 text-zinc-400 hover:text-red-600"
-                                onClick={() => setCreatingForSpeaker(null)}
-                              >
-                                X
-                              </Button>
-                            </div>
-                          ) : (
-                            <select
-                              className={cn(
-                                "flex-1 h-7 text-xs border rounded",
-                                assignedPerson
-                                  ? "bg-white border-blue-200 text-blue-700 font-medium"
-                                  : "bg-zinc-50 border-zinc-200 text-zinc-600",
-                              )}
-                              value={assignedPerson?.id || ""}
-                              onChange={(e) => {
-                                if (e.target.value === "NEW") {
-                                  setCreatingForSpeaker(speaker);
-                                } else if (e.target.value) {
-                                  handleAliasAssign(speaker, e.target.value);
+                                className={cn(
+                                  "h-7 w-7 p-0 shrink-0",
+                                  hasSample
+                                    ? "text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                                    : "text-zinc-300 cursor-not-allowed",
+                                )}
+                                onClick={playSample}
+                                disabled={!hasSample}
+                                title={
+                                  hasSample ? `Play sample` : "No sample available"
                                 }
-                              }}
-                            >
-                              <option value="">Assign person...</option>
-                              <option
-                                value="NEW"
-                                className="font-bold text-blue-600"
                               >
-                                + Create New Person
-                              </option>
-                              <optgroup label="Council">
-                                {people
-                                  .filter((p: any) => p.is_councillor)
-                                  .map((p: any) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.name}
-                                    </option>
-                                  ))}
-                              </optgroup>
-                              <optgroup label="Others">
-                                {people
-                                  .filter((p: any) => !p.is_councillor)
-                                  .map((p: any) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.name}
-                                    </option>
-                                  ))}
-                              </optgroup>
-                            </select>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                                <Play className="h-4 w-4" />
+                              </Button>
+
+                              {/* Speaker info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-zinc-900 text-xs">
+                                    {speaker}
+                                  </span>
+                                  {hasCentroid && (
+                                    <span title="Voice embedding available">
+                                      <Volume2 className="h-3 w-3 text-green-600 shrink-0" />
+                                    </span>
+                                  )}
+                                  {assignedPerson && (
+                                    <span className="text-[10px] text-blue-700 font-semibold flex items-center gap-0.5 bg-blue-100 px-1.5 py-0.5 rounded">
+                                      <User className="h-2.5 w-2.5" />
+                                      {assignedPerson.name}
+                                      {personHasFingerprint && (
+                                        <span className="text-green-600 ml-0.5">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] shrink-0"
+                              >
+                                {
+                                  segments.filter(
+                                    (s: any) => s.speaker_name === speaker,
+                                  ).length
+                                }
+                              </Badge>
+                            </div>
+
+                            {/* Assignment typeahead */}
+                            <div className="flex gap-2 pl-9">
+                              <PersonTypeahead
+                                people={people}
+                                activePersonIds={activePersonIds}
+                                assignedPerson={assignedPerson || null}
+                                onSelect={(personId) =>
+                                  handleAliasAssign(speaker, personId)
+                                }
+                                onCreateNew={(name) =>
+                                  handleAliasAssign(speaker, null, name)
+                                }
+                                compact
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               </ScrollArea>
             </div>
