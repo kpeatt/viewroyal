@@ -293,6 +293,10 @@ class MeetingIngester:
             if pdf_files:
                 agenda_text = parser.get_pdf_text(pdf_files[0])
 
+                # PyMuPDF failed (scanned image PDF) — try Marker OCR
+                if len(agenda_text.strip()) < 100:
+                    agenda_text = parser.get_pdf_text_ocr(pdf_files[0])
+
             if not agenda_text or len(agenda_text.strip()) < 100:
                 print(f"  [Fallback] Trying HTML for Agenda...")
                 html_files = glob.glob(os.path.join(agenda_folder, "*.html"))
@@ -317,6 +321,10 @@ class MeetingIngester:
             pdf_files = glob.glob(os.path.join(minutes_folder, "*.pdf"))
             if pdf_files:
                 minutes_text = parser.get_pdf_text(pdf_files[0])
+
+                # PyMuPDF failed (scanned image PDF) — try Marker OCR
+                if len(minutes_text.strip()) < 100:
+                    minutes_text = parser.get_pdf_text_ocr(pdf_files[0])
 
             if not minutes_text or len(minutes_text.strip()) < 100:
                 print(f"  [Fallback] Trying HTML for Minutes...")
@@ -877,7 +885,7 @@ class MeetingIngester:
                         if e:
                             item["discussion_end_time"] = e
 
-        if not refined and (minutes_text or agenda_text):
+        if not refined and (has_minutes or has_agenda):
             print(f"  Running AI Refinement ({ai_provider})...")
             canonical_str = ", ".join(CANONICAL_NAMES)
 

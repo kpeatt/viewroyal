@@ -160,6 +160,36 @@ def get_pdf_text(pdf_path, max_pages=None):
         return ""
 
 
+# Lazy singleton for Marker models (expensive to load)
+_marker_converter = None
+
+
+def get_pdf_text_ocr(pdf_path):
+    """
+    OCR fallback for scanned-image PDFs where PyMuPDF returns no text.
+    Uses the marker-pdf library which includes OCR and layout analysis.
+    """
+    global _marker_converter
+    if not os.path.exists(pdf_path):
+        return ""
+    try:
+        from marker.converters.pdf import PdfConverter
+        from marker.models import create_model_dict
+        from marker.output import text_from_rendered
+
+        if _marker_converter is None:
+            print("  [i] Loading Marker OCR models (first use)...")
+            _marker_converter = PdfConverter(artifact_dict=create_model_dict())
+
+        print(f"  [OCR] Running Marker on {os.path.basename(pdf_path)}...")
+        rendered = _marker_converter(pdf_path)
+        text, _, images = text_from_rendered(rendered)
+        return text or ""
+    except Exception as e:
+        print(f"  [!] Marker OCR failed ({os.path.basename(pdf_path)}): {e}")
+        return ""
+
+
 def _clean_extracted_text(text):
     """
     Cleans up garbage Unicode and ASCII patterns often produced by
