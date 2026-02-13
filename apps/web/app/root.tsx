@@ -21,14 +21,20 @@ export const meta: Route.MetaFunction = () => [
     content:
       "Searchable database of View Royal council meetings, voting records, and AI-powered insights.",
   },
-  { property: "og:title", content: "ViewRoyal.ai" },
+  { property: "og:title", content: "ViewRoyal.ai | Council Meeting Intelligence" },
   {
     property: "og:description",
     content:
       "AI-powered civic transparency platform for the Town of View Royal.",
   },
   { property: "og:type", content: "website" },
+  { property: "og:url", content: "https://viewroyal.ai" },
+  { property: "og:site_name", content: "ViewRoyal.ai" },
+  { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+  { property: "og:image:width", content: "1200" },
+  { property: "og:image:height", content: "630" },
   { name: "twitter:card", content: "summary_large_image" },
+  { name: "twitter:image", content: "https://viewroyal.ai/og-image.png" },
 ];
 
 export const links: Route.LinksFunction = () => [
@@ -37,6 +43,7 @@ export const links: Route.LinksFunction = () => [
     type: "image/svg+xml",
     href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m14 13-5 5'/><path d='m15 9-4 4'/><path d='m17 7-4 4'/><path d='m14 4 4 4'/><path d='m7 17 4 4'/><path d='M21 19v-3'/><path d='M18 19v-3'/><path d='M21 16H13'/></svg>",
   },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

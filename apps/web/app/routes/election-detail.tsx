@@ -14,7 +14,8 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: e.name },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { name: "twitter:card", content: "summary" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
   ];
 };
 import {

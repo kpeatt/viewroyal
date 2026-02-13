@@ -6,7 +6,8 @@ export const meta: Route.MetaFunction = () => [
   { name: "description", content: "View Royal council members, attendance records, and voting history." },
   { property: "og:title", content: "Council Members | ViewRoyal.ai" },
   { property: "og:description", content: "View Royal council members, attendance records, and voting history." },
-  { name: "twitter:card", content: "summary" },
+  { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+  { name: "twitter:card", content: "summary_large_image" },
 ];
 import {
   getRawPeopleData,

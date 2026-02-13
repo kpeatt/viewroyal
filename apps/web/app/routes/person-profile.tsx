@@ -20,11 +20,9 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: `${p.name} — ${role}` },
     { property: "og:description", content: description },
     { property: "og:type", content: "profile" },
-    { name: "twitter:card", content: p.image_url ? "summary_large_image" : "summary" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { property: "og:image", content: p.image_url || "https://viewroyal.ai/og-image.png" },
   ];
-  if (p.image_url) {
-    tags.push({ property: "og:image", content: p.image_url });
-  }
   return tags;
 };
 import {

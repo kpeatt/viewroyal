@@ -14,7 +14,8 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { name: "description", content: "Browse all View Royal council meetings, agendas, transcripts, and voting records." },
     { property: "og:title", content: title },
     { property: "og:description", content: "Browse all View Royal council meetings, agendas, transcripts, and voting records." },
-    { name: "twitter:card", content: "summary" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
   ];
 };
 import {
