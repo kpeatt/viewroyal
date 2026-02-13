@@ -25,4 +25,13 @@ export default {
       cloudflare: { env, ctx },
     });
   },
+
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    const url = (env.VIMEO_PROXY_FALLBACK_URL as string) || "https://vimeo-proxy.onrender.com";
+    ctx.waitUntil(
+      fetch(url).catch(() => {
+        // Swallow errors — the point is just to keep Render warm
+      })
+    );
+  },
 } satisfies ExportedHandler<Env>;
