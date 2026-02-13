@@ -10,7 +10,6 @@ from supabase import Client, create_client
 import src.core.parser as parser
 from src.core import utils
 from src.core.alignment import align_meeting_items
-from src.core.markdown_generator import generate_clean_minutes
 from src.core.names import CANONICAL_NAMES
 from src.pipeline.ai_refiner import refine_meeting_data
 from src.pipeline.matter_matching import MatterMatcher
@@ -667,19 +666,24 @@ class MeetingIngester:
                 # Also update agenda_text so the AI sees the truncated version
                 agenda_text = agenda_md
 
+        # Calculate Ingestion Flags (before saving md files, so we can gate on them)
+        has_agenda = len(agenda_text.strip()) > 100
+        has_minutes = len(minutes_text.strip()) > 100
+
         if not dry_run:
             # Save local Markdown versions (keep local copies for reference)
-            # Only save if there's meaningful content (avoid creating empty files)
+            # Gate on has_minutes/has_agenda (raw text > 100 chars) to avoid creating
+            # files from garbage PDF extraction that then get read back as "real" cache
             try:
                 saved_files = []
-                if minutes_md and len(minutes_md.strip()) > 100:
+                if has_minutes and minutes_md and len(minutes_md.strip()) > 100:
                     with open(
                         os.path.join(folder_path, "minutes.md"), "w", encoding="utf-8"
                     ) as f:
                         f.write(minutes_md)
                     saved_files.append("minutes.md")
 
-                if agenda_md and len(agenda_md.strip()) > 100:
+                if has_agenda and agenda_md and len(agenda_md.strip()) > 100:
                     with open(
                         os.path.join(folder_path, "agenda.md"), "w", encoding="utf-8"
                     ) as f:
@@ -692,10 +696,6 @@ class MeetingIngester:
                     )
             except Exception as e:
                 print(f"  [!] Warning: Failed to save local source files: {e}")
-
-        # Calculate Ingestion Flags
-        has_agenda = len(agenda_text.strip()) > 100
-        has_minutes = len(minutes_text.strip()) > 100
 
         # Check for transcript files on disk (in case text load failed or was skipped)
         has_transcript_file = (
@@ -1070,27 +1070,6 @@ class MeetingIngester:
                 except Exception as e:
                     print(f"  [!] Error saving refinement.json: {e}")
 
-        # Generate clean structured markdown from refinement + original text
-        if refined and minutes_text:
-            try:
-                clean_minutes_md = generate_clean_minutes(
-                    refined,
-                    minutes_text,
-                    meeting_title=meta.get("title"),
-                    meeting_date=meta.get("meeting_date"),
-                )
-
-                # Save locally
-                clean_path = os.path.join(folder_path, "minutes_clean.md")
-                if not dry_run:
-                    with open(clean_path, "w", encoding="utf-8") as f:
-                        f.write(clean_minutes_md)
-                    print(f"  [+] Generated clean minutes: {clean_path}")
-                else:
-                    print(f"  [Dry Run] Would generate clean minutes to {clean_path}")
-            except Exception as e:
-                print(f"  [!] Error generating clean minutes: {e}")
-
         # 3. Attendance (skip for planned meetings to prevent hallucinations)
         if refined.get("attendees") and not is_planned_meeting:
             print(f"  Found {len(refined['attendees'])} attendees.")
@@ -1158,10 +1137,29 @@ class MeetingIngester:
                         existing.data.get("meta") or {} if existing.data else {}
                     )
 
-                    # Update meta with centroids and samples
+                    # Update meta with centroids, samples, and fingerprint matches
                     current_meta["speaker_centroids"] = speaker_centroids
                     if speaker_samples:
                         current_meta["speaker_samples"] = speaker_samples
+
+                    # Persist speaker mapping and fingerprint matches from diarizer
+                    fingerprint_aliases = parser.extract_fingerprint_aliases(transcript_path)
+                    if fingerprint_aliases:
+                        speaker_mapping = {
+                            a["label"]: a["name"]
+                            for a in fingerprint_aliases if a.get("label") and a.get("name")
+                        }
+                        fingerprint_matches = {
+                            a["label"]: {
+                                "person_id": a.get("person_id"),
+                                "person_name": a.get("name"),
+                                "similarity": a.get("confidence"),
+                            }
+                            for a in fingerprint_aliases if a.get("label")
+                        }
+                        current_meta["speaker_mapping"] = speaker_mapping
+                        current_meta["fingerprint_matches"] = fingerprint_matches
+
                     self.supabase.table("meetings").update({"meta": current_meta}).eq(
                         "id", meeting_id
                     ).execute()
