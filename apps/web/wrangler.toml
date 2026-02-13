@@ -13,3 +13,8 @@ crons = ["*/5 * * * *"]
 [vars]
 VIMEO_PROXY_URL = "https://vimeo-proxy.kpeatt.workers.dev"
 VIMEO_PROXY_FALLBACK_URL = "https://vimeo-proxy.onrender.com"
+
+[observability]
+[observability.logs]
+enabled = false
+invocation_logs = true

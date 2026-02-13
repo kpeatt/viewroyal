@@ -777,7 +777,8 @@ function ParticipationDashboard({
                       </div>
                     );
 
-                    return record.person_id ? (
+                    const isCouncil = label === "Council Members";
+                    return isCouncil && record.person_id ? (
                       <Link
                         key={record.id}
                         to={`/people/${record.person_id}`}

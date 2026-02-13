@@ -180,9 +180,7 @@ export async function getHomeData(supabase: SupabaseClient) {
           "id, text_content, plain_english_summary, result, meeting_id, disposition, agenda_items(category)",
         )
         .eq("meeting_id", latestMeetingId)
-        .not("result", "is", null)
-        .neq("disposition", "Procedural")
-        .limit(10),
+        .not("result", "is", null),
 
       // Agenda item count for latest meeting
       supabase
@@ -196,7 +194,8 @@ export async function getHomeData(supabase: SupabaseClient) {
 
     keyDecisions = allMeetingMotions
       .filter((m) => {
-        // Filter out motions from procedural agenda items
+        // Filter out procedural motions from key decisions display
+        if (m.disposition === "Procedural") return false;
         const category = (m.agenda_items as any)?.category;
         if (category === "Procedural") return false;
         return true;
