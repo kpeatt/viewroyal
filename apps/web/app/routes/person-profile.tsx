@@ -60,6 +60,7 @@ import {
 } from "../components/ui/tabs";
 import { cn, formatDate } from "../lib/utils";
 import { AskQuestion } from "../components/ask-question";
+import { SubscribeButton } from "../components/subscribe-button";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const { id } = params;
@@ -247,9 +248,14 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
               </div>
 
               <CardHeader className="pb-2">
-                <CardTitle className="text-3xl font-black tracking-tight text-zinc-900">
-                  {person.name}
-                </CardTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-3xl font-black tracking-tight text-zinc-900">
+                    {person.name}
+                  </CardTitle>
+                  {person.is_councillor && (
+                    <SubscribeButton type="person" targetId={person.id} label="Follow" />
+                  )}
+                </div>
 
                 <div className="flex flex-col gap-1 mt-1">
                   {activeMemberships.map((m) => (

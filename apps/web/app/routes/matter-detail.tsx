@@ -45,6 +45,7 @@ import {
 import { ScrollArea } from "../components/ui/scroll-area";
 import { MotionCard } from "../components/motion-card";
 import { ClientOnly } from "../components/utils/client-only";
+import { SubscribeButton } from "../components/subscribe-button";
 import { lazy, Suspense } from "react";
 
 const MattersMap = lazy(() =>
@@ -122,6 +123,7 @@ export default function MatterDetail({ loaderData }: Route.ComponentProps) {
               >
                 {matter.status}
               </span>
+              <SubscribeButton type="matter" targetId={matter.id} label="Follow Matter" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 mb-4">
               {matter.title}

@@ -21,6 +21,8 @@ import {
   Menu,
   X,
   Info,
+  Bell,
+  Settings,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -192,9 +194,16 @@ export function Navbar() {
             </Link>
 
             {/* Desktop User Menu */}
-            {user && (
+            {user ? (
               <div className="hidden sm:flex items-center gap-4">
                 <div className="h-8 w-px bg-zinc-200" />
+                <Link
+                  to="/settings"
+                  className="text-zinc-400 hover:text-blue-600 transition-colors"
+                  title="Settings & Alerts"
+                >
+                  <Bell className="h-4 w-4" />
+                </Link>
                 <Link
                   to="/speaker-alias"
                   className="text-zinc-400 hover:text-zinc-600 transition-colors"
@@ -210,6 +219,14 @@ export function Navbar() {
                   <LogOut className="h-4 w-4" />
                 </Link>
               </div>
+            ) : (
+              <Link
+                to="/signup"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                Get Alerts
+              </Link>
             )}
 
             {/* Mobile Menu Toggle */}
@@ -269,9 +286,15 @@ export function Navbar() {
               isActive={isLinkActive("/about")}
             />
 
-            {user && (
+            <div className="my-2 h-px bg-zinc-100" />
+            {user ? (
               <>
-                <div className="my-2 h-px bg-zinc-100" />
+                <MobileNavLink
+                  name="Settings & Alerts"
+                  href="/settings"
+                  icon={Settings}
+                  isActive={isLinkActive("/settings")}
+                />
                 <MobileNavLink
                   name="Speaker Aliases"
                   href="/speaker-alias"
@@ -286,6 +309,14 @@ export function Navbar() {
                   className="text-red-600 hover:bg-red-50 hover:text-red-700"
                 />
               </>
+            ) : (
+              <MobileNavLink
+                name="Get Alerts"
+                href="/signup"
+                icon={Bell}
+                isActive={isLinkActive("/signup")}
+                className="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              />
             )}
           </div>
         </div>
