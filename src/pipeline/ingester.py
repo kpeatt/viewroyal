@@ -958,7 +958,12 @@ class MeetingIngester:
                     update_fields["organization_id"] = org_id
                     update_fields["type"] = ai_type
 
-                if ai_status:
+                # Only accept AI status if it doesn't downgrade a past meeting.
+                # The ingester's date-based status (Occurred/Completed) is authoritative
+                # over the AI's content-based guess (which may say "Planned" for
+                # agenda-only meetings that already happened).
+                status_rank = {"Planned": 0, "Occurred": 1, "Completed": 2}
+                if ai_status and status_rank.get(ai_status, 0) >= status_rank.get(meeting_status, 0):
                     update_fields["status"] = ai_status
 
                 if ai_summary:
