@@ -1,5 +1,5 @@
 name = "viewroyal-intelligence"
-compatibility_date = "2026-02-12"
+compatibility_date = "2026-02-10"
 compatibility_flags = ["nodejs_compat"]
 main = "./workers/app.ts"
 
@@ -15,6 +15,7 @@ VIMEO_PROXY_URL = "https://vimeo-proxy.kpeatt.workers.dev"
 VIMEO_PROXY_FALLBACK_URL = "https://vimeo-proxy.onrender.com"
 
 [observability]
+enabled = true
 [observability.logs]
-enabled = false
+enabled = true
 invocation_logs = true
