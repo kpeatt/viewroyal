@@ -27,11 +27,13 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    const url = (env.VIMEO_PROXY_FALLBACK_URL as string) || "https://vimeo-proxy.onrender.com";
+    const baseUrl = (env.VIMEO_PROXY_FALLBACK_URL as string) || "https://vimeo-proxy.onrender.com";
+    const url = `${baseUrl}/health`;
+    console.log(`[Cron] Pinging Render fallback: ${url}`);
     ctx.waitUntil(
-      fetch(url).catch(() => {
-        // Swallow errors — the point is just to keep Render warm
-      })
+      fetch(url)
+        .then((res) => console.log(`[Cron] Render responded: ${res.status}`))
+        .catch((err) => console.warn(`[Cron] Render ping failed: ${err}`))
     );
   },
 } satisfies ExportedHandler<Env>;
