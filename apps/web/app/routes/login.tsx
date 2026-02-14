@@ -1,4 +1,4 @@
-import { Form, redirect, useActionData } from "react-router";
+import { Form, Link, redirect, useActionData } from "react-router";
 import type { Route } from "./+types/login";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { Input } from "../components/ui/input";
@@ -71,6 +71,13 @@ export default function Login() {
             Sign In
           </Button>
         </Form>
+
+        <p className="text-xs text-zinc-400 text-center">
+          Want council alerts?{" "}
+          <Link to="/signup" className="text-blue-600 hover:underline font-medium">
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );
