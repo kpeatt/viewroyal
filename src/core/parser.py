@@ -179,7 +179,19 @@ def get_pdf_text_ocr(pdf_path):
 
         if _marker_converter is None:
             print("  [i] Loading Marker OCR models (first use)...")
-            _marker_converter = PdfConverter(artifact_dict=create_model_dict())
+            # Exclude table processors — surya table_rec crashes with
+            # "stack expects a non-empty TensorList" on scanned PDFs
+            # that have tables with no detected rows.  We don't need
+            # table structure for meeting agendas/minutes.
+            processors = [
+                f"{p.__module__}.{p.__name__}"
+                for p in PdfConverter.default_processors
+                if "table" not in p.__name__.lower()
+            ]
+            _marker_converter = PdfConverter(
+                artifact_dict=create_model_dict(),
+                processor_list=processors,
+            )
 
         print(f"  [OCR] Running Marker on {os.path.basename(pdf_path)}...")
         rendered = _marker_converter(pdf_path)
