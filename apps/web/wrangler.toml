@@ -16,6 +16,9 @@ VIMEO_PROXY_FALLBACK_URL = "https://vimeo-proxy.onrender.com"
 VITE_SUPABASE_URL = "https://bfpnsfmraazfhxckmcqk.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY = "sb_publishable_MDQ-kuk52qCJpzqdl_EDvg_q9BK6yNM"
 
+workers_dev = true
+preview_urls = true
+
 [observability]
 enabled = true
 [observability.logs]
