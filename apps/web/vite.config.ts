@@ -13,7 +13,8 @@ export default defineConfig(({ mode }) => {
   // Local vars take precedence over root vars.
   const rootEnv = loadEnv(mode, path.resolve(process.cwd(), "../../"), "");
   const localEnv = loadEnv(mode, process.cwd(), "");
-  const env = { ...rootEnv, ...localEnv };
+  // Merge: process.env (Cloudflare Builds) < root .env < local .env
+  const env = { ...process.env, ...rootEnv, ...localEnv };
 
   // Make all loaded environment variables available to the server-side
   // parts of the React Router dev server (loaders, actions).
@@ -41,10 +42,12 @@ export default defineConfig(({ mode }) => {
         env.SUPABASE_SECRET_KEY || "",
       ),
       "process.env.VITE_SUPABASE_URL": JSON.stringify(
-        env.VITE_SUPABASE_URL || "",
+        env.VITE_SUPABASE_URL || env.SUPABASE_URL || "",
       ),
       "process.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY": JSON.stringify(
-        env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || "",
+        env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+          env.SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+          "",
       ),
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY || ""),
       "process.env.OPENAI_API_KEY": JSON.stringify(env.OPENAI_API_KEY || ""),
