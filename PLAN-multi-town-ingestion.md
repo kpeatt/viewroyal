@@ -1538,6 +1538,495 @@ While we don't store PDF blobs in the database, the `source_url` column points t
 
 This keeps the PDFs accessible even if the source municipality changes their CMS.
 
+### Layer 9: AI Search & RAG Enhancements
+
+The current RAG system works but has fundamental limitations: each tool embeds the query independently (generating the same embedding 3-4 times per question), results are truncated to fit the context window, the orchestrator model is a single Gemini Flash call per step with no self-correction, and search quality degrades significantly for complex multi-topic or temporal questions. This layer addresses these by improving every stage of the RAG pipeline: query understanding, retrieval, context assembly, and answer synthesis.
+
+#### 9a. Current State Assessment
+
+**What works well:**
+- The two-phase architecture (orchestrator gathers evidence → synthesizer writes answer) is sound
+- Tool selection guidance in the system prompt produces good tool choices ~80% of the time
+- Citation numbering system ensures valid references
+- Streaming SSE gives good perceived latency
+
+**What doesn't work well:**
+- **Redundant embedding generation**: Each search tool independently calls `generateQueryEmbedding(query)`. A question that triggers `search_motions`, `search_transcript_segments`, and `search_matters` generates the same embedding 3 times — 3 API round-trips to OpenAI
+- **No query rewriting**: The orchestrator passes the user's raw query to search tools verbatim. "What has council done about the bike lanes on Island Highway?" becomes a vector search for that entire sentence — when "Island Highway bike lane" would match much better
+- **Truncation destroys context**: `truncateForContext()` caps results at 15 items and 2000 chars. For a question spanning multiple meetings, the orchestrator sees only a fraction of relevant evidence, then decides to stop — believing it has enough when it doesn't
+- **No hybrid search**: Vector search alone misses exact matches. A user asking "bylaw 1045" gets semantic neighbors of the concept "bylaw 1045" instead of the exact bylaw. The `search_agenda_items` tool uses keyword-only (`ilike`), which is the opposite problem — no semantic understanding at all
+- **No reranking**: Vector similarity scores from HNSW are approximate — the top-25 by cosine distance are not necessarily the top-25 by relevance to the question. A cross-encoder reranker (or LLM-as-judge) would significantly improve precision
+- **Single-shot orchestration**: The orchestrator gets one chance per step. If it picks the wrong tool or bad search terms, it sees poor results and often gives up rather than trying a different approach
+- **No document search**: With the `documents` and `document_sections` tables coming (Layer 4.5), the RAG system needs tools to search across staff reports, financial statements, engineering assessments, and other attachment content — the substance behind what council debates
+- **No cross-municipality search**: As multi-town support comes online, users will want comparative queries ("How does View Royal's approach to short-term rentals compare to Esquimalt's?")
+- **Synthesis context is thin**: The synthesizer receives only `[N] (type, date, speaker) 120-char title` per source — it never sees the actual evidence text. It's synthesizing from summaries of summaries. The orchestrator's `history` contains the evidence, but it's not passed to the synthesizer
+- **No conversation memory**: The `context` parameter is a raw string of the previous question. Follow-up questions lose the evidence gathered in the previous turn
+- **`search_agenda_items` uses `ilike` injection-vulnerable patterns**: The query is interpolated directly into a PostgREST filter string (`ilike.%${query}%`) without sanitization
+
+#### 9b. Query Understanding & Rewriting
+
+Add a lightweight query analysis step before the orchestrator loop. This runs once per question and produces structured metadata that all subsequent tool calls can use.
+
+```typescript
+interface QueryAnalysis {
+  original_query: string;
+  intent: "factual" | "person" | "comparative" | "temporal" | "exploratory";
+  entities: {
+    people: string[];         // ["Councillor Lemon", "Mayor Mercer"]
+    topics: string[];         // ["bike lane", "Island Highway"]
+    places: string[];         // ["Island Highway", "Helmcken Road"]
+    dates: string[];          // ["2024", "last year", "January"]
+    bylaws: string[];         // ["Bylaw 1045"]
+    organizations: string[];  // ["Committee of the Whole"]
+  };
+  rewritten_queries: {
+    semantic: string;         // Optimized for vector search: "Island Highway bike lane infrastructure"
+    keyword: string;          // Optimized for text search: "bike lane" OR "cycling infrastructure"
+    expanded: string[];       // Synonyms/related terms: ["cycling", "active transportation", "bike path"]
+  };
+  temporal: {
+    has_temporal_intent: boolean;
+    resolved_after_date: string | null;  // "2024-01-01" (resolved from "last year")
+    resolved_before_date: string | null;
+  } | null;
+  municipality_scope: string | null;      // null = current context, "all" = cross-municipality
+}
+```
+
+**Implementation**: A single Gemini Flash call with structured output (JSON schema enforcement). The prompt includes the current date, the municipality name, and known entity types. Cost: ~0.5¢ per question, <200ms latency.
+
+This replaces `get_current_date` as a tool (temporal resolution happens upfront), eliminates the need for the orchestrator to craft search queries on its own, and enables hybrid search by providing both semantic and keyword query forms.
+
+**Query expansion examples:**
+
+| User query | Semantic rewrite | Keyword rewrite | Expanded terms |
+|-----------|-----------------|----------------|----------------|
+| "What has council done about the bike lanes on Island Highway?" | "Island Highway bike lane infrastructure" | "bike lane" OR "Island Highway" | ["cycling", "active transportation", "bike path", "bicycle"] |
+| "Has anyone opposed Bylaw 1045?" | "Bylaw 1045 opposition vote" | "Bylaw 1045" OR "bylaw no. 1045" | ["rezoning", specific bylaw title from DB lookup] |
+| "What's happening with housing?" | "affordable housing development policy" | "housing" OR "residential" | ["affordable housing", "rental", "OCP", "density", "zoning"] |
+| "Compare View Royal and Esquimalt on short-term rentals" | "short-term rental regulation policy" | "short-term rental" OR "Airbnb" OR "STR" | ["vacation rental", "home sharing", "licensing"] |
+
+**Entity pre-resolution**: When the analysis identifies a person name, do a database lookup immediately (reusing the existing `getPerson` logic). If the person exists, attach their `id` to the analysis so subsequent tools can skip the lookup. Same for bylaws — if "Bylaw 1045" is mentioned, look up its `matter_id` and title so search tools can use the title text instead of the identifier.
+
+#### 9c. Hybrid Search Foundation
+
+Replace the current per-tool embedding generation with a shared search infrastructure that combines vector similarity with full-text search.
+
+**Shared embedding cache**: Generate the query embedding once per request and pass it to all tools:
+
+```typescript
+// In runQuestionAgent, before the orchestrator loop:
+const analysis = await analyzeQuery(question, municipalityContext);
+const queryEmbedding = await generateQueryEmbedding(analysis.rewritten_queries.semantic);
+
+// Each tool receives the pre-computed embedding + analysis
+const toolContext = { queryEmbedding, analysis, municipalityId };
+```
+
+This eliminates 2-3 redundant OpenAI API calls per question.
+
+**Full-text search integration**: Add `tsvector` generated columns and GIN indexes (from Layer 8f plan) to enable combined retrieval:
+
+```sql
+-- Already planned in Layer 8; ensuring the RAG tools use them
+ALTER TABLE transcript_segments ADD COLUMN text_search tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(corrected_text_content, text_content, ''))) STORED;
+ALTER TABLE motions ADD COLUMN text_search tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(plain_english_summary, text_content, ''))) STORED;
+ALTER TABLE agenda_items ADD COLUMN text_search tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(plain_english_summary, '') || ' ' || coalesce(debate_summary, ''))) STORED;
+ALTER TABLE matters ADD COLUMN text_search tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(plain_english_summary, description, ''))) STORED;
+ALTER TABLE documents ADD COLUMN text_search tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content_markdown, ''))) STORED;
+
+CREATE INDEX idx_ts_segments_fts ON transcript_segments USING GIN (text_search);
+CREATE INDEX idx_motions_fts ON motions USING GIN (text_search);
+CREATE INDEX idx_agenda_items_fts ON agenda_items USING GIN (text_search);
+CREATE INDEX idx_matters_fts ON matters USING GIN (text_search);
+CREATE INDEX idx_documents_fts ON documents USING GIN (text_search);
+```
+
+**Hybrid search RPC function**: A single Supabase RPC that runs both vector and full-text search, then merges results with reciprocal rank fusion (RRF):
+
+```sql
+CREATE OR REPLACE FUNCTION hybrid_search(
+    p_query_embedding vector(768),   -- or halfvec(384) after migration
+    p_text_query text,               -- raw text for ts_query
+    p_table_name text,               -- "motions", "transcript_segments", etc.
+    p_municipality_id bigint DEFAULT NULL,
+    p_after_date date DEFAULT NULL,
+    p_before_date date DEFAULT NULL,
+    p_match_count int DEFAULT 20,
+    p_vector_weight float DEFAULT 0.7,
+    p_text_weight float DEFAULT 0.3
+) RETURNS TABLE (id bigint, vector_rank int, text_rank int, rrf_score float, similarity float)
+```
+
+**Reciprocal Rank Fusion**: Combines rankings from vector and keyword search without needing to normalize scores across different metrics:
+
+```
+RRF_score = vector_weight / (k + vector_rank) + text_weight / (k + text_rank)
+```
+
+Where `k = 60` (standard constant). Items that appear in both result sets get boosted; items from only one source still appear but ranked lower. This handles the "bylaw 1045" problem — exact text match ranks it #1 in keyword search, which boosts it above semantically-similar-but-wrong results from vector search.
+
+#### 9d. Reranking with LLM-as-Judge
+
+After hybrid search returns ~50 candidates, rerank the top results using the LLM to score relevance. This is dramatically more accurate than cosine similarity alone because the LLM understands the question's intent, not just vocabulary overlap.
+
+**Why not a cross-encoder model?** Cross-encoders (e.g., `ms-marco-MiniLM`) are faster and cheaper per item, but they require hosting a model endpoint or running it client-side. Gemini Flash is already available, fast (~50ms per batch), and understands municipal context better than a generic cross-encoder.
+
+**Batch reranking**: Send a single Gemini Flash call with the question and top-N candidates (20-30), asking it to score each 0-10 and return the top results:
+
+```typescript
+async function rerankResults(
+  question: string,
+  candidates: SearchResult[],
+  topK: number = 10
+): Promise<SearchResult[]> {
+  const prompt = `Rate each result's relevance to the question on a scale of 0-10.
+Question: "${question}"
+
+Results:
+${candidates.map((c, i) => `[${i}] ${c.type}: ${c.text.slice(0, 300)}`).join("\n\n")}
+
+Return JSON: {"rankings": [{"index": 0, "score": 8, "reason": "directly addresses..."}, ...]}
+Only include results scoring 5 or higher.`;
+
+  const response = await geminiFlash.generateContent(prompt);
+  // Parse, sort by score, return top K
+}
+```
+
+**Cost**: ~1¢ per question (one Flash call with ~3K tokens input). **Latency**: ~300ms. **Quality improvement**: Eliminates the ~30% of results that are topically adjacent but not actually relevant (e.g., a motion about "road improvements" matching a query about "bike lanes" because both are transportation-related).
+
+**When to rerank**: Only when the candidate set is large (>10 results) and the question is complex. Simple factual queries ("When was bylaw 1045 adopted?") can skip reranking — the entity pre-resolution from query analysis handles these.
+
+#### 9e. Enhanced Tool Set
+
+Redesign the RAG tools for the multi-town, document-rich data model. The tools shift from "search a single table" to "answer a type of question" — each tool encapsulates the hybrid search, municipality scoping, and result formatting internally.
+
+**Retired tools:**
+- `get_current_date` → replaced by query analysis temporal resolution (9b)
+- `search_agenda_items` (keyword-only `ilike`) → replaced by `search_discussions` which uses hybrid search
+
+**Redesigned tools:**
+
+| Tool | Purpose | Changes from current |
+|------|---------|---------------------|
+| `search_discussions` | Find what was discussed about a topic | **Replaces both `search_transcript_segments` and `search_agenda_items`.** Searches agenda item discussion embeddings (Layer 8f) + key statements + full-text on segments. Returns agenda items with their key quotes and discussion summary, not raw segments. The orchestrator gets structured discussion context instead of scattered fragments. |
+| `search_decisions` | Find council decisions and votes on a topic | **Replaces `search_motions`.** Hybrid search on motions + matters. Returns motions with vote breakdowns, related matter context, and outcome. Optionally includes the debate context (key statements from the discussion that led to the vote). |
+| `get_person_activity` | Everything about a person on a topic | **Replaces both `get_statements_by_person` and `get_voting_history`.** Single tool that returns a person's statements, votes, and motions they moved/seconded on a topic. Handles aliases. Reduces tool calls for person-based questions from 2 to 1. |
+| `search_documents` | Search across staff reports, attachments, and official documents | **New.** Searches the `documents` and `document_sections` tables (Layer 4.5). Finds staff recommendations, financial analyses, engineering assessments, correspondence. Returns section-level results with document context. Critical for questions like "What did the staff report say about traffic impacts?" |
+| `get_meeting_context` | Get full context for a specific meeting | **New.** Given a meeting ID or date, returns the complete agenda, key decisions, attendance, and document list. Useful when the orchestrator finds a relevant meeting via another tool and needs to understand the full picture. |
+| `compare_across_municipalities` | Compare how different towns handle a topic | **New (Phase 6+).** Runs the same search across multiple municipalities and returns side-by-side results. Enables "How does View Royal's tree bylaw compare to Esquimalt's?" |
+| `get_timeline` | Chronological history of a topic across meetings | **New.** Given a matter ID or topic, returns a chronological sequence of events: when it was first raised, key debates, readings, votes, and current status. Synthesizes across meetings, motions, and agenda items. Essential for "What's the history of the OCP review?" |
+
+**Tool definitions (detailed):**
+
+```typescript
+// search_discussions — primary topic search tool
+{
+  name: "search_discussions",
+  description: `search_discussions(query: string, after_date?: string, before_date?: string)
+    — Finds council discussions about a topic. Returns agenda items with their AI summaries,
+    key quotes from debate, and meeting context. Best for: "What has council discussed about X?",
+    "What was said about Y?", "Show me debates about Z."
+    Uses semantic + keyword hybrid search. Short specific queries work best.`,
+  call: async ({ query, after_date, before_date }, context) => {
+    // 1. Hybrid search on agenda_items (discussion embeddings + full-text)
+    // 2. For top results, fetch key_statements linked to those agenda items
+    // 3. Return structured: { agenda_item, meeting_date, summary, key_quotes[], speakers[] }
+  }
+}
+
+// search_documents — new tool for staff reports, attachments
+{
+  name: "search_documents",
+  description: `search_documents(query: string, document_type?: string, after_date?: string)
+    — Searches across official documents: staff reports, financial statements, engineering
+    assessments, correspondence, and other attachments to agenda packages. Use when the question
+    is about specific details, recommendations, or analysis that staff prepared for council.
+    Optional document_type filter: "staff_report", "financial_statement", "correspondence",
+    "bylaw_text", "map", "presentation".`,
+  call: async ({ query, document_type, after_date }, context) => {
+    // 1. Hybrid search on documents table (content_markdown + embedding)
+    // 2. For top results, fetch parent document and linked agenda item for context
+    // 3. Return: { document_title, document_type, section_heading, excerpt, meeting_date, agenda_item_title }
+  }
+}
+
+// get_timeline — chronological topic tracking
+{
+  name: "get_timeline",
+  description: `get_timeline(topic_or_matter_id: string)
+    — Returns the chronological history of a topic or matter across all meetings. Shows when it
+    was first raised, key debates, readings, votes, amendments, and current status. Use for
+    questions like "What's the history of X?" or "How has the OCP review progressed?"
+    Pass either a matter ID (if known from prior search) or a topic string.`,
+  call: async ({ topic_or_matter_id }, context) => {
+    // 1. If numeric, look up the matter directly
+    // 2. If string, search matters to find the best match
+    // 3. Fetch all agenda items, motions, and key events for that matter, ordered by date
+    // 4. Return: { matter_title, status, timeline: [{ date, event_type, description, outcome }] }
+  }
+}
+```
+
+#### 9f. Richer Context Assembly
+
+The current system passes truncated JSON blobs to the orchestrator and one-line summaries to the synthesizer. Both lose critical information. Redesign context assembly for each phase.
+
+**Orchestrator context**: Instead of raw JSON dumps, format tool results as readable structured text that's easy for the model to reason about:
+
+```typescript
+function formatToolResultForOrchestrator(toolName: string, result: any): string {
+  if (toolName === "search_discussions") {
+    return result.map((r: any, i: number) =>
+      `Discussion ${i+1}: "${r.agenda_item_title}" (${r.meeting_date}, ${r.meeting_type})
+       Summary: ${r.plain_english_summary || "No summary"}
+       Key quotes: ${r.key_quotes?.map((q: any) => `- ${q.speaker}: "${q.text}"`).join("\n") || "None"}
+       Speakers: ${r.speakers?.join(", ") || "Unknown"}`
+    ).join("\n\n");
+  }
+  // ... format per tool type
+}
+```
+
+This gives the orchestrator much richer signal about what it found, enabling better decisions about whether to search further or finalize.
+
+**Synthesizer evidence bundle**: Pass the full evidence text to the synthesizer, not just titles. The synthesizer currently receives:
+
+```
+[1] (transcript, 2024-01-15, Cllr. Lemon) Councillor Lemon noted that the bike lane...
+```
+
+Change to a structured evidence document:
+
+```
+[1] TRANSCRIPT — Regular Council, January 15, 2024
+    Speaker: Councillor Lemon
+    Context: Discussion on Island Highway Active Transportation Plan (Agenda Item 7.2)
+    Quote: "I believe we need to delay the bike lane project until the traffic study is complete.
+    The current proposal doesn't account for the increased volume from the new development at
+    Helmcken Road. We're talking about a $2.3 million investment and we owe it to residents
+    to get it right."
+
+[2] MOTION — Regular Council, January 15, 2024
+    Motion: "THAT Council direct staff to commission an independent traffic impact assessment
+    for the Island Highway Active Transportation Corridor before proceeding to detailed design."
+    Moved by: Councillor Lemon. Seconded by: Councillor Holland.
+    Result: CARRIED (5-2). Opposed: Mayor Mercer, Councillor Bateman.
+
+[3] STAFF REPORT — Regular Council, November 12, 2023
+    Document: "Staff Report: Island Highway Active Transportation Plan — Phase 2 Design"
+    Author: Director of Engineering
+    Recommendation: "Staff recommends that Council approve the Phase 2 detailed design at an
+    estimated cost of $2.3 million, funded from the Gas Tax Reserve."
+    Key finding: "Traffic modeling indicates a 12% reduction in vehicle throughput during
+    peak hours, offset by a projected 40% increase in cycling trips."
+```
+
+This gives the synthesizer enough context to write a genuinely informative answer with specific dates, quotes, vote counts, and document references — instead of a vague summary.
+
+**Context window budget**: With Gemini 2.0 Flash's 1M token context, we have ample room. Budget:
+- System prompt: ~1K tokens
+- Evidence bundle: up to 8K tokens (~20 rich sources × ~400 tokens each)
+- Question + instructions: ~200 tokens
+- Output: ~600 tokens
+- Total: ~10K tokens per synthesis call — well within limits, and 5x richer than current
+
+#### 9g. Orchestrator Improvements
+
+**Adaptive step budget**: Replace the fixed `maxSteps = 6` with a dynamic budget based on query complexity from the analysis:
+
+| Query intent | Step budget | Rationale |
+|-------------|------------|-----------|
+| Simple factual ("When was bylaw 1045 adopted?") | 2 | Entity lookup + one search |
+| Person-based ("What has Cllr. Lemon said about housing?") | 3 | Person lookup + statements + optional votes |
+| Topic exploration ("What's happening with housing?") | 4 | Discussions + decisions + matters |
+| Comparative ("How do councillors differ on density?") | 5 | Multiple person lookups + topic search |
+| Historical ("What's the full history of the OCP review?") | 5 | Timeline + discussions + documents |
+| Cross-municipality comparison | 6 | Parallel searches across towns |
+
+**Self-correction loop**: When a tool returns fewer than 3 results, the orchestrator should automatically try a reformulated query before giving up. Add a retry instruction to the system prompt:
+
+```
+If a search returns 0-2 results, try ONE of these recovery strategies before finalizing:
+- Broaden the query: "tree cutting permit" → "tree removal"
+- Try a different tool: if search_discussions found nothing, try search_decisions
+- Remove date filters: temporal filters may be too narrow
+- Search for a related concept: "bike lane" → "active transportation"
+Do NOT retry with the same query and tool.
+```
+
+**Parallel tool execution**: Currently, tools run sequentially (one per orchestrator step). For questions that clearly need multiple independent searches, the orchestrator should be able to request parallel execution:
+
+```json
+{"thought": "This is a comparative question. I need voting records for both councillors.",
+ "action": {"parallel": [
+   {"tool_name": "get_person_activity", "tool_args": {"person_name": "Lemon", "topic": "housing"}},
+   {"tool_name": "get_person_activity", "tool_args": {"person_name": "Bateman", "topic": "housing"}}
+ ]}}
+```
+
+The agent loop detects the `parallel` key and runs both tools concurrently via `Promise.all()`. This halves latency for comparative questions.
+
+#### 9h. Answer Quality & Self-Evaluation
+
+**Claim verification**: After the synthesizer produces an answer, run a lightweight verification pass that checks each factual claim against the evidence. This catches hallucinated dates, vote counts, or misattributed quotes:
+
+```typescript
+async function verifyAnswer(
+  answer: string,
+  evidence: NormalizedSource[],
+  question: string
+): Promise<{ verified: boolean; issues: string[] }> {
+  const verificationPrompt = `Check each factual claim in this answer against the evidence.
+Flag any claim that is not directly supported by the evidence.
+
+Answer: ${answer}
+
+Evidence:
+${formattedEvidence}
+
+Return JSON: {"verified": true/false, "issues": ["Claim X is not supported...", ...]}`;
+
+  // Only run if answer contains specific claims (dates, numbers, names, vote counts)
+  // Skip for vague or "insufficient evidence" answers
+}
+```
+
+If issues are found, either: (a) regenerate the answer with a correction prompt, or (b) add a subtle disclaimer to the UI ("Some details in this answer could not be fully verified against council records").
+
+**Confidence scoring**: Have the synthesizer output a confidence level alongside the answer. Display this to users so they know whether to trust the answer or dig deeper:
+
+- **High confidence**: Multiple corroborating sources, recent data, clear evidence
+- **Medium confidence**: Few sources, indirect evidence, older data
+- **Low confidence**: Single source, inference-heavy, data gaps noted
+
+The UI already shows sources — add a confidence indicator (e.g., a subtle badge or sentence like "Based on 7 council records from 2023-2024").
+
+#### 9i. Conversation Memory & Follow-ups
+
+The current `context` parameter is a raw string of the previous question. This loses all gathered evidence and forces re-retrieval for follow-ups. Implement lightweight conversation state.
+
+**Session state structure:**
+
+```typescript
+interface ConversationState {
+  session_id: string;
+  turns: {
+    question: string;
+    analysis: QueryAnalysis;
+    evidence: NormalizedSource[];   // Full evidence from this turn
+    answer_summary: string;         // First 200 chars of answer
+    entities_discovered: {          // Entities found during this turn
+      people: { id: number; name: string }[];
+      matters: { id: number; title: string }[];
+      meetings: { id: number; date: string }[];
+    };
+  }[];
+}
+```
+
+**Storage**: Cloudflare Workers KV with a 15-minute TTL (same as current rate limit window). Key: session ID from a cookie or header. Size: ~5-10 KB per session — well within KV limits.
+
+**Follow-up handling**: When the orchestrator receives a follow-up question with conversation state:
+1. The query analysis step receives prior context (entities, topics discussed)
+2. Pronoun resolution: "What did she say about that?" → "What did Councillor Lemon say about the bike lane?"
+3. Evidence reuse: If the prior turn found the relevant meeting, don't re-search — use the cached `meeting_id`
+4. Incremental search: Only search for new information not already in the conversation
+
+**Example flow:**
+```
+Turn 1: "What has council discussed about the Island Highway bike lane?"
+→ Finds 5 discussions, 3 motions, 2 staff reports. Surfaces key quotes.
+
+Turn 2: "Who opposed it?"
+→ Query analysis resolves "it" = Island Highway bike lane (from turn 1)
+→ Reuses the motion IDs from turn 1 to look up vote breakdowns
+→ No new embedding generation or broad search needed — targeted vote lookup only
+```
+
+#### 9j. Observability & Quality Metrics
+
+Add instrumentation to measure and improve RAG quality over time.
+
+**Per-question telemetry** (stored in Supabase or KV):
+
+```typescript
+interface RAGTelemetry {
+  question_id: string;
+  question: string;
+  municipality_slug: string;
+  query_analysis_ms: number;
+  embedding_ms: number;
+  tool_calls: {
+    tool: string;
+    latency_ms: number;
+    result_count: number;
+    reranked: boolean;
+  }[];
+  total_sources: number;
+  unique_sources: number;
+  synthesis_ms: number;
+  total_latency_ms: number;
+  answer_length: number;
+  confidence: "high" | "medium" | "low";
+  // User feedback (optional, from thumbs up/down in UI)
+  feedback?: "positive" | "negative";
+  feedback_comment?: string;
+}
+```
+
+**Quality dashboard** (admin-only route): Aggregated metrics showing:
+- Average latency by stage (query analysis, search, reranking, synthesis)
+- Tool usage distribution (which tools are called most, which return empty)
+- Confidence score distribution
+- User feedback ratio
+- Questions with negative feedback (for manual review)
+- Common query patterns (topics people ask about most)
+
+**Feedback loop**: Add thumbs up/down buttons to the answer UI. Negative feedback triggers:
+1. Store the question + answer + evidence for review
+2. Periodically review low-rated answers to identify systematic issues (bad prompts, missing data, poor tool choices)
+3. Use the feedback corpus to improve system prompts and tool descriptions
+
+#### 9k. Search UI Enhancements
+
+**Unified search bar**: Replace the separate search page and ask page with a single search experience that auto-routes based on query analysis:
+
+- Simple keyword queries (< 4 words, no question mark) → instant keyword/hybrid search results
+- Questions (detected by "?" or question intent) → route to RAG agent with streaming answer
+- Entity queries ("Bylaw 1045", "Councillor Lemon") → route to entity detail page directly
+
+**Suggested follow-ups**: After showing an answer, suggest 2-3 natural follow-up questions based on the evidence gathered. The synthesizer can generate these as a structured field:
+
+```json
+{
+  "answer": "Council has discussed affordable housing in 7 meetings...",
+  "follow_ups": [
+    "How did each councillor vote on the housing density motion?",
+    "What did the staff report recommend for the Helmcken Road development?",
+    "What's the timeline for the Official Community Plan housing review?"
+  ]
+}
+```
+
+These render as clickable chips below the answer, encouraging deeper exploration.
+
+**Source previews**: When a user hovers over a citation `[3]`, show a rich preview card with the full source excerpt (not just a title), the speaker, the meeting date, and a direct link to that moment in the meeting (video timestamp for transcripts, document section for staff reports). This is already partially implemented — enhance it with the richer evidence from 9f.
+
+**Progressive disclosure for research steps**: The current UI shows tool names and result counts in a collapsible section. Enhance to show the actual search queries used, which helps users understand why certain results appeared and how to refine their questions:
+
+```
+🔍 Searched discussions for "Island Highway bike lane" → 5 results
+🔍 Searched decisions for "bike lane infrastructure" → 3 results
+📄 Found staff report: "Island Highway Active Transportation Plan — Phase 2 Design"
+```
+
 ## Implementation Sequence
 
 ### Phase 0: Python Monorepo Reorganization
@@ -1649,6 +2138,20 @@ This keeps the PDFs accessible even if the source municipality changes their CMS
 5. Validate output against OCD spec (automated tests with sample data)
 6. Publish OCD endpoint documentation alongside the custom API docs
 
+### Phase 5c: AI Search & RAG Enhancements
+1. **Query analysis pipeline** (9b): Build `analyzeQuery()` function — single Gemini Flash call that extracts intent, entities, temporal resolution, and query rewrites. Replace `get_current_date` tool. Add entity pre-resolution (person/bylaw DB lookups from extracted entities).
+2. **Shared embedding + hybrid search foundation** (9c): Refactor to generate query embedding once per request (eliminate redundant OpenAI calls). Add `tsvector` generated columns + GIN indexes on `transcript_segments`, `motions`, `agenda_items`, `matters`, `documents`. Create `hybrid_search` RPC function implementing reciprocal rank fusion (RRF) across vector + full-text results.
+3. **Reranking** (9d): Add LLM-as-judge reranking step — batch top-30 hybrid search candidates into a single Gemini Flash call, score 0-10, return top-K. Only trigger for complex queries with >10 candidates.
+4. **Redesigned tool set** (9e): Implement `search_discussions` (replaces `search_transcript_segments` + `search_agenda_items`), `search_decisions` (replaces `search_motions`), `get_person_activity` (merges `get_statements_by_person` + `get_voting_history`), `search_documents` (new — searches staff reports and attachments), `get_meeting_context` (new — full meeting detail), `get_timeline` (new — chronological matter history). Wire all tools to use shared embedding + hybrid search + municipality scoping.
+5. **Rich context assembly** (9f): Replace `truncateForContext()` with structured text formatting per tool type. Build full evidence bundles for synthesizer with quotes, vote breakdowns, and document excerpts instead of 120-char titles.
+6. **Orchestrator improvements** (9g): Adaptive step budget based on query intent. Add self-correction instructions (retry with broader query on sparse results). Implement parallel tool execution (`Promise.all` for independent tool calls in a single orchestrator step).
+7. **Answer quality** (9h): Add confidence scoring to synthesizer output. Implement claim verification pass (Gemini Flash checks answer claims against evidence). Add confidence indicator to answer UI.
+8. **Conversation memory** (9i): Store conversation state in Cloudflare KV (session_id → turns with evidence + entities). Implement pronoun resolution and evidence reuse for follow-up questions. Add suggested follow-up questions to synthesizer output.
+9. **Observability** (9j): Add per-question telemetry (latency by stage, tool usage, result counts, confidence). Build admin-only quality dashboard route. Add thumbs up/down feedback buttons to answer UI. Store negative-feedback questions for review.
+10. **Search UI** (9k): Unify search page and ask page into single search bar with auto-routing (keywords → instant results, questions → RAG agent). Render suggested follow-ups as clickable chips. Enhance citation hover cards with full source excerpts. Show search queries used in progressive research step disclosure.
+11. **Fix `search_agenda_items` injection vulnerability**: Sanitize query input in PostgREST `ilike` filter (or replace entirely with the new `search_discussions` hybrid tool).
+12. **Create missing RPC functions**: Define `match_transcript_segments`, `match_motions`, `match_matters`, and `match_agenda_items` in a migration (currently called but not defined in `bootstrap.sql`).
+
 ### Phase 6: Second Town Onboarding
 1. Configure Esquimalt municipality in database with OCD IDs
 2. Run Legistar scraper to populate data (structured ingestion path — documents populated from API data)
@@ -1706,6 +2209,32 @@ This keeps the PDFs accessible even if the source municipality changes their CMS
 - OCD is a read-only projection of existing data (serialization layer only) — it doesn't require changing the internal data model
 - Supporting both costs relatively little: the OCD serializers are thin transformations, and the routes reuse the same service layer
 
+### Why hybrid search (vector + full-text) instead of vector-only?
+- Vector search excels at semantic similarity ("affordable housing" matches "residential density") but fails on exact matches ("Bylaw 1045" returns semantically-similar-but-wrong bylaws)
+- Full-text search (tsvector/GIN) handles exact terms, identifiers, and proper nouns perfectly but has zero semantic understanding
+- Reciprocal rank fusion combines both without needing to normalize incompatible score scales — items that appear in both result sets get a natural boost
+- The cost is two indexes per table (HNSW + GIN) instead of one. GIN indexes are tiny (~5 KB per meeting vs. ~500 KB for HNSW), so the storage overhead is negligible
+- Keyword-only `ilike` search (current `search_agenda_items`) is the worst of both worlds — slow (no index), no semantics, and SQL-injection-adjacent. Hybrid search replaces it entirely
+
+### Why LLM reranking instead of a cross-encoder?
+- Cross-encoders (ms-marco-MiniLM, etc.) are faster per item (~5ms vs ~300ms for a batch) but require hosting a model inference endpoint or a dedicated embedding service — another moving part to maintain
+- Gemini Flash is already available, already paid for (used by the orchestrator), and understands municipal domain context (committee names, bylaw structures, motion phrasing) far better than a generic cross-encoder trained on web search pairs
+- The reranker runs on ~20-30 candidates (not thousands), so the absolute latency (300ms) is acceptable within a multi-second RAG pipeline
+- If latency becomes critical later, a dedicated cross-encoder can be swapped in at the same position in the pipeline without changing the surrounding architecture
+
+### Why merge tools (e.g., `search_discussions` replaces two tools)?
+- Fewer tools = fewer orchestrator decisions = fewer wrong choices. The current 7-tool set forces the orchestrator to choose between `search_transcript_segments` and `search_agenda_items` — two tools that often answer the same question from different angles. The orchestrator frequently picks one and misses evidence from the other
+- Merged tools run hybrid search across multiple tables internally, returning a unified result set. The orchestrator sees "5 discussions found" instead of needing to mentally merge results from two separate tool calls
+- Fewer tool calls per question = lower latency and lower LLM cost
+- The merged tools are still distinct in purpose: `search_discussions` (what was said), `search_decisions` (what was decided), `get_person_activity` (everything about a person). The orchestrator's tool selection prompt becomes simpler and more reliable
+
+### Why query analysis as a separate step instead of letting the orchestrator handle it?
+- The orchestrator is a loop — it runs 2-6 times per question. Query analysis (intent classification, entity extraction, temporal resolution, query rewriting) only needs to run once
+- Moving analysis out of the loop means the orchestrator starts with structured metadata (resolved dates, identified people, optimized search queries) instead of having to figure these out through trial-and-error tool calls
+- It eliminates the `get_current_date` tool entirely — temporal expressions like "last 6 months" are resolved to concrete dates before the orchestrator runs
+- Entity pre-resolution (looking up person IDs, matter IDs) in the analysis step means tools can use direct ID lookups instead of fuzzy name matching, which is both faster and more reliable
+- The analysis step costs ~0.5¢ and ~200ms — trivial compared to the 3-6 orchestrator steps it replaces or simplifies
+
 ### What about the `meeting_type` enum?
 - The current enum (`Regular Council`, `Special Council`, etc.) is View Royal-specific
 - RDOS uses "Board" meetings, not "Council"
@@ -1726,3 +2255,10 @@ This keeps the PDFs accessible even if the source municipality changes their CMS
 | OCD spec is loosely maintained (last major refactor 2014) | Implement the core entities faithfully; don't over-invest in edge cases; treat OCD as a best-effort interop layer |
 | Public API abuse — RAG endpoint is expensive (Gemini calls per request) | Tier the ask endpoint aggressively (10/day free); require API keys; monitor usage; consider caching common questions |
 | API versioning — breaking changes after consumers depend on v1 | Commit to v1 stability; use additive changes only; version bump (v2) for breaking changes |
+| LLM reranking adds latency and cost to every RAG query | Only rerank when candidate set is large (>10) and query is complex; simple factual queries skip reranking entirely. Budget: ~300ms and ~1¢ per rerank call |
+| Query analysis step could misclassify intent or extract wrong entities | Use structured output (JSON schema) to constrain Gemini; always fall back gracefully (if analysis fails, run the orchestrator with the raw query as before) |
+| Claim verification pass could flag correct answers as unsupported | Only trigger verification when the answer contains specific factual claims (dates, numbers, vote counts); skip for qualitative or "insufficient evidence" answers. Use as a soft signal (confidence indicator) rather than hard blocking |
+| Conversation memory in KV could grow unbounded for long sessions | Cap at 5 turns per session; 15-minute TTL auto-expires sessions; store only source IDs + entities (not full evidence text) to keep KV values under 25 KB |
+| Hybrid search RPC function complexity — maintaining two search paths per table | The hybrid_search RPC is a single function that handles both paths, not per-table duplication. If one path fails (e.g., GIN index missing), degrade to the other gracefully |
+| Merged tools reduce orchestrator flexibility for edge cases | Keep the original granular tools available as fallback options in the tool registry but deprioritize them in the system prompt. If the merged tool returns poor results, the orchestrator can explicitly call the underlying search |
+| Missing RPC functions (`match_transcript_segments`, `match_motions`, `match_matters`) currently called but undefined | Create these in the first migration of Phase 5c; they're prerequisites for everything else. The hybrid_search RPC eventually supersedes them, but having them defined prevents runtime errors during incremental rollout |
