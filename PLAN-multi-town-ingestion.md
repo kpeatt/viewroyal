@@ -2467,14 +2467,13 @@ Profiles must work across municipalities with different council structures:
 
 ### Layer 11: Speaker Identification, Fingerprinting & Transcript Quality
 
-The current diarization and speaker identification system works — Gemini identifies speakers from audio context, the local diarizer uses CAM++ embeddings for voice matching, and AI refinement corrects transcription errors. But the system has fundamental architectural gaps: speaker identity is scoped to individual meetings (a person gets a fresh "Speaker_01" label every time), voice fingerprints exist but aren't systematically built or maintained, name canonicalization is hardcoded to View Royal's 50 known people, and there's no quality scoring to know which transcripts are reliable and which need human review. This layer fixes the speaker identity lifecycle from enrollment through cross-meeting tracking, and adds quality infrastructure to measure and improve transcript accuracy over time.
+The current diarization and speaker identification system works — the local diarizer uses senko + CAM++ embeddings for voice matching, parakeet-mlx for STT, and AI refinement corrects transcription errors. But the system has fundamental architectural gaps: speaker identity is scoped to individual meetings (a person gets a fresh "Speaker_01" label every time), voice fingerprints exist but aren't systematically built or maintained, name canonicalization is hardcoded to View Royal's 50 known people, and there's no quality scoring to know which transcripts are reliable and which need human review. This layer fixes the speaker identity lifecycle from enrollment through cross-meeting tracking, and adds quality infrastructure to measure and improve transcript accuracy over time.
 
 #### 11a. Current State Assessment
 
 **What works:**
 
-- **Gemini diarization** (`diarizer.py`): Two-pass approach (speaker map → speaker segments) using meeting context. Produces speaker names when the audio + agenda provide enough context. Used for cloud-based processing.
-- **Local diarization** (`local_diarizer.py`): senko + CAM++ embeddings + parakeet-mlx STT. Produces 192-dim speaker centroids and time-aligned segments. Supports voice fingerprint matching against known speakers. Used on Apple Silicon.
+- **Local diarization** (`local_diarizer.py`): senko + CAM++ embeddings for speaker diarization, parakeet-mlx for STT. Produces 192-dim speaker centroids and time-aligned segments. Supports voice fingerprint matching against known speakers. Runs on Apple Silicon with excellent performance (~0.1x realtime for STT).
 - **AI refinement** (`ai_refiner.py`): Validates speaker identifications against known council members, corrects transcription errors using agenda/minutes as ground truth, extracts structured data (motions, votes, timestamps).
 - **Voice fingerprints**: Stored in `voice_fingerprints` table (person_id, 192-dim embedding, source_meeting_id). Matched during local diarization at cosine threshold 0.75. Saved via the speaker-alias UI.
 - **Speaker alias UI** (`speaker-alias.tsx`): Manual correction interface for assigning speaker labels to people, accepting voice matches, splitting/relabeling segments.
@@ -2487,7 +2486,6 @@ The current diarization and speaker identification system works — Gemini ident
 - **No fingerprint quality tracking**: The `confidence` column on `voice_fingerprints` is always set to 1.0 (hardcoded at `speaker-alias.tsx:288`). There's no actual confidence calibration.
 - **Hardcoded name lists**: `names.py` contains 50 hardcoded names and 50+ hardcoded variant mappings specific to View Royal. This doesn't scale to Esquimalt, RDOS, or any future municipality. Adding a new town requires manually populating `CANONICAL_NAMES` and `NAME_VARIANTS`.
 - **`voice_fingerprints` table not in bootstrap.sql**: The table exists in production but was created manually — it's not part of the schema definition, meaning fresh deployments or CI environments won't have it.
-- **No confidence on Gemini diarization**: The Gemini-based `diarizer.py` returns speaker_aliases with a confidence field, but this is a number the AI makes up — it's not calibrated or validated. Individual transcript segments from Gemini have no confidence at all.
 - **No quality scoring**: `is_verified` (boolean) and `sentiment_score` (float) exist on `transcript_segments` but are never populated. There's no way to know which meetings have good transcripts and which are garbage without manually reading them.
 - **Transcript corrections are one-shot**: AI refinement applies corrections during ingestion. If a correction is wrong, there's no way to override it. If new information reveals better corrections later, there's no mechanism to re-apply.
 - **No audio preprocessing**: Audio goes directly from Vimeo MP4 to processing. No noise reduction, no volume normalization, no silence trimming. Meeting audio quality varies significantly (some have clear lapel mics, others have distant room mics with HVAC noise).
@@ -2611,7 +2609,7 @@ def auto_enroll_fingerprints(meeting_id: int, speaker_centroids: dict, speaker_a
         confidence = alias.get("confidence", 0.0)
 
         if label not in speaker_centroids:
-            continue  # No centroid available (Gemini diarizer doesn't produce centroids)
+            continue  # No centroid available for this speaker
 
         if confidence < 0.80:
             continue  # Only enroll high-confidence identifications
@@ -2781,7 +2779,7 @@ ALTER TABLE meetings ADD COLUMN IF NOT EXISTS transcript_quality_flags jsonb DEF
 Computed as weighted average of segment quality scores for that meeting, plus meeting-level signals:
 - **Speaker coverage**: What fraction of segments have identified speakers? (>90% = good, <50% = poor)
 - **Correction density**: Average corrections per segment
-- **Diarization method**: Local diarizer (with voice fingerprints) > Gemini diarizer (no fingerprints) > no diarization
+- **Diarization method**: Local diarizer with voice fingerprints > local diarizer without fingerprints > no diarization
 - **Unique speakers identified**: Should roughly match expected attendees — if the diarizer found 12 speakers but only 7 people were expected, something's wrong
 
 **Quality dashboard**: Display transcript quality scores on the admin meetings list. Color-code: green (>0.8), yellow (0.6-0.8), red (<0.6). Allow sorting by quality to prioritize human review for the worst transcripts.
@@ -2841,7 +2839,7 @@ Add preprocessing steps before diarization to improve STT and speaker identifica
        return max(0.0, min(1.0, score))
    ```
 
-**When to preprocess**: Always for local diarization. For Gemini diarization, only volume normalization (Gemini handles noise reasonably well, and the audio is uploaded as-is).
+**When to preprocess**: Always — run the full preprocessing chain before passing audio to the local diarizer. The cost is ~5 seconds and ~50 MB temp disk per meeting; the quality improvement for STT and speaker embedding extraction is significant.
 
 **Storage**: Preprocessed audio is a temp file — not persisted. The original audio source (Vimeo URL) is the permanent reference. Preprocessing adds ~5 seconds per meeting and ~50 MB temp disk usage.
 
@@ -2926,45 +2924,143 @@ interface ReviewItem {
 
 **Batch verification**: For a person with consistent voice matches across many meetings (all >0.85), offer a "Confirm all N matches" button that accepts all at once. This is the fastest way to backfill fingerprints for well-known speakers.
 
-#### 11j. Gemini Diarization Enhancements
+#### 11j. Custom Vocabulary & Domain-Specific Transcript Correction
 
-The Gemini-based diarizer (`diarizer.py`) has limitations compared to the local diarizer: no speaker centroids, no configurable confidence thresholds, limited context window. Improve it for the cloud-processing path.
+STT models (parakeet-mlx, Whisper, etc.) are trained on general English text. They systematically fail on:
+- **Indigenous language terms**: "Lekwungen" (the First Nations people whose territory View Royal occupies) gets transcribed as "look wung in", "lick wung en", "la kwung in" or dozens of other phonetic guesses. Same for "Songhees", "Esquimalt Nation", "W̱SÁNEĆ", "SENCOTEN" language terms, and Coast Salish place names.
+- **Municipal jargon**: "OCP" (Official Community Plan), "DVP" (Development Variance Permit), "ALR" (Agricultural Land Reserve), "CRD" (Capital Regional District) are spoken as acronyms but transcribed as random words.
+- **Local place names**: "Helmcken Road", "Portage Inlet", "Thetis Cove", "Esquimalt Lagoon" — some are transcribed correctly, others mangled depending on speaker pronunciation.
+- **Legislative terminology**: "THAT Council", "first/second/third reading", "rise and report", "Committee of the Whole" — procedural phrases that should be rendered exactly.
+- **People's names**: Handled by name canonicalization (11e), but the STT output that feeds into that step is often wrong enough that the name can't be matched at all.
 
-**Structured output enforcement**: Replace free-form JSON prompting with Gemini's structured output (JSON schema):
+This is not just a cosmetic issue — incorrect transcription of Indigenous terms is disrespectful and undermines the civic transparency mission. Incorrect jargon makes transcripts harder to search and less useful for the RAG system.
 
-```python
-speaker_map_schema = {
-    "type": "object",
-    "properties": {
-        "speaker_aliases": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string"},
-                    "name": {"type": "string"},
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "evidence": {"type": "string"},  # NEW: Why this identification was made
-                },
-                "required": ["label", "name", "confidence", "evidence"]
-            }
-        }
-    }
-}
+**Custom vocabulary table:**
+
+```sql
+CREATE TABLE custom_vocabulary (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    municipality_id bigint REFERENCES municipalities(id),  -- NULL = global
+    term text NOT NULL,                    -- Correct form: "Lekwungen"
+    phonetic_variants text[] NOT NULL,     -- STT outputs to match: ["look wung in", "lick wung en", ...]
+    category text NOT NULL,                -- 'indigenous', 'acronym', 'place_name', 'legislative', 'person'
+    pronunciation_guide text,              -- Optional IPA or phonetic hint for display
+    context_hint text,                     -- "First Nations people of the Victoria area"
+    UNIQUE (municipality_id, term)
+);
+
+CREATE INDEX idx_cv_municipality ON custom_vocabulary(municipality_id);
+CREATE INDEX idx_cv_category ON custom_vocabulary(category);
 ```
 
-The `evidence` field forces the model to explain its reasoning ("Chair addresses this speaker as 'Councillor Lemon' at 12:34"), which provides auditability and helps the AI refinement step validate identifications.
+**How it works — three-stage correction:**
 
-**Extended context**: The current 8000-char context truncation loses valuable information. With Gemini Flash's 1M token context, expand to include:
-- Full agenda (not truncated)
-- Attendance list (from prior ingestion or previous meeting)
-- Known speaker characteristics from the fingerprint database ("Councillor Lemon: female, typically third to speak after the mayor")
-- Prior meeting's speaker map (if available) — speakers at consecutive meetings are usually the same people
+**Stage 1: Pre-STT vocabulary injection (where supported)**
 
-**Multi-pass speaker resolution**: When the single-pass approach leaves speakers unidentified, run a second pass with targeted prompts:
-- "The following speakers were not identified: Speaker_03, Speaker_05. Based on the agenda, the expected participants who haven't been identified yet are: [list]. Listen for how they're addressed, what committee assignments they reference, and their speaking patterns."
+Some STT models support "hot words" or vocabulary biasing — a list of terms the model should favor during decoding. For parakeet-mlx, this isn't natively supported, but for future STT model upgrades (Whisper v4, Canary), this is the highest-quality fix because it corrects at the decoding stage rather than post-hoc.
 
-**Confidence calibration**: Run a one-time calibration by comparing Gemini's confidence scores against the ground truth from manually-verified meetings. Adjust the threshold based on the actual precision/recall curve, not the model's self-reported confidence.
+Prepare the hot word list from `custom_vocabulary` before each meeting:
+
+```python
+hot_words = get_custom_vocabulary(municipality_id)
+# ["Lekwungen", "Songhees", "Esquimalt", "W̱SÁNEĆ", "OCP", "DVP", "ALR", ...]
+```
+
+**Stage 2: Post-STT phonetic correction**
+
+After STT produces raw text, scan for known phonetic variants and replace with the correct term. This is a deterministic find-and-replace using the `phonetic_variants` array:
+
+```python
+def apply_vocabulary_corrections(text: str, vocabulary: list[VocabEntry]) -> tuple[str, list[Correction]]:
+    """
+    Apply custom vocabulary corrections to raw STT output.
+    Returns corrected text and a list of corrections made (for auditing).
+    """
+    corrections = []
+    corrected = text
+
+    for entry in vocabulary:
+        for variant in entry.phonetic_variants:
+            # Case-insensitive whole-word matching to avoid partial replacements
+            pattern = re.compile(r'\b' + re.escape(variant) + r'\b', re.IGNORECASE)
+            if pattern.search(corrected):
+                corrected = pattern.sub(entry.term, corrected)
+                corrections.append(Correction(
+                    original=variant,
+                    corrected=entry.term,
+                    type='vocabulary',
+                    source='custom_vocabulary',
+                ))
+
+    return corrected, corrections
+```
+
+This runs *before* AI refinement, so the refiner sees "Lekwungen" instead of "look wung in" — which improves downstream quality of all AI-extracted data (motions, votes, summaries).
+
+**Stage 3: AI refinement with vocabulary context**
+
+Pass the custom vocabulary list to the AI refiner as additional context, so it can catch variants that the deterministic pass missed:
+
+```python
+vocabulary_context = "\n".join(
+    f"- {entry.term} ({entry.category}): {entry.context_hint}"
+    for entry in get_custom_vocabulary(municipality_id)
+)
+
+# Added to the AI refinement prompt:
+CUSTOM_VOCABULARY_PROMPT = f"""
+The following terms are commonly used in this municipality and are frequently
+mis-transcribed by speech-to-text. Correct any instances you find:
+
+{vocabulary_context}
+
+Pay special attention to Indigenous language terms — these must be rendered
+in their correct form, not phonetic approximations.
+"""
+```
+
+**Seeding the vocabulary:**
+
+For View Royal, seed with known terms:
+
+```python
+VIEW_ROYAL_VOCABULARY = [
+    # Indigenous terms
+    {"term": "Lekwungen", "phonetic_variants": ["look wung in", "lick wung en", "la kwung in", "le kwung en", "lack wung in", "look wangan"], "category": "indigenous", "context_hint": "Lekwungen peoples — First Nations on whose traditional territory View Royal is situated"},
+    {"term": "Songhees", "phonetic_variants": ["song hees", "song ease", "song he's"], "category": "indigenous", "context_hint": "Songhees Nation — First Nations community in the Greater Victoria area"},
+    {"term": "Esquimalt Nation", "phonetic_variants": ["es kwai malt", "es quai malt"], "category": "indigenous", "context_hint": "Esquimalt Nation — First Nations community adjacent to View Royal"},
+    {"term": "W̱SÁNEĆ", "phonetic_variants": ["wa san itch", "wa sanich", "saw nitch", "w sonnet"], "category": "indigenous", "context_hint": "W̱SÁNEĆ (Saanich) peoples"},
+    {"term": "SENCOTEN", "phonetic_variants": ["sen coat en", "sen cotton"], "category": "indigenous", "context_hint": "SENĆOŦEN language of the W̱SÁNEĆ peoples"},
+
+    # Acronyms
+    {"term": "OCP", "phonetic_variants": ["oh see pee", "o c p"], "category": "acronym", "context_hint": "Official Community Plan"},
+    {"term": "DVP", "phonetic_variants": ["dee vee pee", "d v p"], "category": "acronym", "context_hint": "Development Variance Permit"},
+    {"term": "ALR", "phonetic_variants": ["a l r", "ay el are"], "category": "acronym", "context_hint": "Agricultural Land Reserve"},
+    {"term": "CRD", "phonetic_variants": ["see are dee", "c r d"], "category": "acronym", "context_hint": "Capital Regional District"},
+    {"term": "DPA", "phonetic_variants": ["dee pee ay", "d p a"], "category": "acronym", "context_hint": "Development Permit Area"},
+
+    # Place names
+    {"term": "Helmcken", "phonetic_variants": ["helm can", "helm kin", "helm ken"], "category": "place_name", "context_hint": "Helmcken Road — major road in View Royal"},
+    {"term": "Portage Inlet", "phonetic_variants": ["port age inlet", "portage in let"], "category": "place_name", "context_hint": "Portage Inlet — waterway in View Royal"},
+    {"term": "Thetis", "phonetic_variants": ["thee tis", "the tis", "that is"], "category": "place_name", "context_hint": "Thetis Cove / Thetis Lake area"},
+
+    # Legislative
+    {"term": "THAT Council", "phonetic_variants": ["that council"], "category": "legislative", "context_hint": "Motion preamble — 'THAT Council direct staff to...'"},
+    {"term": "Committee of the Whole", "phonetic_variants": ["committee of the hole", "committee of a whole"], "category": "legislative", "context_hint": "Committee of the Whole — meeting format where council acts as a committee"},
+]
+```
+
+**Building the phonetic variant list**: For the initial seed, listen to 5-10 meetings and note every STT misspelling of each term. For ongoing maintenance, the transcript correction pipeline (11h) automatically captures new variants — when a human or AI corrects "look wung in" → "Lekwungen", the original mis-transcription is added to `phonetic_variants` for that term.
+
+**Admin UI**: Add a vocabulary management page where administrators can:
+- Add/edit/delete custom vocabulary entries
+- See a list of recent STT corrections that could become vocabulary entries (mined from `transcript_corrections`)
+- Test a phonetic variant against existing vocabulary to see if it would match
+- Bulk import vocabulary from a CSV (for initial seeding of new municipalities)
+
+**Per-municipality vocabulary**: Each municipality gets its own vocabulary. Esquimalt will have different local place names. RDOS will have different Indigenous terms (Okanagan Nation, Syilx, nsyilxcən). The global vocabulary (NULL municipality_id) covers terms shared across BC — "ALR", "CRD", "Metro Vancouver", common legislative terms.
+
+**Quality impact**: Custom vocabulary correction is the single highest-impact change for transcript readability. A meeting transcript that says "the look wung in people" instead of "the Lekwungen peoples" is not just wrong — it's disrespectful. Getting Indigenous terms right is a baseline requirement for a civic transparency tool.
 
 #### 11k. Multi-Municipality Speaker Handling
 
@@ -3128,8 +3224,8 @@ As new municipalities are onboarded, the speaker identification system needs to 
 7. **Transcript quality scoring** (11f): Add `quality_score` and `quality_flags` columns to `transcript_segments`. Add `transcript_quality_score` and `transcript_quality_flags` to `meetings`. Compute per-segment quality during ingestion (speaker confidence, correction ratio, segment length, overlap score, speaker continuity). Aggregate to per-meeting score.
 8. **Transcript correction pipeline** (11h): Create `transcript_corrections` table. Refactor ingestion to log individual corrections (not just apply them). Build post-ingestion cross-meeting correction pass (proper noun standardization, name variant application, jargon expansion). Add "Report correction" UI button on transcript segments.
 9. **Speaker verification workflow** (11i): Build review queue for medium-confidence identifications on speaker-alias page. Implement confirm/correct/reject/split actions. Add batch confirmation for consistent cross-meeting matches. Track review status per meeting.
-10. **Gemini diarization enhancements** (11j): Add structured output schema (with evidence field). Expand context window (full agenda, attendance list, known speaker characteristics, prior meeting speaker map). Implement multi-pass resolution for unidentified speakers. Calibrate confidence thresholds against manually-verified ground truth.
-11. **Quality dashboard**: Add admin route showing per-meeting transcript quality scores (color-coded), speaker identification coverage, flagged segments needing review, fingerprint enrollment status across all meetings.
+10. **Custom vocabulary & domain-specific correction** (11j): Create `custom_vocabulary` table (term, phonetic_variants[], category, municipality_id). Seed View Royal vocabulary (Indigenous terms: Lekwungen, Songhees, W̱SÁNEĆ, etc.; acronyms: OCP, DVP, ALR, CRD; place names: Helmcken, Portage Inlet, Thetis; legislative terms). Implement three-stage correction: post-STT phonetic find-and-replace, AI refinement vocabulary context injection, and auto-learning of new variants from `transcript_corrections`. Build admin vocabulary management UI. Backfill corrections across all existing transcripts for high-confidence vocabulary matches.
+11. **Quality dashboard**: Add admin route showing per-meeting transcript quality scores (color-coded), speaker identification coverage, flagged segments needing review, fingerprint enrollment status, vocabulary correction stats across all meetings.
 
 ### Phase 6: Second Town Onboarding
 1. Configure Esquimalt municipality in database with OCD IDs
@@ -3254,6 +3350,14 @@ As new municipalities are onboarded, the speaker identification system needs to 
 - The priority order (AI context > high voice > medium voice) reflects reliability: when the chair says "Thank you, Councillor Lemon" and the voice match also says Lemon, confidence is near-certain. When the voice says Lemon but the context contradicts it (Lemon was absent), the context wins
 - For new municipalities with no fingerprints yet, AI identification bootstraps the system — every confirmed identification enrolls a fingerprint for next time. After ~5 meetings, voice matching starts contributing. After ~20 meetings, it's highly reliable
 
+### Why a custom vocabulary table instead of fine-tuning the STT model?
+- Fine-tuning parakeet-mlx or Whisper on municipal audio would require a labeled training set (hundreds of hours of transcribed meeting audio per municipality). We don't have this, and creating it is the very problem we're trying to solve
+- Custom vocabulary correction is deterministic, auditable, and immediately effective. Add "Lekwungen" → "look wung in" today, and every future (and past, via backfill) transcript is corrected
+- The vocabulary approach composes: Indigenous terms, municipal acronyms, local place names, and legislative jargon are all different categories that can be independently maintained and extended
+- STT model fine-tuning would need to be redone for each model upgrade. Vocabulary corrections are model-independent — they work whether the underlying STT is parakeet, Whisper, or something else
+- The three-stage approach (hot words where supported → post-STT replacement → AI refinement context) gives three chances to catch errors, with the phonetic replacement being the most reliable (no LLM variability)
+- Municipality-scoped vocabulary means View Royal's Indigenous terms don't interfere with Esquimalt's — different nations, different languages, different place names
+
 ### What about the `meeting_type` enum?
 - The current enum (`Regular Council`, `Special Council`, etc.) is View Royal-specific
 - RDOS uses "Board" meetings, not "Council"
@@ -3294,4 +3398,7 @@ As new municipalities are onboarded, the speaker identification system needs to 
 | Transcript quality scoring could be gamed or misleading | Quality scores are internal signals, not public-facing grades. Display on admin dashboard only. Per-segment flags are machine-readable, not shown to end users. The meeting-level quality score is shown as a subtle indicator ("Transcript quality: Good / Fair / Needs review"), not a numeric score |
 | Auto-enrollment of fingerprints during ingestion could slow down the pipeline | Fingerprint save is a single Supabase upsert per speaker per meeting (~50ms). For 7 speakers: ~350ms total. Centroid recomputation is a simple average — milliseconds. Total overhead per meeting: <1 second |
 | `voice_fingerprints` table migration from undocumented existing table | Check for existing table in production, export data, create the new table via bootstrap.sql migration, import with column mapping. The existing table has minimal data (~15 fingerprints) so migration risk is low |
-| Gemini diarization confidence scores are uncalibrated | Run calibration study: compare Gemini confidence against ground truth from 10-15 manually-verified meetings. Fit a simple sigmoid to map model confidence → actual precision. Use calibrated scores for the auto-accept/review threshold |
+| Phonetic variant matching could produce false positive replacements | Use whole-word boundary matching (`\b` regex) to avoid partial replacements. Review common short variants (3-4 chars) for collision risk. Keep category-specific matching contexts (e.g., don't replace "that" with legislative "THAT" in every context — use surrounding word patterns). Log all vocabulary corrections to `transcript_corrections` for auditing |
+| Indigenous term phonetic variants are hard to enumerate exhaustively | Seed with the most common STT outputs from 5-10 reviewed meetings. Auto-learn new variants from the `transcript_corrections` table — when a human corrects a new misspelling, it's automatically added to `phonetic_variants`. After ~20 meetings, coverage should be near-complete for high-frequency terms |
+| Vocabulary backfill across existing transcripts could create duplicate corrections | Deduplicate: before creating a correction, check if the segment's `corrected_text_content` already contains the correct term. Only correct segments that still have the wrong form. Track corrections with `source='vocabulary_backfill'` for filtering |
+| Getting Indigenous language terms right requires community input, not just guessing | Consult publicly available resources from Songhees Nation, Esquimalt Nation, and W̱SÁNEĆ communities for correct spellings and diacriticals. Use the forms published on official government and Nation websites. Add a `pronunciation_guide` field so the admin UI can show the correct form alongside the variants |
