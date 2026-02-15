@@ -1173,6 +1173,111 @@ OCD endpoints use the same API key system as the custom API (Layer 6). The OCD A
 
 Optionally support anonymous access for read-only OCD endpoints at a lower rate (5 req/min) to maximize interoperability — civic data should be open.
 
+### Layer 8: Storage Optimization
+
+As municipalities and their full document packages accumulate, database size becomes a cost concern. Supabase Pro includes 8 GB of database storage for $25/month — enough for the structured data, but not if we store rendered HTML and large text blobs for every attachment in every meeting across multiple towns.
+
+#### 8a. Storage Budget Estimate
+
+Back-of-envelope for one municipality (View Royal, ~12 meetings/year, ~5-10 attachments per meeting):
+
+| Content | Per Meeting | Per Year | Notes |
+|---------|------------|----------|-------|
+| Agenda markdown | ~20 KB | ~240 KB | Main agenda text |
+| Minutes markdown | ~30 KB | ~360 KB | Main minutes text |
+| Attachment markdown (5-10 docs) | ~200 KB | ~2.4 MB | Staff reports, schedules |
+| Pre-rendered HTML (all docs) | ~500 KB | ~6 MB | ~2x markdown size |
+| Document sections (rows) | ~100 KB | ~1.2 MB | ~50 sections per meeting |
+| Embeddings (768-dim, ~3 KB each) | ~150 KB | ~1.8 MB | ~50 embeddings per meeting |
+| Transcript segments | ~100 KB | ~1.2 MB | ~500 segments per meeting |
+| **Total per municipality** | **~1.1 MB** | **~13 MB** | |
+
+For 3 municipalities: ~40 MB/year. For 50 municipalities (long-term): ~650 MB/year. With historical backfill (5+ years each): could reach 3-5 GB. That's within Supabase Pro's 8 GB, but leaves little headroom. And the pre-rendered HTML is the biggest contributor while being the least important to keep in Postgres.
+
+#### 8b. Tiered Storage Strategy
+
+Use the right storage tier for each content type:
+
+| Content | Storage | Rationale |
+|---------|---------|-----------|
+| Structured data (meetings, items, motions, people) | **Supabase Postgres** | Needs querying, joins, filtering |
+| `content_markdown` on `documents` | **Supabase Postgres** | Needed for full-text search and RAG |
+| `body_markdown` on `document_sections` | **Supabase Postgres** | Needed for section-level queries |
+| `content_html` on `documents` | **Cloudflare R2** | Read-only rendered output; no need to query |
+| `body_html` on `document_sections` | **Cloudflare R2** | Same — render-only |
+| Embeddings (all tables) | **Supabase Postgres (pgvector)** | Needed for vector similarity search |
+| Large attachment markdown (>100 KB) | **Cloudflare R2** with stub in Postgres | Keep first 500 chars in Postgres for previews; full content in R2 |
+
+This keeps the database lean (structured data + searchable markdown + embeddings) while offloading the bulky rendered HTML to R2 (zero egress, pennies per GB stored).
+
+#### 8c. Cloudflare R2 for Rendered Content
+
+Store pre-rendered HTML in R2 with a predictable key structure:
+
+```
+documents/{municipality_slug}/{meeting_id}/{document_id}.html
+documents/{municipality_slug}/{meeting_id}/{document_id}/sections/{section_id}.html
+```
+
+The document viewer component fetches HTML directly from R2 (via a public bucket or Worker binding) instead of from Postgres. The `documents` table stores an `r2_html_key` reference instead of the full `content_html`:
+
+```sql
+-- Replace content_html text with R2 reference
+ALTER TABLE documents ADD COLUMN r2_html_key text;  -- "documents/view-royal/42/1.html"
+ALTER TABLE documents DROP COLUMN content_html;
+
+ALTER TABLE document_sections ADD COLUMN r2_html_key text;
+ALTER TABLE document_sections DROP COLUMN body_html;
+```
+
+**Pipeline change**: After generating HTML at ingestion time, upload to R2 via the S3-compatible API, then store the key in Postgres.
+
+**Web app change**: The document viewer fetches from R2:
+
+```typescript
+// In loader:
+const htmlUrl = `${R2_PUBLIC_URL}/${document.r2_html_key}`;
+// Or via Worker binding:
+const html = await env.R2_BUCKET.get(document.r2_html_key);
+```
+
+#### 8d. Cloudflare KV for Frequently Accessed Content
+
+Cache hot data in Workers KV for sub-millisecond reads at the edge:
+
+- **Municipality configs** — small, read constantly, rarely updated. Perfect for KV.
+- **Meeting summaries** — the 50 most recent meetings per municipality. Populate from Supabase, cache in KV with TTL.
+- **Document table of contents** — small JSON structure built from `document_sections` headings. Cache per document.
+
+This reduces Supabase query volume (and egress) for the most common page loads.
+
+#### 8e. PostgreSQL-Level Optimizations
+
+Within Supabase, apply these Postgres optimizations:
+
+- **TOAST compression**: Automatic for `text` values >2 KB — already happening. The `content_markdown` and `body_markdown` columns benefit from this. No action needed, but be aware that TOAST adds read overhead.
+- **Partial indexes**: Don't index columns you rarely filter on. For example, the `embedding` HNSW index is expensive — only build it for content types that need vector search (transcripts, motions, agenda items) not for every `document_section`.
+- **Materialized views for stats**: Instead of computing meeting counts and latest dates on every page load, use materialized views refreshed by the pipeline after each run:
+  ```sql
+  CREATE MATERIALIZED VIEW municipality_stats AS
+  SELECT municipality_id, count(*) as meeting_count, max(meeting_date) as latest_meeting
+  FROM meetings GROUP BY municipality_id;
+  ```
+- **Archive old embeddings**: Embeddings for meetings older than 2 years are rarely searched. Consider moving them to a separate table or dropping and regenerating on-demand. This recovers significant space (~3 KB per embedding × thousands of rows).
+- **Vacuuming**: After large backfill operations, run `VACUUM FULL` to reclaim dead tuple space.
+
+#### 8f. Supabase Storage for Original PDF Access
+
+While we don't store PDF blobs in the database, the `source_url` column points to the original CivicWeb/Legistar URL — which may go offline. For long-term preservation:
+
+- Upload original PDFs to a **Supabase Storage bucket** (`documents` bucket) during ingestion
+- This is the only case where the PDF binary is stored — purely for archival access
+- Supabase Storage is S3-compatible and charged separately from database size (100 GB included on Pro)
+- The `documents` table gets a `storage_path` column pointing to the bucket object
+- The web app can serve a "Download original PDF" link via signed URL (already proven with the bylaws download route)
+
+This keeps the PDFs accessible even if the source municipality changes their CMS.
+
 ## Implementation Sequence
 
 ### Phase 0: Python Monorepo Reorganization
@@ -1186,7 +1291,7 @@ Optionally support anonymous access for read-only OCD endpoints at a lower rate 
 8. Verify `uv run pytest` passes from `apps/pipeline/`
 9. Update CLAUDE.md command reference
 
-### Phase 1: Database Foundation
+### Phase 1: Database + Storage Foundation
 1. Create `municipalities` table
 2. Add `municipality_id` FK to `organizations`, `meetings`, `matters`, `elections`, `bylaws`
 3. Insert View Royal as the first municipality record
@@ -1194,7 +1299,10 @@ Optionally support anonymous access for read-only OCD endpoints at a lower rate 
 5. Update unique constraints to be municipality-scoped
 6. Add compound indexes for `(municipality_id, ...)` queries
 7. Add `ocd_id` columns to `municipalities`, `organizations`, `people`, `meetings`, `matters`, `motions`
-8. Create `documents` and `document_sections` tables
+8. Create `documents` and `document_sections` tables (with `r2_html_key` instead of `content_html`)
+9. Create Cloudflare R2 bucket for rendered HTML and bind to Worker in `wrangler.toml`
+10. Create Supabase Storage bucket for PDF archival
+11. Set up Cloudflare KV namespace for cached municipality configs and hot content
 
 ### Phase 2: Scraper Abstraction
 1. Create `BaseScraper` interface and `ScrapedMeeting` dataclass in `pipeline/scrapers/base.py`
@@ -1221,10 +1329,11 @@ Optionally support anonymous access for read-only OCD endpoints at a lower rate 
 6. Store full document markdown + section tree into `documents` and `document_sections` tables
 7. Link attachments to parent documents via `parent_document_id` and to agenda items via `agenda_item_id`
 8. Implement attachment-to-item linking (folder structure → text cross-references → AI fallback)
-9. Generate pre-rendered HTML at ingestion time with official-document-style CSS
-10. Add embeddings for document content (enables RAG search across staff reports, not just transcripts)
-11. Generate OCD IDs for all entities during ingestion
-12. Backfill: re-ingest ALL existing View Royal PDFs (including previously-ignored attachments) to populate `documents` and `document_sections`
+9. Generate pre-rendered HTML at ingestion time → upload to Cloudflare R2 (not stored in Postgres)
+10. Upload original PDFs to Supabase Storage bucket for archival access
+11. Add embeddings for document content (enables RAG search across staff reports, not just transcripts)
+12. Generate OCD IDs for all entities during ingestion
+13. Backfill: re-ingest ALL existing View Royal PDFs (including previously-ignored attachments) to populate `documents` and `document_sections`
 
 ### Phase 4: Web App Multi-Tenancy
 1. Add `municipalities` service layer (`getAllMunicipalities`, `getMunicipality`)
@@ -1305,7 +1414,15 @@ Optionally support anonymous access for read-only OCD endpoints at a lower rate 
 - The document viewer can apply consistent styling across all municipalities regardless of source PDF formatting
 - Sections link bidirectionally to agenda items, enabling "view in original document" navigation
 - Far smaller storage footprint — markdown text vs. multi-MB PDFs
-- Original PDFs remain accessible via `source_url` (the CivicWeb/Legistar link) for anyone who needs the exact original file
+- Original PDFs preserved in Supabase Storage bucket (cheap, S3-compatible) for archival access and "Download original" links
+
+### Why split storage across Postgres, R2, KV, and Supabase Storage?
+- **Postgres (Supabase)**: Structured data, searchable text, embeddings — everything that needs queries, joins, and vector search. This is the expensive tier ($25/mo Pro includes 8 GB).
+- **R2 (Cloudflare)**: Pre-rendered HTML for the document viewer. Read-only, no queries needed, zero egress fees, ~$0.015/GB/month stored. Keeps the biggest content out of Postgres.
+- **KV (Cloudflare)**: Hot cache for municipality configs, meeting summaries, document TOCs. Sub-millisecond reads at the edge, reduces Supabase query volume.
+- **Supabase Storage**: Original PDF archival. 100 GB included on Pro plan. Served via signed URLs for "Download original" links.
+- Each tier plays to its strengths. The pipeline writes to all four; the web app reads from the right one per use case.
+- If we stored everything in Postgres, we'd hit the 8 GB ceiling at ~30 municipalities with full historical backfill. The tiered approach supports 100+ municipalities within the Pro plan budget.
 
 ### Why implement OCD alongside a custom API?
 - The custom API (Layer 6) is optimized for our specific data model — includes RAG search, semantic search, document content, and features not covered by OCD
