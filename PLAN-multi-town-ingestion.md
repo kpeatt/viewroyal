@@ -480,7 +480,60 @@ export async function getMeetings(client, { municipalityId, ...filters }) {
 }
 ```
 
-#### 5e. Files Requiring Town-Specific String Changes
+#### 5e. Municipality Index Page
+
+Build a top-level landing page that lists all active municipalities. This is the entry point when a user visits the root domain (e.g., `civicai.ca/` or the root subdomain).
+
+**Route**: `app/routes/index.tsx` (or `app/routes/municipalities.tsx` if the root remains a splash page)
+
+**Loader**:
+```typescript
+export async function loader({ context }) {
+    const client = getSupabaseAdminClient();
+    const { data: municipalities } = await client
+        .from("municipalities")
+        .select("slug, name, short_name, classification, province, map_center_lat, map_center_lng, website_url, meta")
+        .order("name");
+    return { municipalities };
+}
+```
+
+**UI elements**:
+- Card grid or list of municipalities, each showing:
+  - Municipality name and classification (e.g., "Town of View Royal")
+  - Province
+  - A summary stat: meeting count, latest meeting date (from a DB view or a `meta` JSONB field updated periodically by the pipeline)
+  - Link to the municipality's home page (`/{slug}/` or subdomain)
+- Optional: a map showing all municipalities with clickable markers (reuse the existing map component with multi-point data from `map_center_lat/lng`)
+- Search/filter if the list grows beyond a handful of towns
+
+**Service function**: `app/services/municipalities.ts`
+```typescript
+export async function getAllMunicipalities(client: SupabaseClient) {
+    const { data, error } = await client
+        .from("municipalities")
+        .select("slug, name, short_name, classification, province, map_center_lat, map_center_lng, website_url, meta")
+        .order("name");
+    if (error) throw error;
+    return data;
+}
+
+export async function getMunicipality(client: SupabaseClient, slug: string) {
+    const { data, error } = await client
+        .from("municipalities")
+        .select("*")
+        .eq("slug", slug)
+        .single();
+    if (error) throw error;
+    return data;
+}
+```
+
+**Summary stats**: To show "42 meetings indexed" or "Last updated 3 days ago" on each card without N+1 queries, either:
+- Add a `stats` field to `municipalities.meta` JSONB, updated by the pipeline after each run
+- Or create a database view that joins counts: `CREATE VIEW municipality_stats AS SELECT municipality_id, count(*) as meeting_count, max(date) as latest_meeting FROM meetings GROUP BY municipality_id`
+
+#### 5f. Files Requiring Town-Specific String Changes
 
 22 files in the web app contain hardcoded "View Royal" references. These all need to read from municipality context instead. The full list:
 - `app/root.tsx` — meta tags, site name
@@ -533,12 +586,14 @@ export async function getMeetings(client, { municipalityId, ...filters }) {
 6. Add Legistar structured-data fast path in ingester
 
 ### Phase 4: Web App Multi-Tenancy
-1. Add municipality context loader and provider
-2. Replace all hardcoded "View Royal" strings with context reads
-3. Scope all service queries by `municipality_id`
-4. Parameterize RAG system prompts
-5. Update routing for subdomain or path-based access
-6. Update `wrangler.toml` for new domain/route patterns
+1. Add `municipalities` service layer (`getAllMunicipalities`, `getMunicipality`)
+2. Build municipality index page — card grid listing all active towns with summary stats
+3. Add municipality context layout loader and provider
+4. Replace all hardcoded "View Royal" strings with context reads
+5. Scope all service queries by `municipality_id`
+6. Parameterize RAG system prompts
+7. Update routing for subdomain or path-based access
+8. Update `wrangler.toml` for new domain/route patterns
 
 ### Phase 5: Second Town Onboarding
 1. Configure Esquimalt municipality in database
