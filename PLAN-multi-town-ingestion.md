@@ -2027,6 +2027,444 @@ These render as clickable chips below the answer, encouraging deeper exploration
 📄 Found staff report: "Island Highway Active Transportation Plan — Phase 2 Design"
 ```
 
+### Layer 10: Council Member Profiling
+
+The current profile page shows raw data — vote counts, attendance percentages, a list of meetings attended — but doesn't answer the questions citizens actually have: *What does this councillor care about? Do they follow through on what they say? Who do they align with and on what issues? Are they effective?* This layer uses the data we already collect (transcripts, votes, motions, attendance) to generate rich, AI-synthesized council member profiles that surface patterns, positions, and legislative impact.
+
+#### 10a. Current State & Gaps
+
+**What exists today (`person-profile.tsx` + `people.ts`):**
+- Name, image, bio (usually empty), email
+- Memberships (Council, committees) with date ranges
+- Attendance rate (percentage, paginated history)
+- Vote counts (yes/no/abstain totals)
+- Voting alignment with other councillors (single percentage per pair)
+- Electoral history (elections, votes received)
+- Motions moved/seconded (separate page, paginated)
+
+**What's missing:**
+- **Topic interests**: No analysis of what topics a councillor speaks about most or votes on. The data exists in transcript segments and motion categories, but it's never aggregated
+- **Position summaries**: No AI-generated "Councillor X has consistently supported affordable housing and opposed increased density in residential neighborhoods." The raw data supports this but nobody synthesizes it
+- **Speaking participation**: No metrics on how much each councillor speaks in meetings, asks questions, or contributes to debate vs. just voting
+- **Legislative effectiveness**: No success rate (% of motions moved that passed), no co-sponsorship patterns, no amendment tracking
+- **Temporal alignment**: Voting alignment is a single lifetime number. It doesn't show how alignment has shifted over time or differs by topic ("They agree 95% on budget items but only 40% on environmental issues")
+- **Key votes**: No highlighting of votes where a councillor was in the minority or broke with their usual allies — the most interesting and informative data points
+- **Position consistency**: No analysis of whether a councillor's statements match their votes ("Said they supported the bike lane in debate but voted against the funding motion")
+- **Public engagement**: No tracking of how a councillor interacts with public delegations — do they ask questions? Thank presenters? Challenge staff recommendations?
+
+#### 10b. Profile Generation Pipeline
+
+Add an AI profile generation step that runs after meeting ingestion (or on a schedule) to synthesize structured profile data from raw records. This is a Python pipeline phase, not a real-time web computation.
+
+**When it runs:**
+- After each meeting ingestion completes (new data may change a councillor's profile)
+- Optionally: nightly batch job that regenerates all profiles for the municipality
+- Manual trigger: `uv run python main.py --regenerate-profiles`
+
+**What it produces per councillor:**
+
+```python
+@dataclass
+class CouncillorProfile:
+    person_id: int
+    municipality_id: int
+    generated_at: datetime
+
+    # AI-generated narrative sections
+    summary: str                    # 2-3 sentence overview of the councillor
+    policy_positions: list[PolicyPosition]  # Structured position statements
+    notable_moments: list[NotableMoment]   # Key votes, speeches, confrontations
+
+    # Computed statistics (deterministic, not AI)
+    topic_distribution: dict[str, float]    # {topic: fraction_of_speaking_time}
+    speaking_stats: SpeakingStats
+    legislative_stats: LegislativeStats
+    alignment_by_topic: dict[str, dict[int, float]]  # {topic: {person_id: alignment%}}
+    attendance_trend: list[AttendancePeriod]
+    key_votes: list[KeyVote]
+```
+
+**Data sources per councillor:**
+
+| Source | What we extract | How |
+|--------|----------------|-----|
+| `transcript_segments` (via person_id + aliases) | Topics discussed, speaking volume, key quotes, questioning patterns | Aggregate by agenda_item category + AI topic classification |
+| `votes` + `motions` | Voting patterns, minority votes, consistency | Deterministic aggregation + join with motion categories |
+| `motions` (mover_id, seconder_id) | Legislative initiative, success rate, co-sponsorship pairs | Deterministic: count motions moved, fraction carried |
+| `attendance` | Attendance trends over time, participation in specific meeting types | Deterministic: group by month/quarter |
+| `agenda_items` (via transcript linkage) | Which policy areas they engage with | Category distribution from linked agenda items |
+| `documents` (Layer 4.5) | Staff recommendations they supported/opposed | Cross-reference votes with staff report recommendations |
+
+#### 10c. Topic Interest Detection
+
+Automatically classify what each councillor cares about by analyzing their speaking and voting patterns.
+
+**Step 1 — Build a topic taxonomy:**
+
+Rather than using free-form AI topic extraction (which produces inconsistent labels across councillors), define a fixed taxonomy of municipal policy areas. This ensures comparability ("Councillor A talks about housing 30% of the time; Councillor B talks about housing 10%").
+
+```python
+MUNICIPAL_TOPICS = {
+    "housing": ["affordable housing", "density", "rental", "zoning", "OCP housing"],
+    "transportation": ["bike lane", "transit", "road", "traffic", "sidewalk", "active transportation"],
+    "environment": ["tree", "climate", "stormwater", "park", "green space", "environmental"],
+    "budget": ["budget", "tax", "financial", "reserve fund", "capital plan", "expenditure"],
+    "development": ["rezoning", "subdivision", "development permit", "building permit", "OCP amendment"],
+    "infrastructure": ["water", "sewer", "road maintenance", "capital project", "asset management"],
+    "governance": ["bylaw", "policy", "procedure", "committee", "public hearing", "delegation"],
+    "community": ["recreation", "library", "event", "culture", "senior", "youth", "accessibility"],
+    "public_safety": ["RCMP", "fire", "emergency", "bylaw enforcement", "speed limit"],
+    "regional": ["CRD", "regional", "intermunicipal", "first nations", "Esquimalt Nation"],
+}
+```
+
+The taxonomy is municipality-configurable (stored in `municipalities.source_config` or a separate config table) since different towns have different policy focuses.
+
+**Step 2 — Classify agenda items:**
+
+Agenda items already have a `category` field from AI refinement, but the categories are inconsistent ("Development Application" vs "Land Use" vs "Zoning"). Map each agenda item to 1-3 topics from the taxonomy using either:
+- Keyword matching on title + summary (fast, deterministic)
+- Embedding similarity between agenda item text and topic descriptions (more accurate, uses existing embeddings)
+
+Store the mapping: `agenda_item_topics(agenda_item_id, topic, confidence)`.
+
+**Step 3 — Compute per-councillor topic distribution:**
+
+```sql
+-- How much does each councillor talk about each topic?
+SELECT
+    p.id as person_id,
+    ait.topic,
+    COUNT(DISTINCT ts.id) as segment_count,
+    SUM(LENGTH(COALESCE(ts.corrected_text_content, ts.text_content))) as total_chars
+FROM transcript_segments ts
+JOIN agenda_item_topics ait ON ait.agenda_item_id = ts.agenda_item_id
+JOIN people p ON p.id = ts.person_id
+WHERE ts.person_id IS NOT NULL
+GROUP BY p.id, ait.topic;
+```
+
+This produces a distribution like:
+```json
+{
+    "Councillor Lemon": {
+        "transportation": 0.28,
+        "environment": 0.22,
+        "development": 0.18,
+        "budget": 0.15,
+        "housing": 0.10,
+        "other": 0.07
+    }
+}
+```
+
+**Step 4 — Detect position strength:**
+
+For each topic, determine whether the councillor is a **champion** (speaks frequently + moves motions), a **participant** (votes but doesn't lead), or **passive** (attends but rarely engages). The signal comes from combining:
+- Speaking volume on the topic (segments count)
+- Motions moved/seconded on the topic
+- Votes cast on topic-related motions
+- Whether they deviate from the majority on this topic
+
+#### 10d. AI-Generated Position Summaries
+
+For each councillor's top 3-5 topics, generate a concise position summary using AI. This is the heart of the profiling system — turning hundreds of transcript segments and votes into a readable, cited narrative.
+
+**Input to the AI (per topic, per councillor):**
+
+```python
+position_context = {
+    "councillor": "Councillor Sarah Lemon",
+    "topic": "transportation",
+    "statements": [
+        # Top 10 most relevant transcript segments on this topic
+        {"date": "2024-01-15", "text": "I believe we need to delay the bike lane...", "agenda_item": "Island Highway Active Transportation Plan"},
+        {"date": "2024-03-12", "text": "The traffic study clearly shows...", "agenda_item": "Budget Amendment - Transportation"},
+        # ...
+    ],
+    "votes": [
+        # All votes on transportation-related motions
+        {"date": "2024-01-15", "motion": "Commission traffic impact assessment", "vote": "Yes", "result": "CARRIED 5-2"},
+        {"date": "2024-06-10", "motion": "Approve bike lane detailed design", "vote": "No", "result": "CARRIED 4-3"},
+        # ...
+    ],
+    "motions_moved": [
+        {"date": "2024-01-15", "motion": "Commission traffic impact assessment", "result": "CARRIED"}
+    ]
+}
+```
+
+**Output structure:**
+
+```python
+@dataclass
+class PolicyPosition:
+    topic: str                # "transportation"
+    summary: str              # "Councillor Lemon has been a vocal advocate for evidence-based
+                              #  transportation planning. She successfully moved to delay the Island
+                              #  Highway bike lane project until an independent traffic study was
+                              #  completed (Jan 2024), but later voted against the project even after
+                              #  the study supported it (Jun 2024), citing cost concerns."
+    stance: str               # "cautious_support" | "strong_support" | "opposition" | "mixed" | "neutral"
+    confidence: float         # 0.85 (how confident we are in this characterization)
+    key_quotes: list[str]     # Selected representative quotes with dates
+    key_votes: list[KeyVote]  # The most informative votes on this topic
+    evidence_count: int       # Total number of segments + votes used
+    date_range: tuple[str, str]  # Period covered by the evidence
+```
+
+**Prompt design**: The AI prompt explicitly instructs the model to:
+- Only state positions supported by evidence (no inference beyond what was said/voted)
+- Note contradictions or evolution in position
+- Use neutral, factual language
+- Flag when evidence is thin ("Based on limited available data...")
+- Never editorialize about whether the position is good or bad
+
+**Anti-bias safeguards:**
+- Always present the full voting record, not cherry-picked votes
+- When a councillor votes against the majority, include the context (what the majority argument was)
+- Regenerate profiles regularly so recent activity doesn't get lost behind older, more voluminous data
+- Display "Last updated" timestamp prominently so users know the freshness
+
+#### 10e. Legislative Effectiveness Metrics
+
+Compute deterministic statistics that quantify a councillor's legislative impact. These are factual (not AI-interpreted) and can be displayed alongside the AI narratives.
+
+**Metrics per councillor:**
+
+```typescript
+interface LegislativeStats {
+    // Motion success
+    motions_moved: number;
+    motions_carried: number;
+    motion_success_rate: number;        // motions_carried / motions_moved
+    motions_seconded: number;
+    motions_seconded_carried: number;
+
+    // Voting patterns
+    total_votes: number;
+    majority_votes: number;             // Voted with the winning side
+    minority_votes: number;             // Voted with the losing side
+    majority_rate: number;              // majority_votes / total_votes
+    abstentions: number;
+    recusals: number;
+
+    // Engagement
+    meetings_attended: number;
+    meetings_expected: number;
+    attendance_rate: number;
+    segments_spoken: number;            // Total transcript segments
+    avg_segments_per_meeting: number;   // Speaking participation rate
+    questions_asked: number;            // Segments classified as questions (heuristic)
+    unique_agenda_items_engaged: number; // How many distinct items they spoke on
+
+    // Co-sponsorship
+    most_frequent_seconder: { person_id: number; name: string; count: number };
+    most_frequent_mover_for: { person_id: number; name: string; count: number };
+}
+```
+
+**Key derived insights (computed, not AI):**
+- **"Dissent rate"**: How often they vote against the majority — a proxy for independent thinking
+- **"Engagement breadth"**: Number of distinct agenda items they speak on / total agenda items at attended meetings — do they engage broadly or focus narrowly?
+- **"Follow-through score"**: When they raise a concern in debate, does a related motion appear within 3 meetings? (Heuristic: match transcript topics to subsequent motion topics)
+- **"Co-sponsorship network"**: Who do they most frequently co-sponsor motions with? Reveals informal alliances
+
+#### 10f. Voting Alignment Deep Dive
+
+The current alignment calculation is a single lifetime number. Enhance it to be topic-aware and time-aware.
+
+**Topic-scoped alignment:**
+
+```sql
+-- Alignment between two councillors on transportation topics only
+SELECT
+    v1.person_id as person_a,
+    v2.person_id as person_b,
+    COUNT(*) as shared_votes,
+    SUM(CASE WHEN v1.vote = v2.vote THEN 1 ELSE 0 END) as matching_votes,
+    ROUND(100.0 * SUM(CASE WHEN v1.vote = v2.vote THEN 1 ELSE 0 END) / COUNT(*), 1) as alignment_pct
+FROM votes v1
+JOIN votes v2 ON v1.motion_id = v2.motion_id AND v1.person_id < v2.person_id
+JOIN motions m ON m.id = v1.motion_id
+JOIN agenda_item_topics ait ON ait.agenda_item_id = m.agenda_item_id
+WHERE ait.topic = 'transportation'
+GROUP BY v1.person_id, v2.person_id;
+```
+
+This reveals patterns invisible in the overall number: "Lemon and Bateman agree 85% overall but only 40% on environmental issues."
+
+**Time-windowed alignment:**
+
+Group alignment by quarter or year to show how relationships evolve. Display as a sparkline or small chart on the profile page — rising alignment suggests forming alliances, falling alignment suggests growing disagreements.
+
+**Bloc detection:**
+
+Using the topic-scoped alignment matrix, identify voting blocs — groups of 2-3 councillors who consistently vote together above a threshold (e.g., >85% alignment). Display these as informal groupings on the profile ("Frequently votes with Councillor Bateman and Councillor Holland on development issues").
+
+#### 10g. Notable Moments & Key Votes
+
+Automatically identify the most interesting/noteworthy moments for each councillor. These are the moments citizens actually want to see — not the 95% of routine unanimous votes.
+
+**Key vote detection (deterministic):**
+
+A vote is "key" if any of:
+1. The councillor was in the **minority** (voted against the winning side)
+2. The motion was **close** (passed/failed by 1-2 votes — their vote mattered)
+3. The councillor **broke** from their usual allies (voted differently from their top-2 aligned councillors)
+4. The councillor **moved or seconded** the motion (they had a personal stake)
+5. The motion was on one of the councillor's **top topics** (high-interest vote)
+
+Score each vote 0-5 based on how many criteria it meets. Display the top 10 key votes prominently on the profile.
+
+**Notable moment detection (AI-assisted):**
+
+After key votes are identified, use AI to scan the surrounding transcript segments for notable exchanges — heated debates, pointed questions, emotional statements, public confrontations, or significant policy announcements. The AI extracts:
+
+```python
+@dataclass
+class NotableMoment:
+    date: str
+    meeting_id: int
+    description: str            # "Councillor Lemon questioned the Director of Engineering about
+                                #  the cost overrun on the Helmcken Road project, resulting in
+                                #  Council directing staff to prepare a revised budget."
+    category: str               # "confrontation" | "policy_announcement" | "public_engagement"
+                                # | "procedural_victory" | "key_vote" | "first_motion"
+    transcript_segment_ids: list[int]  # Links to the actual transcript moments
+    significance: str           # "This was the first time a councillor publicly questioned
+                                #  the engineering budget since the 2022 election."
+```
+
+#### 10h. Speaking Pattern Analysis
+
+Quantify how each councillor participates in debate, beyond just "number of segments spoken."
+
+**Metrics (deterministic):**
+
+- **Speaking volume per meeting**: Average number of transcript segments per attended meeting. Normalize by meeting length (total segments) to get a "participation share."
+- **Topic concentration**: Herfindahl-Hirschman Index (HHI) of their topic distribution — a high HHI means they focus narrowly on a few topics; low HHI means they engage broadly
+- **Question rate**: Fraction of their segments that are questions (detected by ? or interrogative phrasing). High question rate = scrutiny role; low = declaration role
+- **Debate engagement**: Do they speak on items where there's disagreement (multiple speakers, non-unanimous vote) or only on routine items? Measured as: (segments on contested items) / (total segments)
+
+**AI-assisted patterns:**
+
+For the councillor's most recent 6 months of transcripts, classify each segment as:
+- **Statement**: Declaring a position or sharing information
+- **Question**: Asking staff or other councillors for clarification
+- **Procedural**: Points of order, agenda management
+- **Public engagement**: Responding to delegations or public input
+
+Store the distribution. This reveals role differences: some councillors are primarily "questioners" (holding staff accountable), others are "declarers" (advancing policy positions), others are "proceduralists" (managing meeting flow).
+
+#### 10i. Schema Extensions
+
+**New table: `person_profiles`**
+
+```sql
+CREATE TABLE person_profiles (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    person_id bigint NOT NULL REFERENCES people(id),
+    municipality_id bigint NOT NULL REFERENCES municipalities(id),
+
+    -- AI-generated narrative
+    summary text,                        -- 2-3 sentence overview
+    policy_positions jsonb DEFAULT '[]',  -- Array of PolicyPosition objects
+    notable_moments jsonb DEFAULT '[]',   -- Array of NotableMoment objects
+
+    -- Computed statistics
+    topic_distribution jsonb DEFAULT '{}',  -- {topic: fraction}
+    speaking_stats jsonb DEFAULT '{}',      -- SpeakingStats object
+    legislative_stats jsonb DEFAULT '{}',   -- LegislativeStats object
+    alignment_by_topic jsonb DEFAULT '{}',  -- {topic: {person_id: pct}}
+    key_votes jsonb DEFAULT '[]',           -- Array of KeyVote objects
+
+    -- Metadata
+    data_coverage_start date,             -- Earliest data used for this profile
+    data_coverage_end date,               -- Latest data used for this profile
+    meetings_analyzed int,                -- How many meetings contributed to this profile
+    segments_analyzed int,                -- How many transcript segments analyzed
+    generated_at timestamptz NOT NULL DEFAULT now(),
+
+    UNIQUE (person_id, municipality_id)
+);
+```
+
+**New table: `agenda_item_topics`**
+
+```sql
+CREATE TABLE agenda_item_topics (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    agenda_item_id bigint NOT NULL REFERENCES agenda_items(id) ON DELETE CASCADE,
+    topic text NOT NULL,                 -- From the taxonomy
+    confidence float NOT NULL DEFAULT 1.0,
+    UNIQUE (agenda_item_id, topic)
+);
+
+CREATE INDEX idx_ait_topic ON agenda_item_topics(topic);
+CREATE INDEX idx_ait_agenda_item ON agenda_item_topics(agenda_item_id);
+```
+
+**Extensions to `people` table:**
+
+```sql
+ALTER TABLE people ADD COLUMN IF NOT EXISTS pronouns text;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS short_bio text;  -- AI-generated 1-liner for cards
+```
+
+The `short_bio` is generated from the full profile: "Transportation and environment advocate. Councillor since 2022. 94% attendance rate." This replaces the currently-empty `bio` field with something auto-generated and always current.
+
+#### 10j. Profile Page Redesign
+
+Restructure the person profile page to lead with synthesized insights rather than raw data tables.
+
+**New layout (top to bottom):**
+
+1. **Header**: Name, role, photo, short_bio, pronouns, tenure ("Councillor since Nov 2022")
+2. **At a Glance** (card row):
+   - Attendance rate (with trend arrow: up/down vs. previous period)
+   - Voting record pie chart (yes/no/abstain)
+   - Motion success rate
+   - Dissent rate
+   - Speaking participation rank ("3rd most active speaker")
+3. **AI Summary**: The 2-3 sentence profile summary, with "Last updated" timestamp and "Based on N meetings" context
+4. **Policy Positions** (expandable cards per topic):
+   - Topic name + stance indicator (visual: green/red/yellow/gray)
+   - Position summary paragraph
+   - Key quotes (collapsible)
+   - Key votes on this topic
+   - "Explore more" link → filtered search for this person + topic
+5. **Key Votes** (highlight reel):
+   - The top 5-10 most noteworthy votes
+   - Each showing: date, motion summary, their vote, outcome, why it's notable
+   - Link to meeting page / transcript moment
+6. **Voting Alignment** (enhanced):
+   - Overall alignment table (existing, improved)
+   - Topic-specific alignment selector (dropdown: "All topics", "Housing", "Budget", etc.)
+   - Time-series alignment chart (sparklines per councillor pair)
+   - Detected blocs/alliances callout
+7. **Speaking Profile**:
+   - Topic distribution bar chart
+   - Speaking role breakdown (questioner / declarer / proceduralist)
+   - Debate engagement metric
+8. **Electoral History** (existing, moved lower)
+9. **Full Voting Record** (existing paginated table, moved to subpage)
+10. **Full Attendance History** (existing, moved to subpage)
+
+**RAG integration**: The profile page includes the existing "Ask a question" component (`ask-question.tsx`), pre-populated with the councillor's name as context. The AI search tools (Layer 9) can reference the precomputed profile data to provide faster, richer answers about specific councillors without re-analyzing hundreds of transcript segments in real time.
+
+#### 10k. Multi-Municipality Considerations
+
+Profiles must work across municipalities with different council structures:
+
+- **Council size**: View Royal has 7 (mayor + 6 councillors); other towns may have 5, 9, or 11
+- **Meeting frequency**: Some councils meet weekly, others monthly — normalize speaking/attendance stats as rates, not counts
+- **Committee structure**: Some councillors serve on 2-3 committees with separate meetings — membership tracking (already implemented) handles this, but "meetings expected" must account for committee assignments
+- **Term lengths**: 4 years in BC, but by-elections create partial terms — use actual membership dates, not election cycle dates
+- **Topic taxonomy**: Each municipality gets its own topic taxonomy (stored in config), though there's a shared base of common municipal topics
+
+**Cross-municipality comparison** (Phase 6+): Once profiles exist for multiple municipalities, enable comparative views ("How does View Royal's mayor's attendance compare to Esquimalt's?"). This requires normalized metrics (rates, not counts) and is a natural extension of the profile data structure.
+
 ## Implementation Sequence
 
 ### Phase 0: Python Monorepo Reorganization
@@ -2152,6 +2590,15 @@ These render as clickable chips below the answer, encouraging deeper exploration
 11. **Fix `search_agenda_items` injection vulnerability**: Sanitize query input in PostgREST `ilike` filter (or replace entirely with the new `search_discussions` hybrid tool).
 12. **Create missing RPC functions**: Define `match_transcript_segments`, `match_motions`, `match_matters`, and `match_agenda_items` in a migration (currently called but not defined in `bootstrap.sql`).
 
+### Phase 5d: Council Member Profiling
+1. **Schema** (10i): Create `person_profiles` table (person_id, municipality_id, all JSONB stat/narrative columns, generated_at). Create `agenda_item_topics` table (agenda_item_id, topic, confidence). Add `pronouns` and `short_bio` columns to `people`.
+2. **Topic taxonomy** (10c): Define default `MUNICIPAL_TOPICS` taxonomy. Implement agenda item topic classifier (keyword matching + embedding similarity fallback). Backfill `agenda_item_topics` for all existing agenda items.
+3. **Deterministic stats** (10e, 10f, 10h): Build `compute_legislative_stats()` — motion success rate, dissent rate, co-sponsorship pairs. Build `compute_speaking_stats()` — segments per meeting, topic concentration (HHI), question rate. Build `compute_alignment_by_topic()` — topic-scoped voting alignment matrix. Build `detect_key_votes()` — score each vote 0-5 on minority/close/ally-break/mover/top-topic criteria.
+4. **AI profile generation** (10d, 10g): Build `generate_position_summaries()` — for each councillor's top 5 topics, gather top statements + all votes, call Gemini to produce PolicyPosition objects. Build `detect_notable_moments()` — scan debate segments around key votes, classify as confrontation/announcement/engagement. Build `generate_summary()` — 2-3 sentence overview from stats + positions. Build `generate_short_bio()` — one-liner for card display.
+5. **Pipeline integration** (10b): Add `--regenerate-profiles` flag to main.py. Hook profile generation into post-ingestion step (runs after embeddings). Implement incremental updates (only recompute stats for councillors with new data since last `generated_at`).
+6. **Profile page redesign** (10j): Implement new layout — at-a-glance stat cards, AI summary section, expandable policy position cards with stance indicators, key votes highlight reel, topic-scoped alignment selector, speaking profile charts. Move full voting record and attendance history to subpages.
+7. **RAG integration**: Wire `get_person_activity` tool (Layer 9) to read from `person_profiles` for quick stats lookup before falling back to raw data queries. Add profile data to synthesizer context for person-based questions.
+
 ### Phase 6: Second Town Onboarding
 1. Configure Esquimalt municipality in database with OCD IDs
 2. Run Legistar scraper to populate data (structured ingestion path — documents populated from API data)
@@ -2235,6 +2682,26 @@ These render as clickable chips below the answer, encouraging deeper exploration
 - Entity pre-resolution (looking up person IDs, matter IDs) in the analysis step means tools can use direct ID lookups instead of fuzzy name matching, which is both faster and more reliable
 - The analysis step costs ~0.5¢ and ~200ms — trivial compared to the 3-6 orchestrator steps it replaces or simplifies
 
+### Why precompute profiles in the pipeline instead of generating them on-demand?
+- A councillor's profile draws from hundreds of transcript segments, every vote they've ever cast, all motions they've moved, and attendance across potentially hundreds of meetings. Computing this in a web request would take 10-30 seconds and dozens of database queries
+- Precomputation turns a complex multi-table aggregation into a single row read. The profile page becomes a fast `SELECT * FROM person_profiles WHERE person_id = $1` instead of 15+ parallel queries (which is what `getPersonProfile()` does today)
+- AI-generated summaries and position statements take 2-5 seconds per topic per councillor (Gemini calls). Even with just 7 councillors × 5 topics, that's 35 LLM calls — fine in a batch pipeline, unacceptable in a page load
+- Profile freshness doesn't need to be real-time. Profiles change meaningfully only after a new meeting is ingested (roughly weekly). Running the profiler after each ingestion keeps data current without wasting compute on unchanged data
+- The deterministic stats (vote counts, alignment scores, etc.) are computationally cheap individually but add up — the current `getPersonProfile()` fires ~15 parallel Supabase queries. Precomputing into JSONB columns eliminates this entirely
+
+### Why a fixed topic taxonomy instead of free-form AI topic extraction?
+- Free-form extraction produces inconsistent labels across councillors and across runs — "affordable housing", "housing affordability", "residential development", and "housing policy" might all refer to the same topic. This makes cross-councillor comparison impossible
+- A fixed taxonomy (10 topics with keyword lists) ensures that when we say "Councillor A talks about housing 30% of the time", we're measuring the same thing as "Councillor B talks about housing 10%"
+- The taxonomy is municipality-configurable — different towns can emphasize different topics (a coastal town might add "marine environment" while an urban centre might add "transit")
+- Keyword matching on the taxonomy handles 80% of classification; embedding similarity against topic descriptions handles the remaining 20% (ambiguous cases). This hybrid approach is both fast and accurate
+- The alternative — letting AI classify every agenda item into arbitrary topics — would require an LLM call per item (expensive at scale) and would still need a normalization step afterward to make topics comparable
+
+### Why detect key votes algorithmically instead of letting AI pick them?
+- Key vote detection is based on objective, verifiable criteria: minority position, close margin, alliance break, motion mover status. These are facts, not judgments
+- AI selection of "interesting" votes would introduce editorial bias — the model might consider some topics more noteworthy than others based on training data, not the councillor's actual record
+- Algorithmic scoring (0-5 based on how many criteria are met) is transparent, reproducible, and auditable. Citizens can understand why a vote was highlighted
+- The AI does enter the picture for notable moment *description* — explaining why a key vote was significant. But the selection of which votes to highlight is deterministic
+
 ### What about the `meeting_type` enum?
 - The current enum (`Regular Council`, `Special Council`, etc.) is View Royal-specific
 - RDOS uses "Board" meetings, not "Council"
@@ -2262,3 +2729,9 @@ These render as clickable chips below the answer, encouraging deeper exploration
 | Hybrid search RPC function complexity — maintaining two search paths per table | The hybrid_search RPC is a single function that handles both paths, not per-table duplication. If one path fails (e.g., GIN index missing), degrade to the other gracefully |
 | Merged tools reduce orchestrator flexibility for edge cases | Keep the original granular tools available as fallback options in the tool registry but deprioritize them in the system prompt. If the merged tool returns poor results, the orchestrator can explicitly call the underlying search |
 | Missing RPC functions (`match_transcript_segments`, `match_motions`, `match_matters`) currently called but undefined | Create these in the first migration of Phase 5c; they're prerequisites for everything else. The hybrid_search RPC eventually supersedes them, but having them defined prevents runtime errors during incremental rollout |
+| AI-generated position summaries could mischaracterize a councillor's stance | Always include evidence counts and date ranges so readers can gauge reliability. Show "Based on N statements and M votes over date range." Regenerate profiles after each meeting ingestion so stale characterizations don't persist. Add a feedback mechanism for councillors to flag inaccuracies |
+| AI profiling could be perceived as editorial/biased by councillors or citizens | Position summaries use only factual language (no value judgments). Key vote selection is algorithmic, not AI-chosen. Display methodology transparently ("How are profiles generated?" info tooltip). Offer raw data views alongside AI summaries |
+| Profile generation is expensive for large councils or long histories | Incremental updates: only recompute for councillors with new data since last `generated_at`. Batch Gemini calls (multiple topics per API call). Full regeneration is a manual trigger, not automatic. For a 7-member council with 100 meetings: ~35 Gemini calls, ~$0.50, ~3 minutes |
+| Topic taxonomy may not cover all relevant policy areas for a municipality | Start with a common base taxonomy (10 topics) and allow per-municipality extensions. Uncategorized agenda items fall into "other" — if "other" exceeds 20% of items, the taxonomy needs expansion. Monitor and adjust during Phase 6 onboarding |
+| Speaking pattern analysis depends on diarization quality — misattributed segments corrupt stats | Use confidence-weighted aggregation: segments with low speaker confidence contribute less to stats. Display data quality indicator on profile ("Speaker identification confidence: 87%"). High-confidence segments only for AI position summaries |
+| `person_profiles` JSONB columns could grow large for long-serving councillors | Cap stored data: top 5 topics (not all), top 10 key votes (not all), top 5 notable moments. Full data available via direct queries for the detail subpages. Profile row stays under 50 KB |
