@@ -18,6 +18,7 @@ SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 DATABASE_URL = os.environ.get("DATABASE_URL")
 SUPABASE_DB_PASSWORD = os.environ.get("SUPABASE_DB_PASSWORD")
+GOOGLE_GEOCODING_API_KEY = os.environ.get("GOOGLE_GEOCODING_API_KEY")
 
 # AI Settings
 USE_PARAKEET = os.environ.get("USE_PARAKEET", "false").lower() == "true"

@@ -75,6 +75,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--geocode-only",
+        action="store_true",
+        help="Only run geocoding (populate geo columns from related_address).",
+    )
+
+    parser.add_argument(
         "--target",
         type=str,
         help="Target a specific meeting by DB ID or folder path (force re-processes).",
@@ -114,6 +120,10 @@ if __name__ == "__main__":
     elif args.embed_only:
         print("\n--- Embedding Only ---")
         app._embed_new_content()
+    elif args.geocode_only:
+        print("\n--- Geocoding Only ---")
+        from src.pipeline.geocoder import geocode_all_addresses
+        geocode_all_addresses()
     elif args.process_only or args.rediarize:
         if app.ai_enabled:
             mode = "Re-diarizing" if args.rediarize else "Processing"
