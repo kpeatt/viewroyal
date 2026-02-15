@@ -27,6 +27,157 @@ ViewRoyal.ai currently ingests data from a single municipality (View Royal, BC) 
 
 ## Architecture Changes
 
+### Layer 0: Python Monorepo Reorganization
+
+The current Python code lives in a bare `src/` at the repo root alongside `main.py` and `pyproject.toml`. This is ambiguous in a monorepo that also has `apps/web/` and `apps/vimeo-proxy/`. Before adding multi-town abstractions, move the Python pipeline into `apps/pipeline/` to match the monorepo convention and establish a proper package structure.
+
+#### Current layout (problems)
+
+```
+viewroyal/
+    main.py                  # Entrypoint at repo root — competes with web config files
+    pyproject.toml           # Python config at repo root
+    tests/                   # Tests at repo root
+    src/                     # Ambiguous — "src of what?"
+        core/                # Shared utilities, names, config, parser
+            mlx_diarizer/    # Only subpackage with __init__.py
+        pipeline/            # Scraper, ingester, diarizer, embeddings
+            scraper.py       # CivicWeb-only
+            vimeo.py         # Vimeo-only
+        analysis/            # Ad-hoc analysis scripts
+        maintenance/         # Mix of one-off scripts AND code imported by pipeline
+            audit/
+                check_occurred_meetings.py  # Imported by orchestrator — not really "maintenance"
+            archive/         # One-off cleanup scripts
+            db/              # One-off DB scripts
+            seeding/         # Seed data importers
+            transcript/      # One-off transcript fixes
+```
+
+**Problems:**
+- No `__init__.py` files (except `mlx_diarizer/`) — relies on repo root in `sys.path`
+- `src/maintenance/audit/check_occurred_meetings.py` is imported by the orchestrator at runtime — it's core pipeline code hiding in "maintenance"
+- Multiple dead/duplicate files in `pipeline/`: `batch.py`, `batch_embeddings.py`, `diarizer.py` (superseded by `local_diarizer.py`), `embeddings.py` (superseded by `embed_local.py`), `ingest.py` (older entrypoint alongside `ingester.py`)
+- `pyproject.toml`, `main.py`, `tests/` at repo root compete with `pnpm-workspace.yaml`, `wrangler.toml`, etc.
+
+#### Target layout
+
+```
+apps/pipeline/                    # Python ETL pipeline — parallel to apps/web/, apps/vimeo-proxy/
+    pyproject.toml
+    main.py
+    tests/
+        core/
+            test_parser.py
+            test_utils.py
+            test_marker_ocr.py
+            test_nlp.py
+        pipeline/
+            test_ingester_logic.py
+            test_local_refiner_logic.py
+            test_agenda_only.py
+    pipeline/                     # Importable Python package (has __init__.py)
+        __init__.py
+        config.py                 # was: src/core/config.py
+        paths.py                  # was: src/core/paths.py
+        utils.py                  # was: src/core/utils.py
+        names.py                  # was: src/core/names.py
+        parser.py                 # was: src/core/parser.py
+        marker_parser.py          # was: src/core/marker_parser.py
+        alignment.py              # was: src/core/alignment.py
+        embeddings.py             # was: src/core/embeddings.py
+        markdown_generator.py     # was: src/core/markdown_generator.py
+        diarization/              # was: src/core/mlx_diarizer/ + pipeline/local_diarizer.py
+            __init__.py
+            local_diarizer.py
+            audio.py
+            clustering.py
+            convert.py
+            diarization_types.py
+            inference.py
+            models.py
+            pipeline.py
+            resnet_embedding.py
+        scrapers/                 # was: src/pipeline/scraper.py + src/core/civicweb.py
+            __init__.py           # Scraper registry + get_scraper()
+            base.py               # BaseScraper ABC + ScrapedMeeting dataclass
+            civicweb.py           # Merged from core/civicweb.py + pipeline/scraper.py
+            legistar.py           # NEW (Phase 2)
+            static_html.py        # NEW (Phase 2)
+        video/                    # was: src/pipeline/vimeo.py
+            __init__.py           # Video source registry + get_video_client()
+            base.py               # BaseVideoSource ABC
+            vimeo.py              # Refactored from pipeline/vimeo.py
+            youtube.py            # NEW (Phase 2)
+        ingestion/                # was: src/pipeline/ingester.py, ai_refiner.py, etc.
+            __init__.py
+            ingester.py
+            ai_refiner.py
+            matter_matching.py
+            embed.py              # was: pipeline/embed_local.py
+            bylaws.py             # was: pipeline/ingest_bylaws.py
+            process_agenda.py     # was: pipeline/process_agenda_intelligence.py
+            process_bylaws.py     # was: pipeline/process_bylaws_intelligence.py
+            audit.py              # was: maintenance/audit/check_occurred_meetings.py (runtime dependency)
+        orchestrator.py
+    scripts/                      # One-off / manual-run scripts (NOT imported at runtime)
+        archive/
+            canonicalize_archive.py
+            cleanup_documents.py
+            fix_misplaced_council_meetings.py
+        db/
+            clean_agenda_markdown.py
+            link_matters_to_bylaws.py
+            reset_db.py
+        seeding/
+            import_election_history.py
+            import_staff.py
+            seed_organizations.py
+        transcript/
+            clean_transcript_spellings.py
+            harvest_corrections.py
+        analysis/
+            check_votes.py
+            person_analysis.py
+        audit/
+            meeting_inventory.py
+            run_audit.py
+```
+
+#### What changes
+
+| Before | After | Notes |
+|--------|-------|-------|
+| `from src.core import utils` | `from pipeline import utils` | All imports simplified |
+| `from src.pipeline.scraper import CivicWebScraper` | `from pipeline.scrapers import get_scraper` | Dynamic dispatch via registry |
+| `from src.core.civicweb import CivicWebClient` | (merged into `pipeline/scrapers/civicweb.py`) | No longer split across core/pipeline |
+| `from src.maintenance.audit.check_occurred_meetings import ...` | `from pipeline.ingestion.audit import ...` | Runtime dependency moved into package |
+| Global `ARCHIVE_ROOT` constant | `get_archive_root(municipality_slug)` | Per-municipality archives |
+
+#### Files to delete (dead/superseded code)
+
+Verify these are unused before deleting:
+- `src/pipeline/batch.py` — old batch processing entrypoint
+- `src/pipeline/batch_embeddings.py` — old batch embedding runner
+- `src/pipeline/diarizer.py` — superseded by `local_diarizer.py`
+- `src/pipeline/embeddings.py` — superseded by `embed_local.py`
+- `src/pipeline/ingest.py` — older ingestion entrypoint (vs `ingester.py`)
+- `src/pipeline/scrape_election_results.py` — one-off scraper, move to `scripts/` if still useful
+
+#### Import rewriting strategy
+
+All imports use the `from src.` prefix pattern — a global find-and-replace of `from src.core` → `from pipeline` and `from src.pipeline` → `from pipeline` covers the majority. The `pyproject.toml` moves into `apps/pipeline/` and the `[project]` name changes from `viewroyal` to `civic-pipeline` (or similar). Commands become:
+
+```bash
+cd apps/pipeline && uv run python main.py --municipality view-royal
+cd apps/pipeline && uv run pytest
+```
+
+Or with a root-level pnpm script that wraps it:
+```json
+{ "scripts": { "pipeline": "cd apps/pipeline && uv run python main.py" } }
+```
+
 ### Layer 1: Database — Add `municipalities` Table
 
 Add a new `municipalities` table as the top-level entity that scopes all data.
@@ -92,7 +243,7 @@ CREATE TABLE municipalities (
 
 #### 2a. Define a `BaseScraper` Interface
 
-Create `src/pipeline/scrapers/base.py`:
+Create `pipeline/scrapers/base.py` (already in target layout from Layer 0):
 
 ```python
 from abc import ABC, abstractmethod
@@ -127,14 +278,7 @@ class BaseScraper(ABC):
 
 #### 2b. Implement Source-Specific Scrapers
 
-```
-src/pipeline/scrapers/
-    __init__.py
-    base.py
-    civicweb.py      # Refactored from current scraper.py + civicweb.py
-    legistar.py      # New: uses webapi.legistar.com REST API
-    static_html.py   # New: generic HTML scraper for sites like RDOS
-```
+These live under `apps/pipeline/pipeline/scrapers/` (established in Layer 0):
 
 **CivicWeb scraper** (`civicweb.py`): Refactor existing `CivicWebScraper` to extend `BaseScraper`. The recursive folder traversal and PDF download logic stays the same — just parameterize the base URL from `municipality_config`.
 
@@ -153,7 +297,7 @@ src/pipeline/scrapers/
 #### 2c. Scraper Registry
 
 ```python
-# src/pipeline/scrapers/__init__.py
+# pipeline/scrapers/__init__.py
 SCRAPER_REGISTRY = {
     "civicweb": CivicWebScraper,
     "legistar": LegistarScraper,
@@ -270,7 +414,7 @@ This makes Legistar ingestion much faster and cheaper (no Gemini API calls).
 
 #### 4c. Canonical Names Per Municipality
 
-Move `CANONICAL_NAMES` from `src/core/names.py` (hardcoded View Royal council members) into the database or per-municipality config. The AI refiner prompt should receive the correct list of known people for the current municipality.
+Move `CANONICAL_NAMES` from `pipeline/names.py` (hardcoded View Royal council members) into the database or per-municipality config. The AI refiner prompt should receive the correct list of known people for the current municipality.
 
 ### Layer 5: Web App — Multi-Tenancy
 
@@ -353,6 +497,17 @@ export async function getMeetings(client, { municipalityId, ...filters }) {
 
 ## Implementation Sequence
 
+### Phase 0: Python Monorepo Reorganization
+1. Audit `src/pipeline/` for dead code — delete `batch.py`, `batch_embeddings.py`, `diarizer.py`, `embeddings.py`, `ingest.py` if confirmed unused
+2. Move `check_occurred_meetings.py` from `maintenance/audit/` into the pipeline package (it's a runtime dependency, not a maintenance script)
+3. Move entire Python codebase from `src/` + `main.py` + `pyproject.toml` + `tests/` into `apps/pipeline/`
+4. Establish proper Python package: add `__init__.py` files, rename `src/` → `pipeline/`
+5. Rewrite all imports (`from src.core` → `from pipeline`, `from src.pipeline` → `from pipeline`)
+6. Create stub `scrapers/`, `video/`, `ingestion/` directories with `__init__.py` (empty implementations — just the structure for Phase 2)
+7. Move one-off scripts to `apps/pipeline/scripts/`
+8. Verify `uv run pytest` passes from `apps/pipeline/`
+9. Update CLAUDE.md command reference
+
 ### Phase 1: Database Foundation
 1. Create `municipalities` table
 2. Add `municipality_id` FK to `organizations`, `meetings`, `matters`, `elections`, `bylaws`
@@ -362,19 +517,19 @@ export async function getMeetings(client, { municipalityId, ...filters }) {
 6. Add compound indexes for `(municipality_id, ...)` queries
 
 ### Phase 2: Scraper Abstraction
-1. Create `BaseScraper` interface and `ScrapedMeeting` dataclass
-2. Refactor existing CivicWeb scraper to extend `BaseScraper`
-3. Implement `LegistarScraper` using the Legistar Web API
-4. Implement `StaticHtmlScraper` for RDOS-style sites
-5. Build scraper registry with factory function
-6. Parameterize archive paths per municipality
+1. Create `BaseScraper` interface and `ScrapedMeeting` dataclass in `pipeline/scrapers/base.py`
+2. Refactor existing CivicWeb code (merge `civicweb.py` client + `scraper.py`) into `pipeline/scrapers/civicweb.py` extending `BaseScraper`
+3. Implement `LegistarScraper` in `pipeline/scrapers/legistar.py` using the Legistar Web API
+4. Implement `StaticHtmlScraper` in `pipeline/scrapers/static_html.py` for RDOS-style sites
+5. Build scraper registry with factory function in `pipeline/scrapers/__init__.py`
+6. Parameterize archive paths per municipality in `pipeline/paths.py`
 
 ### Phase 3: Pipeline Refactoring
-1. Abstract video sources (Vimeo, YouTube, inline)
-2. Refactor `Archiver` to accept municipality config
+1. Abstract video sources into `pipeline/video/` (Vimeo, YouTube, inline)
+2. Refactor `Archiver` to accept municipality config instead of hard-instantiating CivicWeb + Vimeo
 3. Add `--municipality` CLI parameter to `main.py`
 4. Pass `municipality_id` through ingester
-5. Move canonical names to per-municipality config
+5. Move canonical names to per-municipality config (database or YAML)
 6. Add Legistar structured-data fast path in ingester
 
 ### Phase 4: Web App Multi-Tenancy
