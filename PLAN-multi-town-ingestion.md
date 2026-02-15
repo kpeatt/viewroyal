@@ -2465,6 +2465,525 @@ Profiles must work across municipalities with different council structures:
 
 **Cross-municipality comparison** (Phase 6+): Once profiles exist for multiple municipalities, enable comparative views ("How does View Royal's mayor's attendance compare to Esquimalt's?"). This requires normalized metrics (rates, not counts) and is a natural extension of the profile data structure.
 
+### Layer 11: Speaker Identification, Fingerprinting & Transcript Quality
+
+The current diarization and speaker identification system works — Gemini identifies speakers from audio context, the local diarizer uses CAM++ embeddings for voice matching, and AI refinement corrects transcription errors. But the system has fundamental architectural gaps: speaker identity is scoped to individual meetings (a person gets a fresh "Speaker_01" label every time), voice fingerprints exist but aren't systematically built or maintained, name canonicalization is hardcoded to View Royal's 50 known people, and there's no quality scoring to know which transcripts are reliable and which need human review. This layer fixes the speaker identity lifecycle from enrollment through cross-meeting tracking, and adds quality infrastructure to measure and improve transcript accuracy over time.
+
+#### 11a. Current State Assessment
+
+**What works:**
+
+- **Gemini diarization** (`diarizer.py`): Two-pass approach (speaker map → speaker segments) using meeting context. Produces speaker names when the audio + agenda provide enough context. Used for cloud-based processing.
+- **Local diarization** (`local_diarizer.py`): senko + CAM++ embeddings + parakeet-mlx STT. Produces 192-dim speaker centroids and time-aligned segments. Supports voice fingerprint matching against known speakers. Used on Apple Silicon.
+- **AI refinement** (`ai_refiner.py`): Validates speaker identifications against known council members, corrects transcription errors using agenda/minutes as ground truth, extracts structured data (motions, votes, timestamps).
+- **Voice fingerprints**: Stored in `voice_fingerprints` table (person_id, 192-dim embedding, source_meeting_id). Matched during local diarization at cosine threshold 0.75. Saved via the speaker-alias UI.
+- **Speaker alias UI** (`speaker-alias.tsx`): Manual correction interface for assigning speaker labels to people, accepting voice matches, splitting/relabeling segments.
+
+**What doesn't work:**
+
+- **Per-meeting identity silo**: `meeting_speaker_aliases` maps "Speaker_01" → person_id for one meeting only. The same person is "Speaker_01" in meeting 42, "Speaker_03" in meeting 43, and "SPEAKER_02" in meeting 44. There's no persistent identity that carries across meetings.
+- **Voice fingerprints aren't systematically built**: A fingerprint is only saved when someone manually clicks "Accept match" in the speaker-alias UI. For the ~100 ingested meetings, maybe 10-15 have had fingerprints saved. The rest have speaker centroids in `meeting.meta` that were never promoted to persistent fingerprints.
+- **Single fingerprint per person**: The `voice_fingerprints` table stores one embedding per person. But voice characteristics vary by microphone, room acoustics, audio quality, and even the person's mood. A single centroid averaged from one meeting's audio is a fragile representation.
+- **No fingerprint quality tracking**: The `confidence` column on `voice_fingerprints` is always set to 1.0 (hardcoded at `speaker-alias.tsx:288`). There's no actual confidence calibration.
+- **Hardcoded name lists**: `names.py` contains 50 hardcoded names and 50+ hardcoded variant mappings specific to View Royal. This doesn't scale to Esquimalt, RDOS, or any future municipality. Adding a new town requires manually populating `CANONICAL_NAMES` and `NAME_VARIANTS`.
+- **`voice_fingerprints` table not in bootstrap.sql**: The table exists in production but was created manually — it's not part of the schema definition, meaning fresh deployments or CI environments won't have it.
+- **No confidence on Gemini diarization**: The Gemini-based `diarizer.py` returns speaker_aliases with a confidence field, but this is a number the AI makes up — it's not calibrated or validated. Individual transcript segments from Gemini have no confidence at all.
+- **No quality scoring**: `is_verified` (boolean) and `sentiment_score` (float) exist on `transcript_segments` but are never populated. There's no way to know which meetings have good transcripts and which are garbage without manually reading them.
+- **Transcript corrections are one-shot**: AI refinement applies corrections during ingestion. If a correction is wrong, there's no way to override it. If new information reveals better corrections later, there's no mechanism to re-apply.
+- **No audio preprocessing**: Audio goes directly from Vimeo MP4 to processing. No noise reduction, no volume normalization, no silence trimming. Meeting audio quality varies significantly (some have clear lapel mics, others have distant room mics with HVAC noise).
+
+#### 11b. Voice Fingerprint Architecture
+
+Redesign the voice fingerprint system from "single embedding per person" to a robust, multi-sample speaker model that improves over time.
+
+**New `voice_fingerprints` table** (replace the undocumented existing table):
+
+```sql
+CREATE TABLE voice_fingerprints (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    person_id bigint NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    municipality_id bigint NOT NULL REFERENCES municipalities(id),
+    embedding vector(192),           -- CAM++ centroid from a single meeting
+    source_meeting_id bigint REFERENCES meetings(id),
+    source_segment_range int4range,  -- Which segments contributed (start_time range)
+    audio_quality_score float,       -- Estimated quality of the source audio (0-1)
+    created_by text DEFAULT 'auto',  -- 'auto' | 'manual' | 'bulk_backfill'
+    is_primary boolean DEFAULT false, -- The best-quality fingerprint for this person
+    created_at timestamptz DEFAULT now(),
+
+    -- One primary fingerprint per person per municipality
+    UNIQUE (person_id, municipality_id) WHERE (is_primary = true)
+);
+
+CREATE INDEX idx_vfp_person ON voice_fingerprints(person_id);
+CREATE INDEX idx_vfp_municipality ON voice_fingerprints(municipality_id);
+```
+
+**Key change: Multiple fingerprints per person.** Instead of one embedding, store one per meeting where the person spoke. The matching algorithm compares against all fingerprints for a person and uses the best match. Over time, more meetings = more fingerprints = more robust identification.
+
+**Aggregated speaker model** (computed, stored on `people` table):
+
+```sql
+ALTER TABLE people ADD COLUMN IF NOT EXISTS voice_centroid vector(192);
+ALTER TABLE people ADD COLUMN IF NOT EXISTS voice_sample_count int DEFAULT 0;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS voice_quality_score float;
+```
+
+The `voice_centroid` is the weighted average of all fingerprints for that person (weighted by `audio_quality_score`). It's recomputed whenever a new fingerprint is added. The `voice_sample_count` tracks how many meetings contributed — a person with 20 samples has a much more reliable centroid than one with 1.
+
+**Matching with multiple samples:**
+
+```python
+def match_speaker(centroid: np.ndarray, municipality_id: int, threshold: float = 0.72) -> list[SpeakerMatch]:
+    """
+    Match a speaker centroid against all known fingerprints for this municipality.
+    Returns ranked matches with confidence scores.
+    """
+    # 1. Quick check against aggregated centroids (people.voice_centroid)
+    #    This is fast — one comparison per known person
+    candidates = quick_centroid_match(centroid, municipality_id, threshold=threshold - 0.05)
+
+    # 2. For top-5 candidates, compare against ALL their individual fingerprints
+    #    Best individual match determines final confidence
+    matches = []
+    for person_id in candidates:
+        fingerprints = get_fingerprints(person_id)
+        similarities = [cosine_similarity(centroid, fp.embedding) for fp in fingerprints]
+
+        best_sim = max(similarities)
+        avg_sim = np.mean(similarities)
+        sample_count = len(fingerprints)
+
+        # Confidence combines best match, average match, and sample diversity
+        confidence = compute_match_confidence(best_sim, avg_sim, sample_count)
+
+        if confidence >= threshold:
+            matches.append(SpeakerMatch(
+                person_id=person_id,
+                similarity=best_sim,
+                confidence=confidence,
+                sample_count=sample_count,
+            ))
+
+    return sorted(matches, key=lambda m: m.confidence, reverse=True)
+```
+
+**Confidence calibration:**
+
+| Signal | Weight | Rationale |
+|--------|--------|-----------|
+| Best individual fingerprint similarity | 0.5 | The single best-matching sample — high similarity here means the voice is genuinely close |
+| Average across all fingerprints | 0.2 | Consistency — if they match well on average, the identification is robust |
+| Sample count (log-scaled) | 0.15 | More samples = more reliable. But diminishing returns: 10 samples isn't 10x better than 1 |
+| Audio quality of best match | 0.15 | A high-quality sample match is worth more than a low-quality one |
+
+The weighted score maps to human-interpretable confidence:
+- **0.90+**: Very high confidence — auto-accept (display green)
+- **0.80-0.90**: High confidence — auto-accept with review flag (display blue)
+- **0.72-0.80**: Medium confidence — suggest but require confirmation (display amber)
+- **Below 0.72**: No match — require manual identification (display gray)
+
+#### 11c. Automatic Fingerprint Enrollment
+
+Currently, fingerprints are only saved when a human manually confirms them in the speaker-alias UI. This means most meetings never contribute to the fingerprint database. Add automatic enrollment.
+
+**When auto-enrollment triggers:**
+
+1. **After AI refinement confirms a speaker identity** with high confidence: If the AI refiner maps "Speaker_01" to "Councillor Lemon" and the local diarizer produced a centroid for "Speaker_01", auto-save that centroid as a fingerprint for Councillor Lemon.
+
+2. **After a human confirms an alias in the UI**: Already implemented — enhance to save the centroid from that meeting's `meta.speaker_centroids`.
+
+3. **Bulk backfill**: A one-time script that processes all existing meetings with `meta.speaker_centroids` and `meeting_speaker_aliases`, and creates fingerprints for every confirmed speaker-to-person mapping.
+
+**Auto-enrollment flow (during ingestion):**
+
+```python
+def auto_enroll_fingerprints(meeting_id: int, speaker_centroids: dict, speaker_aliases: list):
+    """
+    After ingestion, save fingerprints for speakers with confirmed identities.
+
+    speaker_centroids: {"SPEAKER_01": [0.123, ...], "SPEAKER_02": [...]}
+    speaker_aliases: [{"label": "SPEAKER_01", "person_id": 42, "confidence": 0.92}]
+    """
+    for alias in speaker_aliases:
+        label = alias["label"]
+        person_id = alias["person_id"]
+        confidence = alias.get("confidence", 0.0)
+
+        if label not in speaker_centroids:
+            continue  # No centroid available (Gemini diarizer doesn't produce centroids)
+
+        if confidence < 0.80:
+            continue  # Only enroll high-confidence identifications
+
+        centroid = speaker_centroids[label]
+
+        # Check if this centroid is significantly different from existing fingerprints
+        # (don't store near-duplicates from consecutive meetings in the same room)
+        existing = get_fingerprints(person_id)
+        if existing and max(cosine_similarity(centroid, fp.embedding) for fp in existing) > 0.95:
+            continue  # Too similar to an existing sample — skip
+
+        save_fingerprint(
+            person_id=person_id,
+            embedding=centroid,
+            source_meeting_id=meeting_id,
+            audio_quality_score=estimate_audio_quality(meeting_id),
+            created_by="auto"
+        )
+
+        # Recompute aggregated centroid for this person
+        recompute_voice_centroid(person_id)
+```
+
+**Diversity-aware enrollment**: Don't store fingerprints that are near-duplicates (>0.95 similarity) of existing ones. This encourages diversity in the sample set — different rooms, different mic setups, different days — which makes the aggregated centroid more robust.
+
+#### 11d. Cross-Meeting Speaker Linking
+
+The core identity gap: when a new meeting is ingested, the diarizer produces labels like "SPEAKER_01", "SPEAKER_02" etc. Currently, these are matched to people only within that meeting. With the fingerprint architecture from 11b, implement automatic cross-meeting speaker linking.
+
+**Linking flow during ingestion:**
+
+```
+1. Audio → Local diarizer → Produces segments + speaker centroids
+2. For each speaker centroid:
+   a. Match against all known fingerprints for this municipality (11b)
+   b. If high-confidence match (≥0.80): Auto-assign person_id
+   c. If medium-confidence match (0.72-0.80): Create alias with "suggested" flag
+   d. If no match: Leave as unknown speaker
+3. Pass voice-identified speakers to AI refinement as "pre-identified speakers"
+4. AI refinement validates/overrides using contextual clues
+5. Final speaker_aliases saved to meeting_speaker_aliases
+6. Auto-enroll fingerprints for confirmed speakers (11c)
+```
+
+**Step 3 is critical**: Voice matching produces probabilistic results; AI refinement uses semantic context (who's expected at this meeting, who the chair addresses by name, who moves motions) to validate or override. The two systems complement each other:
+
+| Voice match says | AI refinement says | Result |
+|-----------------|-------------------|--------|
+| Speaker_01 = Cllr. Lemon (0.92) | Context confirms (chair says "Councillor Lemon") | Confirmed: Cllr. Lemon |
+| Speaker_01 = Cllr. Lemon (0.85) | Context says Cllr. Lemon wasn't at this meeting | Override: Unknown (flag for review) |
+| Speaker_01 = Unknown | Context identifies as "Mayor Hill" (chair greeting) | Assign: Mayor Hill |
+| Speaker_01 = Cllr. Lemon (0.76) | No contextual evidence either way | Suggested: Cllr. Lemon (requires confirmation) |
+
+**Conflict resolution priority**: AI contextual identification > high-confidence voice match > medium-confidence voice match > label-based guess
+
+**New column on `meeting_speaker_aliases`:**
+
+```sql
+ALTER TABLE meeting_speaker_aliases ADD COLUMN IF NOT EXISTS identification_source text DEFAULT 'ai_refinement';
+-- Values: 'voice_fingerprint', 'ai_refinement', 'ai_confirmed_voice', 'manual', 'bulk_backfill'
+ALTER TABLE meeting_speaker_aliases ADD COLUMN IF NOT EXISTS confidence float DEFAULT 1.0;
+```
+
+This tracks how each alias was identified and how confident the system is, enabling quality auditing and targeted human review.
+
+#### 11e. Database-Driven Name Canonicalization
+
+Replace the hardcoded `names.py` lists with a database-driven system that works for any municipality.
+
+**New table: `name_variants`**
+
+```sql
+CREATE TABLE name_variants (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    municipality_id bigint NOT NULL REFERENCES municipalities(id),
+    variant text NOT NULL,            -- Lowercase: "matson", "allison mackenzie"
+    canonical_person_id bigint NOT NULL REFERENCES people(id),
+    source text DEFAULT 'manual',     -- 'manual' | 'ai_learned' | 'election_import'
+    created_at timestamptz DEFAULT now(),
+    UNIQUE (municipality_id, variant)
+);
+
+CREATE INDEX idx_name_variants_lookup ON name_variants(municipality_id, variant);
+```
+
+**New table: `name_blocklist`**
+
+```sql
+CREATE TABLE name_blocklist (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    municipality_id bigint REFERENCES municipalities(id),  -- NULL = global
+    term text NOT NULL,
+    UNIQUE (municipality_id, term)
+);
+```
+
+**Migration path:**
+1. Create the tables
+2. Seed `name_variants` from the existing `NAME_VARIANTS` dict (with `municipality_id = 1` for View Royal)
+3. Seed `name_blocklist` from the existing `PERSON_BLOCKLIST`
+4. Auto-populate variants from election data (candidate name variants from `candidacies`)
+5. Refactor `get_canonical_name()` and `is_valid_name()` to query the database instead of the hardcoded lists
+
+**Auto-learning variants**: When the AI refiner or a human corrects a speaker name, add the correction to `name_variants` automatically:
+
+```python
+def record_name_correction(municipality_id: int, incorrect: str, person_id: int):
+    """Record a name variant learned from a correction."""
+    variant = incorrect.lower().strip()
+    if not is_blocklisted(variant, municipality_id):
+        upsert_name_variant(municipality_id, variant, person_id, source='ai_learned')
+```
+
+Over time, the system accumulates corrections and stops making the same mistakes. New municipalities start with an empty variant table and build it up as meetings are ingested.
+
+**Seeding from election data**: When election history is imported (existing `import_election_history.py`), auto-generate obvious variants:
+- Surname only: "Lemon" → Gery Lemon
+- First + last without middle: "Scott Sommerville" → Scott M. Sommerville
+- Common title prefixes: "Mayor Hill" → Graham Hill, "Councillor Lemon" → Gery Lemon
+
+#### 11f. Transcript Quality Scoring
+
+Add quality infrastructure to measure how reliable each transcript is, so the system can prioritize human review where it matters most and so downstream consumers (RAG, profiles) can weight evidence by quality.
+
+**Per-segment quality score:**
+
+```sql
+ALTER TABLE transcript_segments ADD COLUMN IF NOT EXISTS quality_score float;
+ALTER TABLE transcript_segments ADD COLUMN IF NOT EXISTS quality_flags text[] DEFAULT '{}';
+```
+
+**Quality signals (computed during ingestion):**
+
+| Signal | Weight | How measured |
+|--------|--------|-------------|
+| Speaker identification confidence | 0.25 | From voice fingerprint match or AI refinement confidence |
+| Text correction ratio | 0.20 | `edit_distance(text_content, corrected_text_content) / len(text_content)` — high ratio = many corrections needed = lower quality source |
+| Segment length | 0.10 | Very short segments (<10 chars) are likely noise; very long segments (>2000 chars) may be segmentation errors |
+| Audio overlap score | 0.15 | From local diarizer overlap ratio (how well the segment aligns with diarization boundaries) |
+| Contextual coherence | 0.15 | Does this segment make grammatical/semantic sense? Quick heuristic: sentence structure, dictionary word ratio |
+| Speaker continuity | 0.15 | Does the speaker assignment change rapidly (sign of diarization errors)? Measured as: fraction of surrounding segments with the same speaker |
+
+**Quality flags** (machine-readable issues):
+
+```python
+QUALITY_FLAGS = {
+    "no_speaker": "Speaker could not be identified",
+    "low_confidence_speaker": "Speaker identification below 0.80 confidence",
+    "heavy_corrections": "More than 30% of text was corrected by AI",
+    "very_short": "Segment shorter than 10 characters",
+    "very_long": "Segment longer than 2000 characters (possible segmentation error)",
+    "rapid_speaker_change": "Speaker changed more than 3 times in 10 seconds",
+    "possible_overlap": "Multiple speakers may be talking simultaneously",
+    "low_audio_quality": "Source audio had significant noise or low volume",
+    "unresolved_name": "Speaker name doesn't match any known person",
+}
+```
+
+**Per-meeting quality score:**
+
+```sql
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS transcript_quality_score float;
+ALTER TABLE meetings ADD COLUMN IF NOT EXISTS transcript_quality_flags jsonb DEFAULT '{}';
+```
+
+Computed as weighted average of segment quality scores for that meeting, plus meeting-level signals:
+- **Speaker coverage**: What fraction of segments have identified speakers? (>90% = good, <50% = poor)
+- **Correction density**: Average corrections per segment
+- **Diarization method**: Local diarizer (with voice fingerprints) > Gemini diarizer (no fingerprints) > no diarization
+- **Unique speakers identified**: Should roughly match expected attendees — if the diarizer found 12 speakers but only 7 people were expected, something's wrong
+
+**Quality dashboard**: Display transcript quality scores on the admin meetings list. Color-code: green (>0.8), yellow (0.6-0.8), red (<0.6). Allow sorting by quality to prioritize human review for the worst transcripts.
+
+#### 11g. Audio Preprocessing Pipeline
+
+Add preprocessing steps before diarization to improve STT and speaker identification quality.
+
+**Steps (in order):**
+
+1. **Format conversion** (existing): Convert to 16kHz mono WAV — already implemented in `local_diarizer.py`
+
+2. **Volume normalization**: Normalize audio to a consistent RMS level. Meeting recordings vary wildly — some have loud PA systems, others have quiet room mics. Normalization ensures the STT model sees consistent input levels.
+
+   ```bash
+   ffmpeg -i input.wav -af "loudnorm=I=-16:TP=-1.5:LRA=11" -ar 16000 -ac 1 output.wav
+   ```
+
+   Uses EBU R128 loudness normalization — standard for broadcast audio. The `loudnorm` filter measures the input, then applies gain to hit -16 LUFS integrated loudness.
+
+3. **Noise reduction**: Apply spectral gating to reduce constant background noise (HVAC, projector fan, road noise). Use `noisereduce` library (Python) or `sox` (CLI):
+
+   ```python
+   import noisereduce as nr
+   # Estimate noise profile from first 2 seconds (usually silence before meeting starts)
+   noise_sample = audio[:2 * sample_rate]
+   cleaned = nr.reduce_noise(y=audio, sr=sample_rate, y_noise=noise_sample, prop_decrease=0.8)
+   ```
+
+   Conservative `prop_decrease=0.8` — reduce noise by 80% but don't over-process (which creates artifacts that confuse speaker embeddings).
+
+4. **Silence trimming**: Detect and trim leading/trailing silence (common in meeting recordings that start before/after the actual meeting). Use VAD (Voice Activity Detection) to find the first/last speech:
+
+   ```python
+   from silero_vad import load_silero_vad, get_speech_timestamps
+   model = load_silero_vad()
+   timestamps = get_speech_timestamps(audio, model, threshold=0.3)
+   # Trim to first speech start - 2s to last speech end + 2s
+   ```
+
+5. **Audio quality estimation**: Before processing, estimate overall audio quality. Store on the meeting record for use in fingerprint quality weighting:
+
+   ```python
+   def estimate_audio_quality(audio_path: str) -> float:
+       """Estimate audio quality on 0-1 scale."""
+       # Signal-to-noise ratio
+       snr = compute_snr(audio)
+       # Clipping detection (peaks at max amplitude)
+       clipping_ratio = count_clipped_samples(audio) / len(audio)
+       # Silence ratio (too much silence = recording issues)
+       silence_ratio = count_silent_frames(audio) / total_frames
+
+       score = 0.0
+       score += 0.5 * min(snr / 30.0, 1.0)     # 30 dB SNR = perfect
+       score += 0.3 * (1.0 - clipping_ratio * 100)  # Any clipping is bad
+       score += 0.2 * (1.0 - abs(silence_ratio - 0.3) * 2)  # ~30% silence is normal
+       return max(0.0, min(1.0, score))
+   ```
+
+**When to preprocess**: Always for local diarization. For Gemini diarization, only volume normalization (Gemini handles noise reasonably well, and the audio is uploaded as-is).
+
+**Storage**: Preprocessed audio is a temp file — not persisted. The original audio source (Vimeo URL) is the permanent reference. Preprocessing adds ~5 seconds per meeting and ~50 MB temp disk usage.
+
+#### 11h. Transcript Correction Pipeline
+
+Replace the one-shot correction model with an iterative, auditable correction system.
+
+**Current problem**: `corrected_text_content` is set once during ingestion by applying AI refinement corrections. If the correction is wrong or incomplete, it's permanent. No history, no revert capability, no mechanism for humans to improve transcripts over time.
+
+**New table: `transcript_corrections`**
+
+```sql
+CREATE TABLE transcript_corrections (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    segment_id bigint NOT NULL REFERENCES transcript_segments(id) ON DELETE CASCADE,
+    original_text text NOT NULL,
+    corrected_text text NOT NULL,
+    correction_type text NOT NULL,        -- 'spelling' | 'name' | 'grammar' | 'content' | 'speaker'
+    source text NOT NULL,                 -- 'ai_refinement' | 'ai_post_process' | 'manual' | 'user_report'
+    confidence float DEFAULT 1.0,
+    applied boolean DEFAULT false,        -- Has this been applied to corrected_text_content?
+    created_at timestamptz DEFAULT now(),
+    created_by text                       -- User ID or 'system'
+);
+
+CREATE INDEX idx_tc_segment ON transcript_corrections(segment_id);
+CREATE INDEX idx_tc_applied ON transcript_corrections(applied) WHERE NOT applied;
+```
+
+**Correction workflow:**
+
+1. **During ingestion** (existing): AI refinement produces corrections → stored in `transcript_corrections` with `source='ai_refinement'`, `applied=true`. The `corrected_text_content` is set to the corrected version.
+
+2. **Post-ingestion AI pass** (new): After all meetings are ingested, run a second correction pass that uses cross-meeting context:
+   - Identify proper nouns that appear in multiple meetings and standardize spelling
+   - Cross-reference spoken names against the `name_variants` table
+   - Detect municipal jargon and acronyms, expand them (e.g., "OCP" → "Official Community Plan")
+   - Source: `'ai_post_process'`
+
+3. **User-reported corrections** (new): Add a "Report correction" button on transcript segments in the web UI. Users can suggest corrections (flagged for review, not auto-applied). Source: `'user_report'`
+
+4. **Bulk re-correction** (new): When name_variants are updated or a new canonical name is added, re-scan all segments for the old variant and create corrections. This handles the case where "Matson" appears in 50 meetings and needs to become "Mattson" everywhere.
+
+**Applying corrections**: `corrected_text_content` is always the latest version. When a new correction is applied:
+1. Apply the text replacement to `corrected_text_content`
+2. Mark the correction as `applied=true`
+3. Log the change with timestamp
+
+**Revert capability**: Since all corrections are stored individually, reverting means setting `applied=false` and recomputing `corrected_text_content` from `text_content` + all remaining `applied=true` corrections in order.
+
+#### 11i. Speaker Verification & Review Workflow
+
+Add a structured review workflow for speaker identifications that need human verification.
+
+**Review queue**: Segments and aliases flagged for review appear in a queue on the speaker-alias page:
+
+```typescript
+interface ReviewItem {
+    meeting_id: number;
+    speaker_label: string;
+    suggested_person_id: number | null;
+    suggested_person_name: string | null;
+    identification_source: string;       // 'voice_fingerprint' | 'ai_refinement'
+    confidence: number;
+    audio_sample_url: string;            // 15-second clip of the speaker
+    transcript_excerpt: string;          // First few segments from this speaker
+    context_clues: string[];             // "Chair addresses them as 'Councillor Lemon'"
+}
+```
+
+**What gets queued:**
+- Medium-confidence voice matches (0.72-0.80)
+- AI refinement identifications that conflict with voice matches
+- Speakers who appear in multiple meetings but haven't been confirmed
+- Segments flagged with `low_confidence_speaker` quality flag
+
+**Verification actions:**
+- **Confirm**: Accept the suggested identification → saves alias + enrolls fingerprint
+- **Correct**: Override with a different person → saves alias + enrolls fingerprint + adds to `name_variants`
+- **Reject**: Mark as unknown speaker → removes suggestion, doesn't enroll fingerprint
+- **Split**: This label contains two different people → split segments and re-assign
+
+**Batch verification**: For a person with consistent voice matches across many meetings (all >0.85), offer a "Confirm all N matches" button that accepts all at once. This is the fastest way to backfill fingerprints for well-known speakers.
+
+#### 11j. Gemini Diarization Enhancements
+
+The Gemini-based diarizer (`diarizer.py`) has limitations compared to the local diarizer: no speaker centroids, no configurable confidence thresholds, limited context window. Improve it for the cloud-processing path.
+
+**Structured output enforcement**: Replace free-form JSON prompting with Gemini's structured output (JSON schema):
+
+```python
+speaker_map_schema = {
+    "type": "object",
+    "properties": {
+        "speaker_aliases": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "name": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "evidence": {"type": "string"},  # NEW: Why this identification was made
+                },
+                "required": ["label", "name", "confidence", "evidence"]
+            }
+        }
+    }
+}
+```
+
+The `evidence` field forces the model to explain its reasoning ("Chair addresses this speaker as 'Councillor Lemon' at 12:34"), which provides auditability and helps the AI refinement step validate identifications.
+
+**Extended context**: The current 8000-char context truncation loses valuable information. With Gemini Flash's 1M token context, expand to include:
+- Full agenda (not truncated)
+- Attendance list (from prior ingestion or previous meeting)
+- Known speaker characteristics from the fingerprint database ("Councillor Lemon: female, typically third to speak after the mayor")
+- Prior meeting's speaker map (if available) — speakers at consecutive meetings are usually the same people
+
+**Multi-pass speaker resolution**: When the single-pass approach leaves speakers unidentified, run a second pass with targeted prompts:
+- "The following speakers were not identified: Speaker_03, Speaker_05. Based on the agenda, the expected participants who haven't been identified yet are: [list]. Listen for how they're addressed, what committee assignments they reference, and their speaking patterns."
+
+**Confidence calibration**: Run a one-time calibration by comparing Gemini's confidence scores against the ground truth from manually-verified meetings. Adjust the threshold based on the actual precision/recall curve, not the model's self-reported confidence.
+
+#### 11k. Multi-Municipality Speaker Handling
+
+As new municipalities are onboarded, the speaker identification system needs to handle:
+
+**Separate fingerprint pools**: Voice fingerprints are municipality-scoped. A Councillor in View Royal is a different person from a Councillor in Esquimalt, even if they have similar voices. The matching query always filters by `municipality_id`.
+
+**Shared people across municipalities**: Some individuals serve on regional bodies (CRD) or appear as presenters/consultants at multiple councils. The `people` table is shared, but `voice_fingerprints` are municipality-scoped. Cross-municipality matching would use the person_id link: "This person in Esquimalt sounds like the CRD director we identified in View Royal."
+
+**Per-municipality name configuration**:
+- `name_variants` table is municipality-scoped (from 11e)
+- `name_blocklist` can be global (NULL municipality_id) or municipality-specific
+- Each municipality gets its own council member list from election imports — no hardcoding needed
+
+**Municipality-specific diarization context**: The AI refinement prompt already receives meeting context. Extend to include municipality-specific context:
+- Council structure (mayor + 6 councillors vs. board chair + 8 directors)
+- Common titles (some municipalities use "Alderman" instead of "Councillor")
+- Meeting format conventions (some have a formal roll call that helps identification)
+
 ## Implementation Sequence
 
 ### Phase 0: Python Monorepo Reorganization
@@ -2599,6 +3118,19 @@ Profiles must work across municipalities with different council structures:
 6. **Profile page redesign** (10j): Implement new layout — at-a-glance stat cards, AI summary section, expandable policy position cards with stance indicators, key votes highlight reel, topic-scoped alignment selector, speaking profile charts. Move full voting record and attendance history to subpages.
 7. **RAG integration**: Wire `get_person_activity` tool (Layer 9) to read from `person_profiles` for quick stats lookup before falling back to raw data queries. Add profile data to synthesizer context for person-based questions.
 
+### Phase 5e: Speaker Identification & Transcript Quality
+1. **Voice fingerprint schema** (11b): Add `voice_fingerprints` table to `bootstrap.sql` (with UUID PK, person_id, municipality_id, 192-dim embedding, source_meeting_id, audio_quality_score, is_primary). Add `voice_centroid`, `voice_sample_count`, `voice_quality_score` columns to `people`. Migrate any existing fingerprint data.
+2. **Database-driven name canonicalization** (11e): Create `name_variants` table (municipality_id, variant, canonical_person_id, source). Create `name_blocklist` table. Seed from existing `names.py` hardcoded lists. Refactor `get_canonical_name()` and `is_valid_name()` to query DB. Auto-seed variants from election imports (surname, first+last, title+last).
+3. **Multi-sample fingerprint matching** (11b): Implement `match_speaker()` that compares against all fingerprints per person (quick centroid check → top-5 detailed comparison). Add calibrated confidence scoring (best similarity, average, sample count, audio quality weighted). Configure auto-accept threshold (0.80) and review threshold (0.72).
+4. **Automatic fingerprint enrollment** (11c): Hook into post-ingestion — for every confirmed speaker alias with a centroid, auto-save fingerprint (skip near-duplicates >0.95 similarity). Recompute aggregated `people.voice_centroid` after each enrollment. Build bulk backfill script for existing meetings with `meta.speaker_centroids`.
+5. **Cross-meeting speaker linking** (11d): Wire fingerprint matching into the ingestion pipeline — match centroids before AI refinement, pass pre-identified speakers to the refiner, implement conflict resolution priority (AI context > high-confidence voice > medium voice). Add `identification_source` and `confidence` columns to `meeting_speaker_aliases`.
+6. **Audio preprocessing** (11g): Add volume normalization (ffmpeg loudnorm), noise reduction (noisereduce with 2-second noise profile), silence trimming (Silero VAD). Add `estimate_audio_quality()` function. Wire into local diarizer before STT. Store quality score on meetings.
+7. **Transcript quality scoring** (11f): Add `quality_score` and `quality_flags` columns to `transcript_segments`. Add `transcript_quality_score` and `transcript_quality_flags` to `meetings`. Compute per-segment quality during ingestion (speaker confidence, correction ratio, segment length, overlap score, speaker continuity). Aggregate to per-meeting score.
+8. **Transcript correction pipeline** (11h): Create `transcript_corrections` table. Refactor ingestion to log individual corrections (not just apply them). Build post-ingestion cross-meeting correction pass (proper noun standardization, name variant application, jargon expansion). Add "Report correction" UI button on transcript segments.
+9. **Speaker verification workflow** (11i): Build review queue for medium-confidence identifications on speaker-alias page. Implement confirm/correct/reject/split actions. Add batch confirmation for consistent cross-meeting matches. Track review status per meeting.
+10. **Gemini diarization enhancements** (11j): Add structured output schema (with evidence field). Expand context window (full agenda, attendance list, known speaker characteristics, prior meeting speaker map). Implement multi-pass resolution for unidentified speakers. Calibrate confidence thresholds against manually-verified ground truth.
+11. **Quality dashboard**: Add admin route showing per-meeting transcript quality scores (color-coded), speaker identification coverage, flagged segments needing review, fingerprint enrollment status across all meetings.
+
 ### Phase 6: Second Town Onboarding
 1. Configure Esquimalt municipality in database with OCD IDs
 2. Run Legistar scraper to populate data (structured ingestion path — documents populated from API data)
@@ -2702,6 +3234,26 @@ Profiles must work across municipalities with different council structures:
 - Algorithmic scoring (0-5 based on how many criteria are met) is transparent, reproducible, and auditable. Citizens can understand why a vote was highlighted
 - The AI does enter the picture for notable moment *description* — explaining why a key vote was significant. But the selection of which votes to highlight is deterministic
 
+### Why multiple fingerprints per person instead of a single averaged embedding?
+- Voice characteristics vary significantly by recording conditions: microphone type (lapel vs. room), room acoustics, background noise, audio codec, and even the speaker's physical state. A single averaged embedding smooths out these variations but also reduces discriminative power
+- With multiple samples, the matching algorithm can find the best individual match — if a speaker's voice in today's meeting sounds most like their voice from the March meeting (same room, same mic), that specific match will have high similarity even if the average centroid would be mediocre
+- Diversity-aware enrollment (skip near-duplicates >0.95) ensures the sample set captures different conditions, not 10 copies of the same meeting
+- The aggregated centroid on `people.voice_centroid` still exists for fast initial screening (one comparison per known person), then detailed matching against individual fingerprints for the top candidates. This two-stage approach is both fast and accurate
+- Storage cost is minimal: 192 floats × 4 bytes = 768 bytes per fingerprint. Even 100 meetings × 7 speakers = 700 fingerprints = ~500 KB total
+
+### Why database-driven name canonicalization instead of keeping hardcoded lists?
+- The current `names.py` has 50 names and 50+ variants hardcoded for View Royal. Adding Esquimalt requires manually adding another 50+ entries. Adding RDOS requires another set. This doesn't scale
+- Database-driven variants are municipality-scoped — "Rogers" maps to "John Rogers" in View Royal but might map to a different person in another municipality
+- Auto-learning from corrections means the system gets better over time without code changes. The first time the AI corrects "Matson" to "Mattson", the variant is recorded. It never makes that mistake again
+- Election imports auto-generate obvious variants (surname-only, first+last, title+last), seeding the table with minimal manual effort
+- The blocklist is also database-driven, allowing municipalities to add their own (e.g., an Indigenous community might have specific terms that shouldn't become person records)
+
+### Why combine voice fingerprinting with AI contextual identification?
+- Neither approach alone is sufficient. Voice fingerprinting identifies *who is speaking* based on vocal characteristics — but fails for new speakers, similar voices, or poor audio. AI contextual identification identifies speakers from what they say and how others address them — but requires distinctive conversational cues that not all speakers provide
+- The two systems are complementary: voice matching provides probabilistic identity from the audio signal; AI context provides confirmation or correction from the semantic signal. Combined confidence is higher than either alone
+- The priority order (AI context > high voice > medium voice) reflects reliability: when the chair says "Thank you, Councillor Lemon" and the voice match also says Lemon, confidence is near-certain. When the voice says Lemon but the context contradicts it (Lemon was absent), the context wins
+- For new municipalities with no fingerprints yet, AI identification bootstraps the system — every confirmed identification enrolls a fingerprint for next time. After ~5 meetings, voice matching starts contributing. After ~20 meetings, it's highly reliable
+
 ### What about the `meeting_type` enum?
 - The current enum (`Regular Council`, `Special Council`, etc.) is View Royal-specific
 - RDOS uses "Board" meetings, not "Council"
@@ -2735,3 +3287,11 @@ Profiles must work across municipalities with different council structures:
 | Topic taxonomy may not cover all relevant policy areas for a municipality | Start with a common base taxonomy (10 topics) and allow per-municipality extensions. Uncategorized agenda items fall into "other" — if "other" exceeds 20% of items, the taxonomy needs expansion. Monitor and adjust during Phase 6 onboarding |
 | Speaking pattern analysis depends on diarization quality — misattributed segments corrupt stats | Use confidence-weighted aggregation: segments with low speaker confidence contribute less to stats. Display data quality indicator on profile ("Speaker identification confidence: 87%"). High-confidence segments only for AI position summaries |
 | `person_profiles` JSONB columns could grow large for long-serving councillors | Cap stored data: top 5 topics (not all), top 10 key votes (not all), top 5 notable moments. Full data available via direct queries for the detail subpages. Profile row stays under 50 KB |
+| Voice fingerprint matching could produce false positives between similar-sounding speakers | Multi-sample matching (11b) reduces false positives by requiring consistency across multiple meetings. Confidence calibration against ground truth sets thresholds empirically. AI contextual validation catches remaining false positives. Medium-confidence matches go to review queue, not auto-accepted |
+| Audio preprocessing (noise reduction) could distort speaker embeddings | Use conservative noise reduction (prop_decrease=0.8). Run speaker embedding extraction on the original audio, only use preprocessed audio for STT. Validate on a test set of known speakers before deploying |
+| Bulk fingerprint backfill could propagate errors from incorrectly confirmed aliases | Backfill only from aliases with `identification_source='manual'` or with voice match confidence >0.85. Run a validation pass after backfill: flag any person whose fingerprints are inconsistent with each other (pairwise similarity <0.6 among their own samples) |
+| Database-driven name lookup adds a query to every segment during ingestion | Cache the full `name_variants` table in memory at pipeline startup (typically <1000 rows). Refresh only when processing a new municipality. The in-memory lookup is O(1) per name, same as the current hardcoded dict |
+| Transcript quality scoring could be gamed or misleading | Quality scores are internal signals, not public-facing grades. Display on admin dashboard only. Per-segment flags are machine-readable, not shown to end users. The meeting-level quality score is shown as a subtle indicator ("Transcript quality: Good / Fair / Needs review"), not a numeric score |
+| Auto-enrollment of fingerprints during ingestion could slow down the pipeline | Fingerprint save is a single Supabase upsert per speaker per meeting (~50ms). For 7 speakers: ~350ms total. Centroid recomputation is a simple average — milliseconds. Total overhead per meeting: <1 second |
+| `voice_fingerprints` table migration from undocumented existing table | Check for existing table in production, export data, create the new table via bootstrap.sql migration, import with column mapping. The existing table has minimal data (~15 fingerprints) so migration risk is low |
+| Gemini diarization confidence scores are uncalibrated | Run calibration study: compare Gemini confidence against ground truth from 10-15 manually-verified meetings. Fit a simple sigmoid to map model confidence → actual precision. Use calibrated scores for the auto-accept/review threshold |
