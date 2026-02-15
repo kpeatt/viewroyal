@@ -1188,13 +1188,14 @@ Back-of-envelope for one municipality (View Royal, ~12 meetings/year, ~5-10 atta
 | Attachment markdown (5-10 docs) | ~200 KB | ~200 KB | Kept in Postgres (searchable) |
 | Pre-rendered HTML (all docs) | ~500 KB | **→ R2** | Offloaded to Cloudflare R2 |
 | Document sections (rows) | ~100 KB | ~100 KB | Structure metadata in Postgres |
-| Embeddings — naive `vector(768)` | ~150 KB | — | Old approach |
-| Embeddings — `halfvec(256)` | — | ~25 KB | **83% reduction** via Matryoshka + halfvec |
+| Segment embeddings — `vector(768)` | ~553 KB | **0** | Replaced by discussion-level + key statement embeddings |
+| Discussion + key statement embeddings | — | ~27 KB | ~35 embeddings × `halfvec(384)` instead of ~180 × `vector(768)` |
 | Transcript segments (text) | ~200 KB | ~100 KB | Consolidated turns, drop duplicate text column |
+| Key statements (new) | — | ~15 KB | ~25 rows × text + metadata |
 | Transcript raw JSON | — | **→ R2** | Full verbatim transcript offloaded |
-| **Total in Postgres** | **~1.2 MB** | **~475 KB** | **~60% reduction** |
+| **Total in Postgres** | **~1.6 MB** | **~492 KB** | **~69% reduction** |
 
-For 3 municipalities at ~12 meetings/year: ~17 MB/year (down from ~43 MB). For 50 municipalities: ~285 MB/year. With 5+ years historical backfill: ~1.5 GB — well within Supabase Pro's 8 GB with plenty of headroom for growth.
+For 3 municipalities at ~12 meetings/year: ~18 MB/year (down from ~58 MB). For 50 municipalities: ~295 MB/year. With 5+ years historical backfill: ~1.5 GB — well within Supabase Pro's 8 GB with plenty of headroom for growth.
 
 #### 8b. Tiered Storage Strategy
 
@@ -1305,13 +1306,103 @@ ALTER TABLE transcript_segments RENAME COLUMN embedding_hv TO embedding;
 - **Embed at lower dimension**: matters, bylaws (searched less frequently)
 - **Drop embedding**: meetings (the meeting-level embedding is rarely useful — people search by item/topic, not by meeting summary)
 
-#### 8f. Transcript Segment Consolidation
+#### 8f. Rethinking Transcript Embeddings — Agenda-Item-Level Search
 
-Currently, the diarizer creates one row per speaker turn — often very short segments like "Yes", "I agree", "Motion carried." This produces 200-400 rows per meeting, each with its own 3 KB embedding.
+The current approach embeds every transcript segment longer than 10 words. This is fundamentally wasteful: a 2-hour meeting produces ~200 segments, each getting its own 3 KB embedding (~600 KB of vectors), when most segments are fragments of the same discussion. A user searching for "what did council say about the bike lane" doesn't need to match against 15 individual utterances from that discussion — they need to find the agenda item where it was discussed, then see the relevant quotes.
 
-**Strategy 1: Merge consecutive same-speaker segments into speaker turns.**
+**The better approach: embed at the agenda-item discussion level, not per-segment.**
 
-Many diarizer segments are fragments of the same speech. Merge consecutive segments from the same speaker (with gaps <3 seconds) into a single row:
+##### Primary strategy: Discussion-level embeddings
+
+For each agenda item, concatenate all transcript segments that fall within its discussion timeframe into a single text block. Embed that block once. This captures the full semantic context of the discussion in one vector instead of scattering it across dozens of fragment embeddings.
+
+```python
+def build_discussion_embeddings(meeting_id: int):
+    """Create one embedding per agenda item's discussion, not per segment."""
+    agenda_items = get_agenda_items(meeting_id)
+    segments = get_transcript_segments(meeting_id)
+
+    for item in agenda_items:
+        # Get all segments that fall within this item's discussion window
+        item_segments = [
+            s for s in segments
+            if s["start_time"] >= item["discussion_start"]
+            and s["start_time"] < item["discussion_end"]
+        ]
+        if not item_segments:
+            continue
+
+        # Build a single discussion text block
+        discussion_text = "\n".join(
+            f"{s['speaker_name']}: {s['corrected_text_content']}"
+            for s in item_segments
+        )
+
+        # One embedding for the entire discussion
+        embedding = generate_embedding(discussion_text[:8000])  # Truncate to model limit
+        update_agenda_item_discussion_embedding(item["id"], embedding)
+```
+
+This reduces transcript-related embeddings from ~200 per meeting to ~10-15 (one per agenda item with discussion). The `agenda_items` table already exists and already has an `embedding` column — this changes what gets embedded from just the item title/summary to the full discussion text.
+
+##### Secondary strategy: Key statement extraction
+
+During AI refinement, extract substantive statements — proposals, objections, claims, commitments, questions — as standalone searchable units. These are the things people actually search for:
+
+- "I believe we should delay the rezoning until traffic studies are complete" — *substantive claim*
+- "Staff recommends approval subject to the conditions in Schedule A" — *recommendation*
+- "This will cost approximately $2.3 million over three years" — *financial claim*
+- "The residents on Helmcken Road have expressed strong opposition" — *public input summary*
+
+Store these in a new `key_statements` table:
+
+```sql
+CREATE TABLE key_statements (
+    id bigint generated by default as identity primary key,
+    meeting_id bigint REFERENCES meetings(id) ON DELETE CASCADE not null,
+    agenda_item_id bigint REFERENCES agenda_items(id) ON DELETE SET NULL,
+    municipality_id bigint REFERENCES municipalities(id) not null,
+
+    speaker_name text,                           -- Who said it
+    statement_text text not null,                -- The extracted statement
+    statement_type text,                         -- "proposal", "objection", "claim", "commitment",
+                                                 -- "recommendation", "question", "financial", "public_input"
+    source_segment_ids bigint[],                 -- Which transcript segments this was extracted from
+    start_time float,                            -- Timestamp in video for citation
+
+    embedding halfvec(384),                      -- For semantic search
+    created_at timestamptz default now()
+);
+
+CREATE INDEX idx_key_statements_meeting ON key_statements(meeting_id);
+CREATE INDEX idx_key_statements_agenda_item ON key_statements(agenda_item_id);
+CREATE INDEX idx_key_statements_embedding ON key_statements
+    USING hnsw (embedding halfvec_cosine_ops);
+```
+
+This gives ~20-30 high-quality, information-dense embeddings per meeting that capture exactly what users search for. The AI refiner already reads the transcript — extracting key statements is a small addition to the prompt.
+
+##### What happens to individual transcript segments?
+
+**No embeddings on `transcript_segments` at all.** Segments remain in Postgres for:
+- Video sync (the meeting detail page plays video with synced transcript)
+- Citation display (RAG finds an agenda item or key statement, then fetches the underlying segments for verbatim quotes)
+- Timeline navigation (jump to a point in the meeting)
+
+But they don't need their own embeddings. The retrieval path becomes:
+
+```
+User query → embed query → search agenda_item discussion embeddings + key_statement embeddings
+  → find relevant agenda item(s)
+  → fetch transcript_segments WHERE agenda_item_id = X (or by timestamp range)
+  → return segments as citations with video timestamps
+```
+
+This is strictly better for RAG: instead of matching against a fragment like "I think we should probably look at that more carefully" (meaningless without context), the search matches against the full discussion about the bike lane proposal, which contains all the relevant vocabulary and context.
+
+##### Consolidation of transcript segments (still valuable)
+
+Even without embeddings, reducing the number of segment rows saves storage. Merge consecutive same-speaker segments:
 
 ```python
 def consolidate_segments(segments: list[dict]) -> list[dict]:
@@ -1331,38 +1422,94 @@ def consolidate_segments(segments: list[dict]) -> list[dict]:
     return consolidated
 ```
 
-This typically reduces segment count by 30-50% (200 segments → 100-130 turns).
+This reduces segment count by 30-50% (200 → 100-130 rows), which matters for storage even without embeddings.
 
-**Strategy 2: Drop `text_content` after `corrected_text_content` is populated.**
+##### Drop redundant text column
 
-Both columns store nearly identical text. After AI correction runs, `text_content` is redundant. Keep only `corrected_text_content` and rename it to `text_content`, or add a `raw_text` column that stores only the diff (or null if identical).
+Both `text_content` and `corrected_text_content` store nearly identical text. After AI correction runs, keep only `corrected_text_content` (rename to `text_content`). Store the raw version in R2 with the full transcript JSON if needed for debugging.
 
-**Strategy 3: Skip embedding for procedural segments.**
+##### Store raw transcript in R2
 
-Short procedural utterances ("Meeting adjourned", "Motion carried", "Thank you Madam Chair") don't need embeddings — nobody searches for them semantically. Add a `skip_embedding` flag based on segment length (<20 words) or `is_procedural = true`:
+The full verbatim transcript (every utterance with timestamps, pre-consolidation) goes to R2 as a JSON file. Postgres stores only the consolidated, corrected segments for display and citation. The meeting detail page fetches from R2 for the video sync UI if the full granularity is needed.
+
+##### Linking segments to agenda items
+
+This strategy depends on knowing which transcript segments belong to which agenda item. Two approaches:
+
+1. **Timestamp-based**: The AI refiner already identifies discussion start/end times for each agenda item. Use these time windows to assign segments.
+2. **AI-assigned during refinement**: When the AI processes the transcript, it can tag each segment or group of segments with the agenda item being discussed. This handles cases where discussion jumps between items.
+
+Add `agenda_item_id` to `transcript_segments` if not already present (or use a join table for segments that span multiple items).
+
+##### Combined impact estimate for a typical 2-hour meeting:
+
+| Metric | Current approach | New approach | Savings |
+|--------|-----------------|-------------|---------|
+| Transcript segment rows | ~200 | ~120 (consolidated) | -40% rows |
+| Segment embeddings | ~180 (>10 words) | **0** | -100% |
+| Agenda item discussion embeddings | ~10 (title only) | ~10 (full discussion text) | same count, better quality |
+| Key statement embeddings | 0 | ~25 | +25 new, high-value |
+| **Total transcript-related embeddings** | **~180** | **~35** | **-80%** |
+| Bytes per embedding (with halfvec(384)) | 3,072 (vector(768)) | 768 (halfvec(384)) | -75% per vector |
+| **Total embedding storage per meeting** | **~553 KB** | **~27 KB** | **-95%** |
+| Text columns on segments | 2 (text + corrected) | 1 | -50% text storage |
+| **Total transcript storage per meeting** | **~1 MB** | **~100 KB** | **~90%** |
+
+##### RAG search quality comparison
+
+| Scenario | Current (per-segment) | New (discussion + key statements) |
+|----------|----------------------|----------------------------------|
+| "What did council say about bike lanes?" | Matches 3-4 scattered fragments, some out of context | Matches the full bike lane discussion item + specific statements |
+| "Who opposed the rezoning?" | Might match "I don't think we should" (no context) | Matches key statement: "Cllr. Smith objected to the rezoning citing traffic concerns" |
+| "What's the budget for the park upgrade?" | Matches "2.3 million" fragment | Matches key statement with full financial context |
+| "Show me discussions about housing" | Many low-relevance matches across meetings | Focused matches on agenda items where housing was the topic |
+
+The new approach produces fewer but much higher-quality search results, with less storage and better citation context.
+
+##### Quote retrieval without segment embeddings
+
+A natural concern: if transcript segments don't have embeddings, how do you find specific quotes? For example, a user asking "find where someone said the bridge is structurally unsound."
+
+The answer is that **segment-level embeddings are actually bad at finding specific quotes**. A short fragment like "I believe the bridge may be structurally unsound and we need an assessment" contains too little context for an embedding model to understand what it's about — the vector ends up generic and low-signal. Semantic search on short text works poorly.
+
+**Two better approaches for quote finding:**
+
+**1. Full-text search (tsvector) on transcript segments.** For finding specific words or phrases someone said, PostgreSQL full-text search is more reliable than vector similarity. It's also much cheaper — a `tsvector` index is tiny compared to HNSW. Add a GIN index during the consolidation migration:
 
 ```sql
--- Only build HNSW index on substantive segments
-CREATE INDEX idx_ts_embedding_hv ON transcript_segments
-    USING hnsw (embedding halfvec_cosine_ops)
-    WHERE embedding IS NOT NULL AND is_procedural = false;
+ALTER TABLE transcript_segments ADD COLUMN text_search tsvector
+    GENERATED ALWAYS AS (to_tsvector('english', coalesce(corrected_text_content, ''))) STORED;
+
+CREATE INDEX idx_ts_text_search ON transcript_segments USING GIN (text_search);
 ```
 
-This partial index is smaller and faster to query.
+This enables fast keyword search: `SELECT * FROM transcript_segments WHERE text_search @@ plainto_tsquery('bridge structurally unsound')`. Combined with `ts_rank` for relevance scoring and `ts_headline` for excerpt highlighting, this handles the "find the exact quote" use case better than embeddings ever could.
 
-**Strategy 4: Store raw transcript in R2, keep only indexed chunks in Postgres.**
+**2. Two-phase retrieval for RAG.** When the RAG agent needs quotes to support an answer:
 
-The full verbatim transcript (every utterance with timestamps) goes to R2 as a JSON file. Postgres stores only the consolidated, corrected, substantive segments that are needed for search and RAG. The meeting detail page fetches the full transcript from R2 for the video sync UI, while RAG searches use the indexed Postgres segments.
+```
+Phase 1 (semantic): Search discussion embeddings + key statements
+  → "The bridge condition was discussed at the Nov 12, 2024 meeting, item 7.2"
 
-**Combined impact estimate for a typical 2-hour meeting:**
+Phase 2 (targeted): Fetch transcript segments WHERE agenda_item_id = 7.2
+  → Full transcript for that discussion, with speaker names and timestamps
+  → RAG agent selects the most relevant quotes from this focused set
+```
 
-| Metric | Before | After | Savings |
-|--------|--------|-------|---------|
-| Segment rows | ~200 | ~120 (consolidated) | -40% |
-| Embedded rows | ~200 | ~80 (skip procedural) | -60% |
-| Bytes per embedding | 3,072 | 512 (halfvec(256)) | -83% |
-| Text columns | 2 (text + corrected) | 1 | -50% text storage |
-| **Total transcript storage per meeting** | **~1 MB** | **~150 KB** | **~85%** |
+The RAG agent already has tool-calling capability — it can first find the relevant topic, then fetch the specific segments. This two-phase approach actually produces better quotes because the agent has full discussion context when selecting what to cite, rather than getting isolated fragments from vector search.
+
+**3. Key statements are the pre-extracted quotes.** The `key_statements` table stores the most notable and quotable things said at each meeting, already extracted and attributed. For many "find the quote where..." queries, the key statement is exactly what the user wants — and it has its own embedding for semantic search.
+
+**Combined quote retrieval strategy:**
+
+| Query type | Method | Storage cost |
+|-----------|--------|-------------|
+| "Find where someone said X" (specific words) | Full-text search on `transcript_segments` | GIN index: ~5 KB/meeting |
+| "What did Cllr. Smith say about housing?" | Key statement semantic search | Already in `key_statements` embeddings |
+| "Show me the debate about the rezoning" | Discussion embedding → fetch segments | Already in agenda item embeddings |
+| RAG citation (supporting quotes for an answer) | Two-phase: topic search → segment fetch | No additional cost |
+
+This is strictly better than embedding every segment: better quote quality, better search relevance, and ~95% less embedding storage.
 
 #### 8g. PostgreSQL-Level Optimizations
 
@@ -1413,9 +1560,11 @@ This keeps the PDFs accessible even if the source municipality changes their CMS
 6. Add compound indexes for `(municipality_id, ...)` queries
 7. Add `ocd_id` columns to `municipalities`, `organizations`, `people`, `meetings`, `matters`, `motions`
 8. Create `documents` and `document_sections` tables (with `r2_html_key` instead of `content_html`)
-9. Create Cloudflare R2 bucket for rendered HTML and bind to Worker in `wrangler.toml`
-10. Create Supabase Storage bucket for PDF archival
-11. Set up Cloudflare KV namespace for cached municipality configs and hot content
+9. Create `key_statements` table for extracted quotable statements
+10. Add `tsvector` generated column + GIN index on `transcript_segments` for full-text quote search
+11. Create Cloudflare R2 bucket for rendered HTML and bind to Worker in `wrangler.toml`
+12. Create Supabase Storage bucket for PDF archival
+13. Set up Cloudflare KV namespace for cached municipality configs and hot content
 
 ### Phase 2: Scraper Abstraction
 1. Create `BaseScraper` interface and `ScrapedMeeting` dataclass in `pipeline/scrapers/base.py`
@@ -1447,6 +1596,20 @@ This keeps the PDFs accessible even if the source municipality changes their CMS
 11. Add embeddings for document content (enables RAG search across staff reports, not just transcripts)
 12. Generate OCD IDs for all entities during ingestion
 13. Backfill: re-ingest ALL existing View Royal PDFs (including previously-ignored attachments) to populate `documents` and `document_sections`
+
+### Phase 3c: Embedding Strategy Migration
+1. Add key statement extraction to the AI refiner prompt — extract substantive claims, proposals, objections, recommendations, financial claims, and public input summaries during meeting refinement
+2. Store extracted key statements in `key_statements` table with speaker attribution, statement type, and source segment IDs
+3. Switch agenda item embeddings from title-only to full discussion text — concatenate all transcript segments within each item's discussion window
+4. Generate `halfvec(384)` embeddings on `key_statements` and agenda item discussion text using Matryoshka-truncated dimensions
+5. Migrate all existing embedding columns from `vector(768)` to `halfvec(384)` (backfill via truncation + cast)
+6. Drop embedding column from `transcript_segments` — replace with `tsvector` full-text search index
+7. Consolidate transcript segments (merge same-speaker consecutive turns)
+8. Drop redundant `text_content` column (keep `corrected_text_content` only)
+9. Upload raw transcripts to R2, update meeting detail page to fetch from R2 for video sync
+10. Update RAG tools to use new two-phase retrieval: semantic search on discussion/key statement embeddings → fetch segments by agenda_item_id for citations
+11. Backfill: re-process existing View Royal meetings to extract key statements and generate discussion-level embeddings
+12. Verify RAG quality with before/after test queries
 
 ### Phase 4: Web App Multi-Tenancy
 1. Add `municipalities` service layer (`getAllMunicipalities`, `getMunicipality`)
