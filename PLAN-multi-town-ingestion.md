@@ -1181,18 +1181,20 @@ As municipalities and their full document packages accumulate, database size bec
 
 Back-of-envelope for one municipality (View Royal, ~12 meetings/year, ~5-10 attachments per meeting):
 
-| Content | Per Meeting | Per Year | Notes |
-|---------|------------|----------|-------|
-| Agenda markdown | ~20 KB | ~240 KB | Main agenda text |
-| Minutes markdown | ~30 KB | ~360 KB | Main minutes text |
-| Attachment markdown (5-10 docs) | ~200 KB | ~2.4 MB | Staff reports, schedules |
-| Pre-rendered HTML (all docs) | ~500 KB | ~6 MB | ~2x markdown size |
-| Document sections (rows) | ~100 KB | ~1.2 MB | ~50 sections per meeting |
-| Embeddings (768-dim, ~3 KB each) | ~150 KB | ~1.8 MB | ~50 embeddings per meeting |
-| Transcript segments | ~100 KB | ~1.2 MB | ~500 segments per meeting |
-| **Total per municipality** | **~1.1 MB** | **~13 MB** | |
+| Content | Per Meeting (naive) | Per Meeting (optimized) | Notes |
+|---------|-------------------|----------------------|-------|
+| Agenda markdown | ~20 KB | ~20 KB | Kept in Postgres (searchable) |
+| Minutes markdown | ~30 KB | ~30 KB | Kept in Postgres (searchable) |
+| Attachment markdown (5-10 docs) | ~200 KB | ~200 KB | Kept in Postgres (searchable) |
+| Pre-rendered HTML (all docs) | ~500 KB | **→ R2** | Offloaded to Cloudflare R2 |
+| Document sections (rows) | ~100 KB | ~100 KB | Structure metadata in Postgres |
+| Embeddings — naive `vector(768)` | ~150 KB | — | Old approach |
+| Embeddings — `halfvec(256)` | — | ~25 KB | **83% reduction** via Matryoshka + halfvec |
+| Transcript segments (text) | ~200 KB | ~100 KB | Consolidated turns, drop duplicate text column |
+| Transcript raw JSON | — | **→ R2** | Full verbatim transcript offloaded |
+| **Total in Postgres** | **~1.2 MB** | **~475 KB** | **~60% reduction** |
 
-For 3 municipalities: ~40 MB/year. For 50 municipalities (long-term): ~650 MB/year. With historical backfill (5+ years each): could reach 3-5 GB. That's within Supabase Pro's 8 GB, but leaves little headroom. And the pre-rendered HTML is the biggest contributor while being the least important to keep in Postgres.
+For 3 municipalities at ~12 meetings/year: ~17 MB/year (down from ~43 MB). For 50 municipalities: ~285 MB/year. With 5+ years historical backfill: ~1.5 GB — well within Supabase Pro's 8 GB with plenty of headroom for growth.
 
 #### 8b. Tiered Storage Strategy
 
@@ -1205,7 +1207,9 @@ Use the right storage tier for each content type:
 | `body_markdown` on `document_sections` | **Supabase Postgres** | Needed for section-level queries |
 | `content_html` on `documents` | **Cloudflare R2** | Read-only rendered output; no need to query |
 | `body_html` on `document_sections` | **Cloudflare R2** | Same — render-only |
-| Embeddings (all tables) | **Supabase Postgres (pgvector)** | Needed for vector similarity search |
+| Embeddings | **Supabase Postgres as `halfvec(384)` or `halfvec(256)`** | 75-83% smaller than `vector(768)` via Matryoshka + half-precision |
+| Full raw transcript JSON | **Cloudflare R2** | Verbatim transcript for video sync; only indexed chunks in Postgres |
+| Transcript `text_content` (pre-correction) | **Dropped after correction** | Redundant with `corrected_text_content` |
 | Large attachment markdown (>100 KB) | **Cloudflare R2** with stub in Postgres | Keep first 500 chars in Postgres for previews; full content in R2 |
 
 This keeps the database lean (structured data + searchable markdown + embeddings) while offloading the bulky rendered HTML to R2 (zero egress, pennies per GB stored).
@@ -1251,19 +1255,128 @@ Cache hot data in Workers KV for sub-millisecond reads at the edge:
 
 This reduces Supabase query volume (and egress) for the most common page loads.
 
-#### 8e. PostgreSQL-Level Optimizations
+#### 8e. Embedding Compression — `halfvec` + Reduced Dimensions
 
-Within Supabase, apply these Postgres optimizations:
+Embeddings are the single largest per-row storage cost. Currently: `vector(768)` = 768 × 4 bytes = **3,072 bytes per embedding**. With HNSW indexes, the index itself doubles this. Across 7 tables (transcript_segments, agenda_items, motions, matters, meetings, bylaws, bylaw_chunks + the new documents table), this adds up fast.
 
-- **TOAST compression**: Automatic for `text` values >2 KB — already happening. The `content_markdown` and `body_markdown` columns benefit from this. No action needed, but be aware that TOAST adds read overhead.
-- **Partial indexes**: Don't index columns you rarely filter on. For example, the `embedding` HNSW index is expensive — only build it for content types that need vector search (transcripts, motions, agenda items) not for every `document_section`.
+**Strategy: Use `halfvec` (16-bit floats) at reduced dimensions via Matryoshka truncation.**
+
+Both embedding models in use — OpenAI `text-embedding-3-small` and `nomic-embed-text-v1.5` — support [Matryoshka Representation Learning](https://www.nomic.ai/blog/posts/nomic-embed-matryoshka), which means embeddings can be truncated to smaller dimensions (256, 384, 512) with minimal recall loss. Combined with pgvector's `halfvec` type (16-bit instead of 32-bit floats), the savings are dramatic:
+
+| Configuration | Bytes per embedding | vs. current | Notes |
+|--------------|-------------------|-------------|-------|
+| `vector(768)` (current) | 3,072 | baseline | 32-bit floats, full dimension |
+| `halfvec(768)` | 1,536 | **-50%** | 16-bit floats, same dimension |
+| `vector(256)` | 1,024 | **-67%** | 32-bit floats, Matryoshka truncated |
+| `halfvec(256)` | 512 | **-83%** | 16-bit floats + Matryoshka |
+| `halfvec(384)` | 768 | **-75%** | Good balance of recall + savings |
+
+**Recommended: `halfvec(384)`** for most tables. This gives 75% storage reduction with negligible recall loss according to Matryoshka benchmarks. For transcript segments (highest volume, lower precision tolerance), `halfvec(256)` saves 83%.
+
+**Migration path:**
+
+```sql
+-- 1. Add new halfvec column
+ALTER TABLE transcript_segments ADD COLUMN embedding_hv halfvec(384);
+
+-- 2. Pipeline generates new embeddings at reduced dimension
+--    OpenAI: dimensions=384 parameter
+--    Nomic: truncate_dim=384 + re-normalize
+
+-- 3. Backfill existing embeddings (truncate + cast)
+UPDATE transcript_segments
+SET embedding_hv = (embedding::real[])[1:384]::halfvec(384)
+WHERE embedding IS NOT NULL;
+
+-- 4. Rebuild HNSW index on new column
+CREATE INDEX idx_ts_embedding_hv ON transcript_segments
+    USING hnsw (embedding_hv halfvec_cosine_ops);
+
+-- 5. Drop old column and index
+DROP INDEX idx_transcript_segments_embedding;
+ALTER TABLE transcript_segments DROP COLUMN embedding;
+ALTER TABLE transcript_segments RENAME COLUMN embedding_hv TO embedding;
+```
+
+**Index optimization**: Use `halfvec_cosine_ops` for HNSW indexes. These build faster and use less memory than full-precision indexes.
+
+**Selective embedding**: Not every table needs embeddings. Consider:
+- **Always embed**: transcript_segments, motions, agenda_items, documents (needed for RAG)
+- **Embed at lower dimension**: matters, bylaws (searched less frequently)
+- **Drop embedding**: meetings (the meeting-level embedding is rarely useful — people search by item/topic, not by meeting summary)
+
+#### 8f. Transcript Segment Consolidation
+
+Currently, the diarizer creates one row per speaker turn — often very short segments like "Yes", "I agree", "Motion carried." This produces 200-400 rows per meeting, each with its own 3 KB embedding.
+
+**Strategy 1: Merge consecutive same-speaker segments into speaker turns.**
+
+Many diarizer segments are fragments of the same speech. Merge consecutive segments from the same speaker (with gaps <3 seconds) into a single row:
+
+```python
+def consolidate_segments(segments: list[dict]) -> list[dict]:
+    """Merge consecutive same-speaker segments into turns."""
+    consolidated = []
+    current = None
+    for seg in segments:
+        if current and seg["speaker"] == current["speaker"] and seg["start_time"] - current["end_time"] < 3.0:
+            current["end_time"] = seg["end_time"]
+            current["text"] += " " + seg["text"]
+        else:
+            if current:
+                consolidated.append(current)
+            current = dict(seg)
+    if current:
+        consolidated.append(current)
+    return consolidated
+```
+
+This typically reduces segment count by 30-50% (200 segments → 100-130 turns).
+
+**Strategy 2: Drop `text_content` after `corrected_text_content` is populated.**
+
+Both columns store nearly identical text. After AI correction runs, `text_content` is redundant. Keep only `corrected_text_content` and rename it to `text_content`, or add a `raw_text` column that stores only the diff (or null if identical).
+
+**Strategy 3: Skip embedding for procedural segments.**
+
+Short procedural utterances ("Meeting adjourned", "Motion carried", "Thank you Madam Chair") don't need embeddings — nobody searches for them semantically. Add a `skip_embedding` flag based on segment length (<20 words) or `is_procedural = true`:
+
+```sql
+-- Only build HNSW index on substantive segments
+CREATE INDEX idx_ts_embedding_hv ON transcript_segments
+    USING hnsw (embedding halfvec_cosine_ops)
+    WHERE embedding IS NOT NULL AND is_procedural = false;
+```
+
+This partial index is smaller and faster to query.
+
+**Strategy 4: Store raw transcript in R2, keep only indexed chunks in Postgres.**
+
+The full verbatim transcript (every utterance with timestamps) goes to R2 as a JSON file. Postgres stores only the consolidated, corrected, substantive segments that are needed for search and RAG. The meeting detail page fetches the full transcript from R2 for the video sync UI, while RAG searches use the indexed Postgres segments.
+
+**Combined impact estimate for a typical 2-hour meeting:**
+
+| Metric | Before | After | Savings |
+|--------|--------|-------|---------|
+| Segment rows | ~200 | ~120 (consolidated) | -40% |
+| Embedded rows | ~200 | ~80 (skip procedural) | -60% |
+| Bytes per embedding | 3,072 | 512 (halfvec(256)) | -83% |
+| Text columns | 2 (text + corrected) | 1 | -50% text storage |
+| **Total transcript storage per meeting** | **~1 MB** | **~150 KB** | **~85%** |
+
+#### 8g. PostgreSQL-Level Optimizations
+
+Additional Postgres optimizations:
+
+- **TOAST compression**: Automatic for `text` values >2 KB — already happening for markdown columns. No action needed, but be aware that TOAST adds read overhead.
+- **Partial HNSW indexes**: Only index rows that need semantic search (see transcript partial index above). This reduces index size and build time significantly.
 - **Materialized views for stats**: Instead of computing meeting counts and latest dates on every page load, use materialized views refreshed by the pipeline after each run:
   ```sql
   CREATE MATERIALIZED VIEW municipality_stats AS
   SELECT municipality_id, count(*) as meeting_count, max(meeting_date) as latest_meeting
   FROM meetings GROUP BY municipality_id;
   ```
-- **Archive old embeddings**: Embeddings for meetings older than 2 years are rarely searched. Consider moving them to a separate table or dropping and regenerating on-demand. This recovers significant space (~3 KB per embedding × thousands of rows).
+- **Embedding archival for old content**: Embeddings for meetings older than 3+ years are rarely searched. Drop them and regenerate on-demand if a search touches old data. This recovers significant space while keeping the structured data intact for browsing.
 - **Vacuuming**: After large backfill operations, run `VACUUM FULL` to reclaim dead tuple space.
 
 #### 8f. Supabase Storage for Original PDF Access
