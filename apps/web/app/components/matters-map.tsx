@@ -16,16 +16,18 @@ function ChangeView({ center, zoom }: { center: [number, number], zoom: number }
   return null;
 }
 
-export function MattersMap({ 
+export function MattersMap({
   matters,
   onMarkerClick,
   activeLocation,
-  selectedAddress
-}: { 
+  selectedAddress,
+  mapCenter,
+}: {
   matters: Matter[],
   onMarkerClick?: (matter: Matter, address?: string) => void,
   activeLocation?: { lat: number, lng: number },
-  selectedAddress?: string | null
+  selectedAddress?: string | null,
+  mapCenter?: { lat: number, lng: number },
 }) {
   const [isClient, setIsClient] = useState(false);
   const markerRefs = useRef<Record<string, any>>({});
@@ -87,7 +89,7 @@ export function MattersMap({
     );
   }
 
-  const defaultCenter: [number, number] = [48.455, -123.44]; // View Royal center
+  const defaultCenter: [number, number] = [mapCenter?.lat ?? 48.455, mapCenter?.lng ?? -123.44];
   const center: [number, number] = activeLocation ? [activeLocation.lat, activeLocation.lng] : defaultCenter;
   const zoom = activeLocation ? 16 : 14;
 

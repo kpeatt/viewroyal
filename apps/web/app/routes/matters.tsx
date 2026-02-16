@@ -1,7 +1,8 @@
 import type { Route } from "./+types/matters";
 import { getMatters } from "../services/matters";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 import {
   FileText,
   ChevronRight,
@@ -35,6 +36,8 @@ export async function loader() {
 
 export default function Matters({ loaderData }: Route.ComponentProps) {
   const { matters } = loaderData;
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const municipality = rootData?.municipality;
   const [filterText, setFilterText] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -476,6 +479,7 @@ export default function Matters({ loaderData }: Route.ComponentProps) {
                     onMarkerClick={handleMarkerClick}
                     activeLocation={focusedLocation}
                     selectedAddress={activeAddress}
+                    mapCenter={municipality?.map_center_lat && municipality?.map_center_lng ? { lat: municipality.map_center_lat, lng: municipality.map_center_lng } : undefined}
                   />
                 </div>
               )}

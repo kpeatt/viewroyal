@@ -872,7 +872,8 @@ const tools: Tool<any, any>[] = [
   },
 ];
 
-const orchestratorSystemPrompt = `You are a research agent for the Town of View Royal, British Columbia. Citizens ask you questions about their municipal council and you gather evidence from council records (transcripts, motions, votes) to answer them.
+function getOrchestratorSystemPrompt(municipalityName = "Town of View Royal") {
+  return `You are a research agent for the ${municipalityName}, British Columbia. Citizens ask you questions about their municipal council and you gather evidence from council records (transcripts, motions, votes) to answer them.
 
 You operate in a loop. Each turn you output **exactly one raw JSON object** — no markdown fences, no commentary:
 
@@ -922,8 +923,10 @@ ${tools.map((t) => `- ${t.description}`).join("\n")}
 ## Output Format
 
 Raw JSON only. No markdown. No text before or after the JSON object.`;
+}
 
-const finalSystemPrompt = `You are a civic transparency analyst for the Town of View Royal, British Columbia. You help citizens understand what their municipal council has discussed, decided, and debated.
+function getFinalSystemPrompt(municipalityName = "Town of View Royal") {
+  return `You are a civic transparency analyst for the ${municipalityName}, British Columbia. You help citizens understand what their municipal council has discussed, decided, and debated.
 
 You will receive a citizen's question and raw evidence gathered from official council records — transcripts, motions, and votes. Your job is to synthesize this into a clear, trustworthy answer.
 
@@ -962,6 +965,7 @@ You will receive a citizen's question and raw evidence gathered from official co
 - Use ### headers only if the answer genuinely covers 2+ distinct subtopics
 - Use bullet points for lists of decisions, votes, or key points
 - Keep paragraphs to 2-3 sentences max`;
+}
 
 /**
  * Normalize raw tool results into a consistent source shape for the client.
@@ -1080,6 +1084,7 @@ export async function* runQuestionAgent(
   question: string,
   context?: string,
   maxSteps = 6,
+  municipalityName?: string,
 ): AsyncGenerator<AgentEvent> {
   const client = getGenAI();
   if (!client) throw new Error("Gemini API not configured");
@@ -1106,7 +1111,7 @@ ${history.join("\n\n") || "(none)"}
 Respond with a single JSON object. No markdown fences.`;
 
     const result = await model.generateContent([
-      orchestratorSystemPrompt,
+      getOrchestratorSystemPrompt(municipalityName),
       userPrompt,
     ]);
     const responseText = result.response.text().trim();
@@ -1236,7 +1241,7 @@ IMPORTANT: You have exactly ${uniqueSources.length} sources numbered [1] through
 Synthesize a final answer based *only* on the evidence above. Use [1], [2], etc. to cite sources inline.`;
 
   const stream = await model.generateContentStream([
-    finalSystemPrompt,
+    getFinalSystemPrompt(municipalityName),
     finalUserPrompt,
   ]);
   for await (const chunk of stream.stream) {

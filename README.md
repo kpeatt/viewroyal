@@ -36,6 +36,8 @@ sql/
 
 **Data flow:** CivicWeb (PDFs/HTML) + Vimeo (video/audio) → Python pipeline (5 phases) → Supabase → React Router web app
 
+**Municipality context layer:** The root loader fetches the municipality row (currently hardcoded to slug `"view-royal"`), providing `name`, `short_name`, `website_url`, `rss_url`, `contact_email`, and `map_center` to all routes. Meta tags, service queries, AI prompts, and component copy are all driven by this data rather than hardcoded strings.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -52,7 +54,7 @@ sql/
 
 ## Database Schema
 
-18 tables powered by Supabase (PostgreSQL + pgvector):
+19 tables powered by Supabase (PostgreSQL + pgvector):
 
 | Table | Purpose |
 |-------|---------|
@@ -70,6 +72,7 @@ sql/
 | `organizations` + `memberships` | Governance structure and roles |
 | `elections` + `candidacies` | Election history |
 | `attendance` + `meeting_events` | Meeting participation tracking |
+| `municipalities` | Municipality config: name, slug, website URL, RSS feed, map center, contact email |
 | `topics` | Controlled taxonomy for agenda item classification |
 
 **Search infrastructure:**

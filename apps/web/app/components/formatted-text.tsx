@@ -101,12 +101,16 @@ interface FormattedTextProps {
   content?: string;
   markdown?: string;
   className?: string;
+  municipalityName?: string;
+  province?: string;
 }
 
 export function FormattedText({
   content,
   markdown,
   className,
+  municipalityName,
+  province,
 }: FormattedTextProps) {
   // If we have markdown, use the new renderer
   if (markdown) {
@@ -129,9 +133,9 @@ export function FormattedText({
               </div>
             </div>
             <div className="text-right text-[10px] font-sans font-bold text-zinc-400 uppercase tracking-widest leading-relaxed">
-              Town of View Royal
+              {municipalityName || "Town of View Royal"}
               <br />
-              British Columbia
+              {province || "British Columbia"}
             </div>
           </div>
 

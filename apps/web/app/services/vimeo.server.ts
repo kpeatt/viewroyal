@@ -132,6 +132,7 @@ export async function getVimeoThumbnail(
 export async function getVimeoVideoData(
   videoUrl: string,
   meetingId?: number | string,
+  websiteUrl?: string,
 ): Promise<VimeoVideoData | null> {
   try {
     const supabaseAdmin = getSupabaseAdminClient();
@@ -263,7 +264,7 @@ export async function getVimeoVideoData(
 
     if (!VIMEO_TOKEN) {
       console.log("[Vimeo] No VIMEO_TOKEN, using fallback methods...");
-      const fallback = await getDirectUrlFallback(videoUrl).catch((e) => {
+      const fallback = await getDirectUrlFallback(videoUrl, websiteUrl).catch((e) => {
         console.warn(`[Vimeo] Fallback failed: ${e}`);
         return null;
       });
@@ -341,7 +342,7 @@ export async function getVimeoVideoData(
         console.warn(
           `[Vimeo] API returned ${response.status}, trying fallback`,
         );
-        const fallback = await getDirectUrlFallback(videoUrl).catch(() => null);
+        const fallback = await getDirectUrlFallback(videoUrl, websiteUrl).catch(() => null);
         if (fallback) {
           return {
             name: "Fallback Video",
@@ -389,7 +390,7 @@ export async function getVimeoVideoData(
       // If Vimeo API didn't return direct URLs (domain-restricted), use fallback
       if (!directUrl) {
         console.log(`[Vimeo] API returned no direct URLs, trying fallback`);
-        const fallback = await getDirectUrlFallback(videoUrl).catch(() => null);
+        const fallback = await getDirectUrlFallback(videoUrl, websiteUrl).catch(() => null);
         if (fallback) {
           const fallbackResult: VimeoVideoData = {
             ...data,
@@ -495,6 +496,7 @@ export async function getVimeoVideoData(
  */
 async function getDirectUrlViaPlayerConfig(
   videoUrl: string,
+  websiteUrl = "https://www.viewroyal.ca",
 ): Promise<{ video: string; audio?: string } | null> {
   const match = videoUrl.match(/vimeo\.com\/(\d+)/);
   if (!match) return null;
@@ -510,8 +512,8 @@ async function getDirectUrlViaPlayerConfig(
       `https://player.vimeo.com/video/${videoId}/config`,
       {
         headers: {
-          Referer: "https://www.viewroyal.ca/",
-          Origin: "https://www.viewroyal.ca",
+          Referer: `${websiteUrl}/`,
+          Origin: websiteUrl,
           Accept: "application/json",
         },
         signal: controller.signal,
@@ -683,12 +685,13 @@ async function getDirectUrlViaYtDlp(
  */
 async function getDirectUrlFallback(
   videoUrl: string,
+  websiteUrl?: string,
 ): Promise<{ video: string; audio?: string } | null> {
   try {
     // Race player config and primary proxy in parallel for speed.
     // Player config is fast (~1s) when it works, proxy takes ~15s.
     // By racing them, we get the fastest available result.
-    const configPromise = getDirectUrlViaPlayerConfig(videoUrl).catch(
+    const configPromise = getDirectUrlViaPlayerConfig(videoUrl, websiteUrl).catch(
       () => null,
     );
     const proxyPromise = getDirectUrlViaProxy(videoUrl).catch(() => null);

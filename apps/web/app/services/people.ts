@@ -333,6 +333,7 @@ export async function getPersonProfile(
   supabase: SupabaseClient,
   id: string,
   attendancePage = 0,
+  municipalityId?: number,
 ) {
   const [
     personRes,
@@ -415,7 +416,7 @@ export async function getPersonProfile(
     supabase
       .from("memberships")
       .select("*, people(id, name, image_url)")
-      .eq("organization_id", 1),
+      .eq("organization_id", municipalityId || 1),
   ]);
 
   if (personRes.error) {

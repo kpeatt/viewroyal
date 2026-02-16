@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { Route } from "./+types/ask";
-import { useSearchParams, Link } from "react-router";
+import { useSearchParams, Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import { Input } from "../components/ui/input";
@@ -178,6 +179,8 @@ function processCitationNode(node: React.ReactNode, sources: any[], key: number)
 }
 
 export default function AskPage({ loaderData }: Route.ComponentProps) {
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const shortName = rootData?.municipality?.short_name || "View Royal";
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q");
   const person = searchParams.get("person");
@@ -510,7 +513,7 @@ export default function AskPage({ loaderData }: Route.ComponentProps) {
               Ask Anything
             </h1>
             <p className="text-zinc-600 max-w-md mx-auto mb-8">
-              Get instant, AI-powered answers from View Royal's official
+              Get instant, AI-powered answers from {shortName}'s official
               records.
             </p>
             <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">

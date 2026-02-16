@@ -2,18 +2,22 @@ import { useMemo, useState, useEffect } from "react";
 import type { Route } from "./+types/person-profile";
 import { getPersonProfile } from "../services/people";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
-import type { Person, Membership, Attendance, Vote } from "../lib/types";
-import { Link } from "react-router";
+import { getMunicipality } from "../services/municipality";
+import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
+import type { Person, Municipality, Membership, Attendance, Vote } from "../lib/types";
+import { Link, useRouteLoaderData } from "react-router";
 
-export const meta: Route.MetaFunction = ({ data }) => {
+export const meta: Route.MetaFunction = ({ data, matches }) => {
   if (!data?.person) return [{ title: "Person | ViewRoyal.ai" }];
   const p = data.person as Person;
+  const municipality = getMunicipalityFromMatches(matches);
+  const municipalityName = municipality?.name || "Town of View Royal";
   const activeMembership = (p as any).memberships?.find(
     (m: any) => !m.end_date || m.end_date >= new Date().toISOString().slice(0, 10),
   );
   const role = activeMembership?.role || "Council Member";
   const title = `${p.name} — ${role} | ViewRoyal.ai`;
-  const description = p.bio || `${role} for the Town of View Royal.`;
+  const description = p.bio || `${role} for the ${municipalityName}.`;
   const tags: Record<string, string>[] = [
     { title },
     { name: "description", content: description },
@@ -68,7 +72,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const supabase = getSupabaseAdminClient();
-    const data = await getPersonProfile(supabase, id, page);
+    const municipality = await getMunicipality(supabase);
+    const data = await getPersonProfile(supabase, id, page, municipality.id);
     return { ...data, page };
   } catch (error: any) {
     if (error.message === "Person Not Found") {
@@ -92,6 +97,8 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
     page,
   } = loaderData;
 
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const shortName = rootData?.municipality?.short_name || "View Royal";
   const [selectedAlignId, setSelectedAlignId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -271,7 +278,7 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
 
                   {activeMemberships.length === 0 && (
                     <CardDescription className="text-zinc-500 font-medium">
-                      Former View Royal Council Member
+                      Former {shortName} Council Member
                     </CardDescription>
                   )}
                 </div>
