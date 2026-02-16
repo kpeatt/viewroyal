@@ -1,6 +1,9 @@
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 
 export default function Privacy() {
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const municipalityName = rootData?.municipality?.name || "Town of View Royal";
   return (
     <main className="container mx-auto py-16 px-4 max-w-3xl">
       <h1 className="text-4xl font-black mb-8">Privacy Policy</h1>
@@ -10,7 +13,7 @@ export default function Privacy() {
         <h2 className="text-2xl font-bold mt-8 mb-4">1. Data Collection</h2>
         <p>
           ViewRoyal.ai primarily aggregates data from public records provided by
-          the Town of View Royal. This includes meeting agendas, minutes, voting
+          the {municipalityName}. This includes meeting agendas, minutes, voting
           records, and public video broadcasts.
         </p>
 

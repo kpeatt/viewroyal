@@ -9,33 +9,37 @@ import {
   useNavigation,
 } from "react-router";
 import { createSupabaseServerClient } from "./lib/supabase.server";
+import { getMunicipality } from "./services/municipality";
+import { getMunicipalityFromMatches } from "./lib/municipality-helpers";
 
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Navbar } from "./components/navbar";
 
-export const meta: Route.MetaFunction = () => [
-  { title: "ViewRoyal.ai | Council Meeting Intelligence" },
-  {
-    name: "description",
-    content:
-      "Searchable database of View Royal council meetings, voting records, and AI-powered insights.",
-  },
-  { property: "og:title", content: "ViewRoyal.ai | Council Meeting Intelligence" },
-  {
-    property: "og:description",
-    content:
-      "AI-powered civic transparency platform for the Town of View Royal.",
-  },
-  { property: "og:type", content: "website" },
-  { property: "og:url", content: "https://viewroyal.ai" },
-  { property: "og:site_name", content: "ViewRoyal.ai" },
-  { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
-  { property: "og:image:width", content: "1200" },
-  { property: "og:image:height", content: "630" },
-  { name: "twitter:card", content: "summary_large_image" },
-  { name: "twitter:image", content: "https://viewroyal.ai/og-image.png" },
-];
+export const meta: Route.MetaFunction = ({ matches }) => {
+  const municipality = getMunicipalityFromMatches(matches);
+  const shortName = municipality?.short_name || "View Royal";
+  return [
+    { title: "ViewRoyal.ai | Council Meeting Intelligence" },
+    {
+      name: "description",
+      content: `Searchable database of ${shortName} council meetings, voting records, and AI-powered insights.`,
+    },
+    { property: "og:title", content: "ViewRoyal.ai | Council Meeting Intelligence" },
+    {
+      property: "og:description",
+      content: `AI-powered civic transparency platform for the ${municipality?.name || "Town of View Royal"}.`,
+    },
+    { property: "og:type", content: "website" },
+    { property: "og:url", content: "https://viewroyal.ai" },
+    { property: "og:site_name", content: "ViewRoyal.ai" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:image", content: "https://viewroyal.ai/og-image.png" },
+  ];
+};
 
 export const links: Route.LinksFunction = () => [
   {
@@ -62,10 +66,11 @@ export const links: Route.LinksFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
   const { supabase, headers } = createSupabaseServerClient(request);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return { user };
+  const [{ data: { user } }, municipality] = await Promise.all([
+    supabase.auth.getUser(),
+    getMunicipality(supabase),
+  ]);
+  return { user, municipality };
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {

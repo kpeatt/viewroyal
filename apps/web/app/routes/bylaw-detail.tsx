@@ -1,7 +1,8 @@
 import type { Route } from "./+types/bylaw-detail";
 import { getBylawById } from "../services/bylaws";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.bylaw) return [{ title: "Bylaw | ViewRoyal.ai" }];
@@ -53,6 +54,8 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 export default function BylawDetail({ loaderData }: Route.ComponentProps) {
   const { bylaw } = loaderData;
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const municipalityName = rootData?.municipality?.name || "Town of View Royal";
 
   // Construct legislative timeline from linked matters and agenda items
   const meetingEvents = (bylaw.matters || []).flatMap((matter) =>
@@ -81,7 +84,7 @@ export default function BylawDetail({ loaderData }: Route.ComponentProps) {
           date: `${bylaw.year}-01-01`,
           meetingTitle: `Adopted ${bylaw.year}`,
           meetingId: 0,
-          orgName: "Town of View Royal",
+          orgName: municipalityName,
           title: `Official adoption year of Bylaw No. ${bylaw.bylaw_number || ""}`,
           matterTitle: bylaw.title,
           type: "milestone",

@@ -1,7 +1,8 @@
 import type { Route } from "./+types/bylaws";
 import { getBylaws } from "../services/bylaws";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 import {
   Book,
   Search,
@@ -28,6 +29,8 @@ export async function loader() {
 
 export default function Bylaws({ loaderData }: Route.ComponentProps) {
   const { bylaws } = loaderData;
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const municipalityName = rootData?.municipality?.name || "Town of View Royal";
   const [filterText, setFilterText] = useState("");
 
   const filteredBylaws = useMemo(() => {
@@ -67,7 +70,7 @@ export default function Bylaws({ loaderData }: Route.ComponentProps) {
           </div>
           <p className="text-xl text-zinc-500 max-w-2xl">
             Browse and search the official regulations, plans, and policies of
-            the Town of View Royal.
+            the {municipalityName}.
           </p>
         </header>
 

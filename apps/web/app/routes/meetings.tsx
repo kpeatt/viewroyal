@@ -1,19 +1,22 @@
 import type { Route } from "./+types/meetings";
 import { getMeetings } from "../services/meetings";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
 import type { Meeting } from "../lib/types";
 import { cn } from "../lib/utils";
 
-export const meta: Route.MetaFunction = ({ data }) => {
+export const meta: Route.MetaFunction = ({ data, matches }) => {
+  const municipality = getMunicipalityFromMatches(matches);
+  const shortName = municipality?.short_name || "View Royal";
   const year = (data as any)?.selectedYear;
   const title = year
     ? `${year} Council Meetings | ViewRoyal.ai`
     : "Council Meetings | ViewRoyal.ai";
   return [
     { title },
-    { name: "description", content: "Browse all View Royal council meetings, agendas, transcripts, and voting records." },
+    { name: "description", content: `Browse all ${shortName} council meetings, agendas, transcripts, and voting records.` },
     { property: "og:title", content: title },
-    { property: "og:description", content: "Browse all View Royal council meetings, agendas, transcripts, and voting records." },
+    { property: "og:description", content: `Browse all ${shortName} council meetings, agendas, transcripts, and voting records.` },
     { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
     { name: "twitter:card", content: "summary_large_image" },
   ];

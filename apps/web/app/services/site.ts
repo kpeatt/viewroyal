@@ -1,14 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Municipality } from "../lib/types";
 
-export async function getPublicNotices() {
+export async function getPublicNotices(rssUrl?: string) {
+  if (!rssUrl) return [];
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
 
-    const response = await fetch(
-      "https://www.viewroyal.ca/EN/main/town/public/rss/public-notices.rss",
-      { signal: controller.signal },
-    );
+    const response = await fetch(rssUrl, { signal: controller.signal });
     clearTimeout(timeout);
 
     if (!response.ok) return [];
@@ -76,7 +75,7 @@ export async function getAboutStats(supabase: SupabaseClient) {
   };
 }
 
-export async function getHomeData(supabase: SupabaseClient) {
+export async function getHomeData(supabase: SupabaseClient, municipality?: Municipality) {
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Vancouver",
   });
@@ -129,11 +128,11 @@ export async function getHomeData(supabase: SupabaseClient) {
         person:people(id, name, image_url)
       `,
       )
-      .eq("organization_id", 1) // Council organization
+      .eq("organization_id", municipality?.id || 1) // Council organization
       .or(`end_date.is.null,end_date.gte.${today}`)
       .order("role", { ascending: true }),
 
-    getPublicNotices(),
+    getPublicNotices(municipality?.rss_url),
   ]);
 
   // Process council members - dedupe and sort (Mayor first)
