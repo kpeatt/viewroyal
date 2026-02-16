@@ -1,46 +1,81 @@
 # ViewRoyal.ai
 
-An open-source civic transparency platform for the Town of View Royal, BC. Browse council meetings, watch video with synced transcripts, explore voting records, and ask AI-powered questions about local government decisions.
+An open-source civic intelligence platform for the Town of View Royal, BC. Browse council meetings, watch video with synced transcripts, explore voting records, and ask AI-powered questions about local government decisions.
 
 **Live at [viewroyal.ai](https://viewroyal.ai)**
 
 ## Features
 
 - **Meeting Explorer** — Watch council meeting video with a synced sidebar showing agenda items, motions, and speaker-attributed transcripts
-- **Full-Text Search** — Search across transcripts, motions, agenda items, and bylaws
+- **Semantic & Full-Text Search** — Vector similarity search (halfvec embeddings) and PostgreSQL full-text search across transcripts, motions, agenda items, bylaws, and key statements
 - **Voting Records** — See how each council member voted on every motion, with alignment analysis
-- **AI Q&A** — Ask natural language questions about council decisions, answered with citations from official records
+- **AI Q&A** — Ask natural language questions about council decisions via a multi-tool RAG agent with citations from official records
+- **Key Statement Extraction** — AI-extracted typed statements (claims, proposals, objections, recommendations, financial impacts, public input) attributed to speakers
 - **Council Profiles** — Attendance stats, voting history, and speaking time for each member
 - **Bylaw & Matter Tracking** — Follow issues as they move through council across multiple meetings
 - **Election History** — Past election results with candidate details
+- **Speaker Identification** — Diarized transcripts with speaker aliases resolved to real names via AI matching
 
 ## Architecture
 
 ```
-apps/web/               # React Router 7 web application (Cloudflare Workers)
-src/
-  core/                 # Shared config, parsers, embeddings client
-  pipeline/             # ETL: scraper, ingester, AI refiner, batch processing
-  maintenance/          # Seeding, audits, archive tools
-  analysis/             # RAG-powered person analysis, vote checking
+apps/
+  web/                    # React Router 7 web application (Cloudflare Workers)
+  pipeline/               # Python ETL pipeline
+    pipeline/             #   Core package
+      scrapers/           #     CivicWeb, Legistar, Static HTML scrapers
+      ingestion/          #     AI refiner, ingester, embeddings
+      video/              #     Vimeo client, audio processing
+      diarization/        #     MLX transcription + speaker diarization
+    scripts/              #   Maintenance & backfill scripts
+    main.py               #   Pipeline entry point
+  vimeo-proxy/            # Cloudflare Worker for Vimeo URL extraction
 sql/
-  bootstrap.sql         # Complete database schema (Supabase/PostgreSQL)
+  bootstrap.sql           # Complete database schema (Supabase/PostgreSQL + pgvector)
 ```
 
-**Data flow:** CivicWeb (PDFs/HTML) + Vimeo (video/audio) → Python pipeline → Supabase → React Router web app
+**Data flow:** CivicWeb (PDFs/HTML) + Vimeo (video/audio) → Python pipeline (5 phases) → Supabase → React Router web app
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Web app | [React Router 7](https://reactrouter.com/) (SSR), [Tailwind CSS 4](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) |
+| Web app | [React Router 7](https://reactrouter.com/) (SSR on Cloudflare Workers), [Tailwind CSS 4](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) |
 | Hosting | [Cloudflare Workers](https://workers.cloudflare.com/) |
-| Database | [Supabase](https://supabase.com/) (PostgreSQL + pgvector) |
+| Database | [Supabase](https://supabase.com/) (PostgreSQL + pgvector + halfvec) |
 | Pipeline | Python 3.13+, [uv](https://github.com/astral-sh/uv) |
-| AI | Google Gemini (refinement, RAG Q&A) |
-| Embeddings | [fastembed](https://github.com/qdrant/fastembed) (nomic-embed-text-v1.5, runs locally) |
+| AI Refinement | Google Gemini Flash (structured meeting extraction) |
+| AI Q&A | Google Gemini Flash (multi-tool RAG agent with citations) |
+| Embeddings | OpenAI `text-embedding-3-small` (384-dim halfvec via Matryoshka truncation) |
 | Transcription | Local MLX-based diarization on Apple Silicon |
 | Video | Vimeo API + HLS playback |
+
+## Database Schema
+
+18 tables powered by Supabase (PostgreSQL + pgvector):
+
+| Table | Purpose |
+|-------|---------|
+| `meetings` | Council meetings with status flags, video URLs, summaries |
+| `agenda_items` | Per-meeting items with AI-generated summaries, debate summaries, discussion timestamps |
+| `motions` | Formal motions with mover/seconder, results, vote tallies |
+| `votes` | Individual council member votes on each motion |
+| `transcript_segments` | Speaker-attributed transcript with timestamps and full-text search |
+| `key_statements` | AI-extracted typed statements (claim/proposal/objection/recommendation/financial/public_input) |
+| `meeting_speaker_aliases` | Maps diarization labels (Speaker_01) to real people |
+| `matters` | Longitudinal topics tracked across meetings |
+| `bylaws` + `bylaw_chunks` | Bylaw text split into searchable chunks |
+| `documents` | Meeting PDFs (agendas, minutes, staff reports) |
+| `people` | Council members, staff, public delegates |
+| `organizations` + `memberships` | Governance structure and roles |
+| `elections` + `candidacies` | Election history |
+| `attendance` + `meeting_events` | Meeting participation tracking |
+| `topics` | Controlled taxonomy for agenda item classification |
+
+**Search infrastructure:**
+- `halfvec(384)` HNSW indexes on agenda_items, motions, matters, bylaws, bylaw_chunks, key_statements, meetings, documents
+- `tsvector` GIN indexes for full-text search on transcript_segments, motions, agenda_items, matters
+- 7 `match_*` RPC functions for vector similarity search
 
 ## Getting Started
 
@@ -80,14 +115,6 @@ Apply the schema in your Supabase SQL Editor:
 -- Run the contents of sql/bootstrap.sql
 ```
 
-Then seed the core reference data:
-
-```bash
-uv run python src/maintenance/seeding/seed_organizations.py --execute
-uv run python src/maintenance/seeding/import_election_history.py --execute
-uv run python src/maintenance/seeding/import_staff.py --execute
-```
-
 ### Web App
 
 ```bash
@@ -99,31 +126,30 @@ pnpm deploy     # build + deploy to Cloudflare Workers
 
 ## Data Pipeline
 
-The pipeline scrapes, transcribes, and processes council meetings into structured data. A single `python main.py` command runs all 5 phases with smart change detection.
+The pipeline scrapes, transcribes, and processes council meetings into structured data. All commands run from `apps/pipeline/`.
 
 ### Full Pipeline (5 Phases)
 
 ```bash
+cd apps/pipeline
+
 # Run everything: scrape → download audio → diarize → ingest → embed
 uv run python main.py --download-audio
 ```
 
 | Phase | What it does |
 |-------|-------------|
-| 1. Documents | Scrape agendas & minutes PDFs from CivicWeb |
+| 1. Documents | Scrape agendas & minutes PDFs from CivicWeb (or Legistar/static HTML) |
 | 2. Vimeo Download | Match meetings to Vimeo videos, download audio |
-| 3. Diarization | Transcribe + speaker-diarize audio files locally |
-| 4. Ingestion | AI refinement + upsert meetings, items, motions, votes to DB |
-| 5. Embeddings | Generate OpenAI `text-embedding-3-small` vectors for semantic search |
+| 3. Diarization | Transcribe + speaker-diarize audio files locally (MLX on Apple Silicon) |
+| 4. Ingestion | AI refinement via Gemini Flash: extracts agenda items, motions, votes, speaker aliases, key statements, summaries. Upserts to Supabase with smart change detection. |
+| 5. Embeddings | Generate OpenAI `text-embedding-3-small` halfvec(384) vectors for semantic search |
 
-Phase 4 uses **smart change detection**: it compares disk state (new agenda/minutes/transcript files) against DB flags (`has_agenda`, `has_minutes`, `has_transcript`) and automatically re-ingests meetings that have new data. Freshly diarized meetings from Phase 3 are also force-updated.
+Phase 4 uses **smart change detection**: it compares disk state (new agenda/minutes/transcript files) against DB flags (`has_agenda`, `has_minutes`, `has_transcript`) and automatically re-ingests meetings that have new data.
 
 ### Selective Execution
 
 ```bash
-# Original behavior (Phases 1-3 only, no DB writes)
-uv run python main.py --download-audio --skip-ingest --skip-embed
-
 # Only run ingestion with change detection (Phase 4)
 uv run python main.py --ingest-only
 
@@ -138,24 +164,12 @@ uv run python main.py --process-only
 
 # Re-diarize cached transcripts → re-ingest → embed
 uv run python main.py --rediarize --limit 5
-```
 
-### Targeting a Single Meeting
-
-Re-process a specific meeting by DB ID or folder path:
-
-```bash
-# By database ID (looks up archive_path automatically)
+# Target a single meeting by DB ID
 uv run python main.py --target 42
 
-# By folder path
-uv run python main.py --target "viewroyal_archive/Council/2024/01/2024-01-16 Regular Council"
-
-# Re-diarize + re-ingest a specific meeting
-uv run python main.py --target 42 --rediarize
-
-# Target but skip embedding
-uv run python main.py --target 42 --skip-embed
+# Target a specific municipality
+uv run python main.py --municipality esquimalt
 ```
 
 ### All CLI Flags
@@ -174,68 +188,74 @@ uv run python main.py --target 42 --skip-embed
 | `--embed-only` | Only run Phase 5 |
 | `--target <id\|path>` | Target a single meeting (force re-processes) |
 | `--update` | Force update existing meetings (with `--ingest-only`) |
+| `--municipality <slug>` | Target a specific municipality (loads config from DB) |
 | `--limit N` | Limit number of items to process (testing) |
 | `--input-dir DIR` | Override archive directory |
 
-### Batch Processing
-
-For processing many meetings efficiently using Gemini's batch API:
-
-```bash
-uv run python src/pipeline/batch.py create --batch-size 50
-uv run python src/pipeline/batch.py submit
-uv run python src/pipeline/batch.py status
-uv run python src/pipeline/batch.py download
-uv run python src/pipeline/batch.py ingest
-```
-
 ### Standalone Embeddings
 
-Embeddings can also be run standalone with more options:
-
 ```bash
-# Embed all tables (transcript segments filtered to 15+ words by default)
-uv run python src/pipeline/embed_local.py --table all
+# Embed all tables
+uv run python -m pipeline.ingestion.embed --table all
 
 # Embed a specific table
-uv run python src/pipeline/embed_local.py --table motions
+uv run python -m pipeline.ingestion.embed --table motions
 
 # Re-embed everything from scratch
-uv run python src/pipeline/embed_local.py --table all --force
-
-# Adjust minimum word filter for transcript segments
-uv run python src/pipeline/embed_local.py --table transcript_segments --min-words 20
+uv run python -m pipeline.ingestion.embed --table all --force
 ```
 
-### Maintenance & Audits
+### AI Refinement
 
-```bash
-# Check for meetings with new documents that need re-ingestion
-uv run python src/maintenance/audit/check_occurred_meetings.py
+Phase 4 sends meeting documents (agenda PDF text + minutes PDF text + diarized transcript) to Gemini Flash for structured extraction. The AI refiner produces:
 
-# Actually re-ingest them
-uv run python src/maintenance/audit/check_occurred_meetings.py --reingest --refine
-```
+- **Meeting metadata** — type, status, chair, attendees
+- **Speaker aliases** — maps Speaker_01 → "John Rogers" etc.
+- **Transcript corrections** — fixes ASR misspellings
+- **Agenda items** — titles, plain English summaries, debate summaries, discussion timestamps, categories
+- **Key statements** — typed statements (claim/proposal/objection/recommendation/financial/public_input) attributed to speakers
+- **Motions** — text, mover, seconder, vote results with individual votes
+- **Key quotes** — notable quotes from discussion
 
-### Analysis
+### Multi-Municipality Support
 
-```bash
-# Analyze a council member's positions via RAG
-uv run python src/analysis/person_analysis.py "David Screech" --interactive
+The pipeline supports multiple municipalities via a scraper abstraction layer:
 
-# Check vote details
-uv run python src/analysis/check_votes.py 2024-01-15 --detail
-```
+| Scraper | Source | Municipalities |
+|---------|--------|---------------|
+| `CivicWebScraper` | CivicWeb portal | View Royal (active) |
+| `LegistarScraper` | Legistar/InSite API | Esquimalt (planned) |
+| `StaticHtmlScraper` | CSS selector-based | RDOS (planned) |
+
+Scrapers are registered via `SCRAPER_REGISTRY` and selected based on the municipality's `source_config.type`. Each municipality gets its own archive directory and `municipality_id` foreign key throughout the schema.
+
+## RAG Q&A System
+
+The AI Q&A (`/ask` route) uses a two-phase RAG architecture:
+
+**Phase 1 — Evidence Gathering** (Gemini Flash orchestrator with 8 tools):
+- `search_motions` — Vector similarity search on motions
+- `search_agenda_items` — Full-text search on agenda items
+- `search_key_statements` — Vector similarity search on extracted statements
+- `search_matters` — Vector search on longitudinal topics
+- `search_transcript_segments` — Full-text search on transcripts
+- `get_statements_by_person` — Find what a specific person said
+- `get_voting_history` — Look up voting records
+- `get_current_date` — Date context
+
+**Phase 2 — Synthesis** (Gemini Flash):
+Takes gathered evidence and produces a cited answer with source references.
+
+Embeddings are generated via OpenAI `text-embedding-3-small` at 384 dimensions (Matryoshka truncation), stored as `halfvec(384)` for 4x storage savings over full float32 vector(768).
 
 ## Adapting for Another Municipality
 
-This platform is designed around CivicWeb-powered municipalities. To adapt it:
-
-1. Update `src/core/config.py` with your municipality's CivicWeb and Vimeo URLs
-2. Modify the seeding scripts in `src/maintenance/seeding/` for your council members and organizations
-3. Apply `sql/bootstrap.sql` to a fresh Supabase project
-4. Run the pipeline to scrape and process your meetings
-5. Deploy the web app with your Supabase credentials
+1. Add your municipality to the `municipalities` table in Supabase
+2. Create a scraper class extending `BaseScraper` (or use an existing one if your source matches CivicWeb/Legistar/static HTML)
+3. Register the scraper in `pipeline/scrapers/__init__.py`
+4. Apply `sql/bootstrap.sql` to a fresh Supabase project
+5. Run the pipeline: `uv run python main.py --municipality your-slug --download-audio`
+6. Deploy the web app with your Supabase credentials
 
 ## License
 

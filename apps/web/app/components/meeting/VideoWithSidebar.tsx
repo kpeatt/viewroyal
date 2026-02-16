@@ -330,7 +330,7 @@ export function VideoWithSidebar({
                         {resolveSpeakerName(currentSegment)}
                       </span>
                       <p className="text-white/90 text-xs leading-snug">
-                        {currentSegment.corrected_text_content || currentSegment.text_content}
+                        {currentSegment.text_content}
                       </p>
                     </div>
                   </div>
@@ -1171,7 +1171,7 @@ function TranscriptSidebarContent({
                   isActive ? "text-white" : "text-zinc-400",
                 )}
               >
-                {segment.corrected_text_content || segment.text_content}
+                {segment.text_content}
               </p>
             </div>
           );

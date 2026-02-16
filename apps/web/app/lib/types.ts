@@ -163,7 +163,6 @@ export interface TranscriptSegment {
   start_time: number;
   end_time: number;
   text_content: string;
-  corrected_text_content?: string;
   created_at: string;
   person?: Person;
 }

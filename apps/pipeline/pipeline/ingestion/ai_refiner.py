@@ -74,6 +74,18 @@ class KeyQuote(BaseModel):
     timestamp: float | None
 
 
+class KeyStatement(BaseModel):
+    statement_text: str = Field(description="The substantive statement, paraphrased for clarity")
+    speaker: str = Field(description="The person who made the statement")
+    statement_type: str = Field(
+        description="One of: claim, proposal, objection, recommendation, financial, public_input"
+    )
+    context: str | None = Field(
+        None, description="Brief context for the statement (e.g. 'During debate on rezoning')"
+    )
+    timestamp: float | None = Field(None, description="Approximate start time in seconds")
+
+
 class TranscriptCorrection(BaseModel):
     original_text: str = Field(
         description="The exact text string in the transcript that is incorrect"
@@ -113,6 +125,10 @@ class AgendaItemRecord(BaseModel):
     is_controversial: bool
     debate_summary: str | None
     key_quotes: list[KeyQuote]
+    key_statements: list[KeyStatement] = Field(
+        default_factory=list,
+        description="Typed substantive statements extracted from the discussion",
+    )
     discussion_start_time: float | None
     discussion_end_time: float | None
     motions: list[MotionRecord]
@@ -184,7 +200,21 @@ You are a City Council Data Analyst. Your goal is to create a perfect, relationa
 6. **Enrichment**:
    - `debate_summary`: Summarize arguments (leave NULL for procedural items with no discussion).
    - `key_quotes`: Extract verbatim quotes (leave empty for procedural items).
-7. **Transcript Corrections (Spelling & Names)**:
+7. **Key Statements** (CRITICAL for semantic search):
+   - For each substantive (non-procedural) item with discussion, extract `key_statements` — typed statements that capture the substance of the debate.
+   - Statement types:
+     * `claim` — A factual assertion or position stated by a speaker (e.g. "Traffic has increased 40% since 2020")
+     * `proposal` — A specific suggestion or plan of action (e.g. "Staff recommends adding a left-turn lane")
+     * `objection` — An argument against a proposal or action (e.g. "This will destroy the character of the neighborhood")
+     * `recommendation` — A formal recommendation from staff or committee (e.g. "Staff recommends approval with conditions")
+     * `financial` — A statement about costs, budget, or funding (e.g. "The project will cost $2.3M from reserves")
+     * `public_input` — A statement from a member of the public during a hearing or delegation
+   - Each statement should be paraphrased for clarity (not verbatim) and attributed to a speaker.
+   - Include `context` to explain when/why the statement was made.
+   - Include approximate `timestamp` if identifiable from the transcript.
+   - Aim for 2-6 statements per substantive item. Skip procedural items.
+   - Do NOT extract statements for items with no discussion.
+8. **Transcript Corrections (Spelling & Names)**:
    - Scan the TRANSCRIPT for misspellings of proper nouns, locations (e.g. "Esquimalt", "Helmcken"), organization names, and attendee names.
    - Use the AGENDA, MINUTES, and KNOWN ATTENDEES as the source of truth for correct spellings.
    - Example: "Helmakin Road" → "Helmcken Road", "Mayor Screech" → correct name from attendees.
@@ -650,6 +680,24 @@ def _repair_local_json(data):
 
             if "key_quotes" not in item or item["key_quotes"] is None:
                 item["key_quotes"] = []
+
+            # Key Statements repairs
+            if "key_statements" not in item or item["key_statements"] is None:
+                item["key_statements"] = []
+            elif isinstance(item["key_statements"], list):
+                valid_types = {"claim", "proposal", "objection", "recommendation", "financial", "public_input"}
+                for ks in item["key_statements"]:
+                    if isinstance(ks, dict):
+                        if "timestamp" not in ks:
+                            ks["timestamp"] = None
+                        else:
+                            ks["timestamp"] = to_seconds(ks["timestamp"])
+                        if "context" not in ks:
+                            ks["context"] = None
+                        # Normalize statement_type
+                        st = ks.get("statement_type", "").lower().strip()
+                        if st not in valid_types:
+                            ks["statement_type"] = "claim"  # default fallback
 
             if "is_controversial" not in item:
                 item["is_controversial"] = False

@@ -420,7 +420,7 @@ export function MeetingFeed({ transcript, agendaItems, videoUrl, resolveSpeakerN
                                   className="group/seg block relative"
                                 >
                                   <p className="text-sm leading-relaxed text-zinc-800 font-medium">
-                                    {seg.corrected_text_content || seg.text_content}
+                                    {seg.text_content}
                                     <span className="inline-flex ml-2 opacity-0 group-hover/seg:opacity-100 transition-opacity">
                                       <ExternalLink className="h-2.5 w-2.5 text-blue-500" />
                                     </span>
@@ -492,7 +492,7 @@ export function MeetingFeed({ transcript, agendaItems, videoUrl, resolveSpeakerN
                         "text-sm leading-relaxed",
                         "text-zinc-700"
                       )}>
-                        {seg.corrected_text_content || seg.text_content}
+                        {seg.text_content}
                         <span className="inline-flex ml-2 opacity-0 group-hover/seg:opacity-100 transition-opacity">
                           <ExternalLink className="h-3 w-3 text-blue-500" />
                         </span>

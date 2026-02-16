@@ -152,7 +152,7 @@ export async function getMeetingById(supabase: SupabaseClient, id: string) {
     const { data, error } = await supabase
       .from("transcript_segments")
       .select(
-        "id, start_time, end_time, text_content, corrected_text_content, person_id, agenda_item_id, motion_id, speaker_name, speaker_role",
+        "id, start_time, end_time, text_content, person_id, agenda_item_id, motion_id, speaker_name, speaker_role",
       )
       .eq("meeting_id", id)
       .order("start_time", { ascending: true })

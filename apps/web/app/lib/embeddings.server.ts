@@ -2,7 +2,7 @@ import OpenAI from "openai";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const EMBEDDING_MODEL = "text-embedding-3-small";
-const EMBEDDING_DIMENSIONS = 768;
+const EMBEDDING_DIMENSIONS = 384;
 
 let client: OpenAI | null = null;
 
@@ -27,7 +27,7 @@ export function isVectorSearchAvailable(): boolean {
  * Generate a query embedding using OpenAI's text-embedding-3-small model.
  *
  * @param query The search query text
- * @returns 768-dimensional embedding vector, or null if unavailable
+ * @returns 384-dimensional embedding vector, or null if unavailable
  */
 export async function generateQueryEmbedding(query: string): Promise<number[] | null> {
   const openai = getClient();
