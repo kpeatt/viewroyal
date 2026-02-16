@@ -355,7 +355,11 @@ class Archiver:
             return
 
         supabase = create_client(config.SUPABASE_URL, supabase_key)
-        ingester = MeetingIngester(config.SUPABASE_URL, supabase_key, config.GEMINI_API_KEY)
+        municipality_id = self.municipality.id if self.municipality else 1
+        ingester = MeetingIngester(
+            config.SUPABASE_URL, supabase_key, config.GEMINI_API_KEY,
+            municipality_id=municipality_id,
+        )
         diarized_folders = diarized_folders or set()
 
         # Single-folder targeted mode

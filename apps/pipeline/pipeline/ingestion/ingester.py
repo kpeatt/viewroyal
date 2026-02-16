@@ -32,11 +32,12 @@ def to_seconds(val):
 
 
 class MeetingIngester:
-    def __init__(self, supabase_url, supabase_key, gemini_key=None):
+    def __init__(self, supabase_url, supabase_key, gemini_key=None, municipality_id=None):
         if not supabase_url or not supabase_key:
             raise ValueError("Supabase credentials required")
 
         self.supabase: Client = create_client(supabase_url, supabase_key)
+        self.municipality_id = municipality_id or 1  # Default to View Royal
         self.gemini_client = None
         if gemini_key:
             self.gemini_client = genai.Client(api_key=gemini_key)
@@ -45,7 +46,48 @@ class MeetingIngester:
                 "Warning: GEMINI_API_KEY not provided. Embeddings/Refinement will be skipped."
             )
 
-        self.matcher = MatterMatcher(self.supabase)
+        self.matcher = MatterMatcher(self.supabase, municipality_id=self.municipality_id)
+        self._canonical_names = None  # Lazy-loaded per municipality
+
+    def _get_canonical_names(self):
+        """Load canonical names for this municipality from the DB.
+
+        Fetches all known people associated with this municipality's organizations.
+        Falls back to hardcoded CANONICAL_NAMES for View Royal (municipality_id=1).
+        """
+        if self._canonical_names is not None:
+            return self._canonical_names
+
+        try:
+            # Get all people linked to this municipality's organizations via memberships
+            orgs = (
+                self.supabase.table("organizations")
+                .select("id")
+                .eq("municipality_id", self.municipality_id)
+                .execute()
+            )
+            if orgs.data:
+                org_ids = [o["id"] for o in orgs.data]
+                res = (
+                    self.supabase.table("memberships")
+                    .select("person:people(name)")
+                    .in_("organization_id", org_ids)
+                    .execute()
+                )
+                names = list({
+                    m["person"]["name"]
+                    for m in res.data
+                    if m.get("person") and m["person"].get("name")
+                })
+                if names:
+                    self._canonical_names = names
+                    return self._canonical_names
+        except Exception as e:
+            print(f"  [!] Failed to load canonical names from DB: {e}")
+
+        # Fallback to hardcoded list for View Royal
+        self._canonical_names = CANONICAL_NAMES
+        return self._canonical_names
 
     def _get_active_council_members(self, meeting_date):
         """Fetch names of council members active on the given date."""
@@ -55,6 +97,7 @@ class MeetingIngester:
                 self.supabase.table("organizations")
                 .select("id")
                 .eq("classification", "Council")
+                .eq("municipality_id", self.municipality_id)
                 .execute()
             )
             if not orgs.data:
@@ -86,13 +129,21 @@ class MeetingIngester:
         if dry_run:
             return 999
         res = (
-            self.supabase.table("organizations").select("id").eq("name", name).execute()
+            self.supabase.table("organizations")
+            .select("id")
+            .eq("name", name)
+            .eq("municipality_id", self.municipality_id)
+            .execute()
         )
         if res.data:
             return res.data[0]["id"]
 
         print(f"Creating Organization: {name}")
-        data = {"name": name, "classification": classification}
+        data = {
+            "name": name,
+            "classification": classification,
+            "municipality_id": self.municipality_id,
+        }
         res = self.supabase.table("organizations").insert(data).execute()
         return res.data[0]["id"]
 
@@ -233,6 +284,7 @@ class MeetingIngester:
             "status": "Active",
             "first_seen": date,
             "last_seen": date,
+            "municipality_id": self.municipality_id,
         }
         res = self.supabase.table("matters").insert(data).execute()
         new_record = res.data[0]
@@ -477,11 +529,17 @@ class MeetingIngester:
         return [address_str]
 
     def _normalize_archive_path(self, folder_path):
-        """Normalize archive path to always be relative (viewroyal_archive/...)."""
+        """Normalize archive path to always be relative (viewroyal_archive/... or archive/slug/...)."""
         # Convert to absolute first for consistent handling
         abs_path = os.path.abspath(folder_path)
 
-        # Find the viewroyal_archive portion
+        # Try municipality archive path first (archive/slug/...)
+        archive_marker = "/archive/"
+        if archive_marker in abs_path:
+            idx = abs_path.find(archive_marker) + 1  # Skip leading /
+            return abs_path[idx:]  # Returns "archive/slug/..."
+
+        # Legacy: viewroyal_archive/...
         marker = "viewroyal_archive"
         if marker in abs_path:
             idx = abs_path.find(marker)
@@ -537,6 +595,7 @@ class MeetingIngester:
             "organization_id": org_id,
             "archive_path": normalized_path,  # Always store normalized path
             "type": m_type_guess,
+            "municipality_id": self.municipality_id,
         }
 
         # Look for agenda_url from companion .url file
@@ -887,7 +946,7 @@ class MeetingIngester:
 
         if not refined and (has_minutes or has_agenda):
             print(f"  Running AI Refinement ({ai_provider})...")
-            canonical_str = ", ".join(CANONICAL_NAMES)
+            canonical_str = ", ".join(self._get_canonical_names())
 
             # Extract fingerprint aliases from transcript (if diarizer matched known speakers)
             fingerprint_aliases = []
@@ -1497,3 +1556,94 @@ class MeetingIngester:
             "attendance": refined.get("attendees", []) if refined else [],
             "items": refined.get("items", []) if refined else [],
         }
+
+    def process_legistar_meeting(self, scraped_meeting, target_dir, force_update=False):
+        """Fast-path ingestion for Legistar meetings using structured API data.
+
+        Skips AI refinement since Legistar provides structured meeting data directly.
+        """
+        from pipeline.scrapers.base import ScrapedMeeting
+
+        meeting_date = str(scraped_meeting.date)
+        title = scraped_meeting.title
+        source_id = scraped_meeting.source_id
+
+        # Check if already ingested (by source_id in meta)
+        if not force_update and source_id:
+            res = (
+                self.supabase.table("meetings")
+                .select("id")
+                .eq("municipality_id", self.municipality_id)
+                .contains("meta", {"legistar_event_id": source_id})
+                .execute()
+            )
+            if res.data:
+                print(f"  [->] Legistar meeting {source_id} already ingested. Skipping.")
+                return None
+
+        print(f"  [Legistar] Ingesting: {meeting_date} - {title}")
+
+        # Organization
+        meeting_type = scraped_meeting.meeting_type or "Council"
+        org_name, classification = self.map_type_to_org(meeting_type)
+        org_id = self.get_or_create_organization(org_name, classification)
+
+        # Meeting upsert
+        meeting_data = {
+            "title": title,
+            "meeting_date": meeting_date,
+            "organization_id": org_id,
+            "type": utils.infer_meeting_type(meeting_type),
+            "municipality_id": self.municipality_id,
+            "agenda_url": scraped_meeting.agenda_url,
+            "minutes_url": scraped_meeting.minutes_url,
+            "video_url": scraped_meeting.video_url,
+            "has_agenda": bool(scraped_meeting.agenda_url),
+            "has_minutes": bool(scraped_meeting.minutes_url),
+            "meta": {"legistar_event_id": source_id} if source_id else {},
+        }
+
+        res = (
+            self.supabase.table("meetings")
+            .upsert(meeting_data, on_conflict="municipality_id,meeting_date,type")
+            .execute()
+        )
+
+        if not res.data:
+            print(f"  [!] Failed to upsert Legistar meeting: {title}")
+            return None
+
+        meeting_id = res.data[0]["id"]
+        print(f"  [+] Meeting ID: {meeting_id}")
+
+        # Process agenda items from Legistar meta (if available)
+        legistar_event = scraped_meeting.meta.get("legistar_event", {})
+        event_items = legistar_event.get("EventItems") if legistar_event else None
+
+        if event_items:
+            for i, item in enumerate(event_items):
+                item_title = item.get("EventItemTitle", "")
+                if not item_title:
+                    continue
+
+                item_data = {
+                    "meeting_id": meeting_id,
+                    "title": item_title,
+                    "item_order": str(i + 1),
+                    "category": "Substantive",
+                }
+
+                # Try to link a matter
+                matter_identifier = item.get("EventItemMatterFile")
+                if matter_identifier:
+                    matter_id = self.get_or_create_matter(
+                        matter_identifier,
+                        item_title,
+                        date=meeting_date,
+                    )
+                    if matter_id:
+                        item_data["matter_id"] = matter_id
+
+                self.supabase.table("agenda_items").insert(item_data).execute()
+
+        return {"meeting": meeting_data, "meeting_id": meeting_id}
