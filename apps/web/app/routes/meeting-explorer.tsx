@@ -671,8 +671,7 @@ export default function MeetingExplorer({ loaderData }: Route.ComponentProps) {
                               </div>
                             </div>
                             <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100">
-                              {segment.corrected_text_content ||
-                                segment.text_content}
+                              {segment.text_content}
                             </p>
                           </div>
                         );

@@ -36,6 +36,17 @@ export interface AgendaItemMatch {
   similarity: number;
 }
 
+export interface KeyStatementMatch {
+  id: number;
+  meeting_id: number;
+  agenda_item_id: number | null;
+  speaker_name: string | null;
+  statement_type: string;
+  statement_text: string;
+  context: string | null;
+  similarity: number;
+}
+
 export interface VectorSearchResults {
   segments: TranscriptSegmentMatch[];
   motions: MotionMatch[];
@@ -48,30 +59,20 @@ const DEFAULT_MATCH_THRESHOLD = 0.65;
 const DEFAULT_MATCH_COUNT = 20;
 
 /**
- * Search transcript segments using vector similarity
+ * Search transcript segments using vector similarity.
+ * @deprecated Transcript segment embeddings were removed in Phase 3c.
+ * Use searchAgendaItems for discussion-level search instead.
  */
 export async function searchTranscriptSegments(
-  supabase: SupabaseClient,
-  embedding: number[],
-  options?: {
+  _supabase: SupabaseClient,
+  _embedding: number[],
+  _options?: {
     threshold?: number;
     limit?: number;
     meetingId?: number;
   },
 ): Promise<TranscriptSegmentMatch[]> {
-  const { data, error } = await supabase.rpc("match_transcript_segments", {
-    query_embedding: JSON.stringify(embedding),
-    match_threshold: options?.threshold ?? DEFAULT_MATCH_THRESHOLD,
-    match_count: options?.limit ?? DEFAULT_MATCH_COUNT,
-    filter_meeting_id: options?.meetingId ?? null,
-  });
-
-  if (error) {
-    console.error("Vector search error (transcripts):", error);
-    return [];
-  }
-
-  return data || [];
+  return [];
 }
 
 /**
@@ -143,6 +144,31 @@ export async function searchAgendaItems(
 
   if (error) {
     console.error("Vector search error (agenda items):", error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Search key statements using vector similarity
+ */
+export async function searchKeyStatements(
+  supabase: SupabaseClient,
+  embedding: number[],
+  options?: {
+    threshold?: number;
+    limit?: number;
+  },
+): Promise<KeyStatementMatch[]> {
+  const { data, error } = await supabase.rpc("match_key_statements", {
+    query_embedding: JSON.stringify(embedding),
+    match_threshold: options?.threshold ?? DEFAULT_MATCH_THRESHOLD,
+    match_count: options?.limit ?? 15,
+  });
+
+  if (error) {
+    console.error("Vector search error (key statements):", error);
     return [];
   }
 

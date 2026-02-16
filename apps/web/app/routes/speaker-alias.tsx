@@ -60,7 +60,6 @@ type Segment = {
   end_time: number;
   speaker_name: string;
   text_content: string;
-  corrected_text_content?: string;
   person_id: number | null;
   person?: {
     name: string;
@@ -147,7 +146,6 @@ export async function loader({ request }: { request: Request }) {
             end_time: t.end_time,
             speaker_name: t.speaker_name || "Unknown",
             text_content: t.text_content,
-            corrected_text_content: t.corrected_text_content,
             person_id: t.person_id,
             person: resolvedPerson,
           };
@@ -446,7 +444,6 @@ export async function action({ request }: { request: Request }) {
       .update({
         text_content: text1,
         end_time: splitTime,
-        corrected_text_content: null, // Clear correction
       })
       .eq("id", segmentId);
 
@@ -761,7 +758,7 @@ export default function SpeakerAliasTool({ loaderData }: any) {
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const [bulkMode, setBulkMode] = useState<"label" | "person" | null>(null);
   const [isCreatingPerson, setIsCreatingPerson] = useState(false);
-  const [showCorrected, setShowCorrected] = useState(true);
+  const showCorrected = true; // Legacy: corrected text is now always in text_content
   const [activeTab, setActiveTab] = useState<"voiceid" | "aliases">(
     Object.keys(speakerCentroids || {}).length > 0 ? "voiceid" : "aliases",
   );
@@ -847,9 +844,7 @@ export default function SpeakerAliasTool({ loaderData }: any) {
     )
       return false;
 
-    const text = showCorrected
-      ? s.corrected_text_content || s.text_content
-      : s.text_content;
+    const text = s.text_content;
     if (filterText && !text.toLowerCase().includes(filterText.toLowerCase()))
       return false;
     return true;
@@ -1665,16 +1660,6 @@ export default function SpeakerAliasTool({ loaderData }: any) {
                   <Target className="h-4 w-4" />
                 </Button>
                 <div className="h-4 w-px bg-zinc-200" />
-                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-600 font-medium hover:text-blue-600 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={showCorrected}
-                    onChange={(e) => setShowCorrected(e.target.checked)}
-                    className="rounded border-zinc-300 text-blue-600 focus:ring-blue-600"
-                  />
-                  Show Fixed Text
-                </label>
-                <div className="h-4 w-px bg-zinc-200" />
                 {filteredSegments.length} segments
               </div>
             </div>
@@ -1773,10 +1758,7 @@ export default function SpeakerAliasTool({ loaderData }: any) {
                         </div>
 
                         <p className="text-sm text-zinc-800 leading-relaxed">
-                          {showCorrected
-                            ? segment.corrected_text_content ||
-                              segment.text_content
-                            : segment.text_content}
+                          {segment.text_content}
                         </p>
                       </div>
                     </div>
