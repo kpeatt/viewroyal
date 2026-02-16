@@ -29,11 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Embedding dimensions are consistent — web app generates 384-dim vectors matching the database halfvec(384) columns
   3. PR #35 and PR #37 are merged to main with no duplicate or conflicting migrations against the 23 already applied
   4. Key statement extraction produces higher-quality results with improved prompts (verifiable by running pipeline on a test meeting)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — Merge PR #35 (embedding migration), fix dimension mismatch, remove corrected_text_content, add key statement search
+- [ ] 01-02-PLAN.md — Merge PR #37 (key statement prompt improvements), resolve conflicts, validate full phase
 
 ### Phase 2: Multi-Tenancy
 **Goal**: The web app dynamically adapts to any municipality in the database — no hardcoded "View Royal" references remain in user-facing code
@@ -105,7 +105,7 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Schema Foundation | 0/? | Not started | - |
+| 1. Schema Foundation | 0/2 | Planned | - |
 | 2. Multi-Tenancy | 0/? | Not started | - |
 | 3. Subscriptions & Notifications | 0/? | Not started | - |
 | 4. Home Page Enhancements | 0/? | Not started | - |
