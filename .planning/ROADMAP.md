@@ -60,12 +60,11 @@ Plans:
   3. A logged-in user can subscribe to a specific councillor and receive an email when that councillor has new motions or votes
   4. A user can view and manage all their subscriptions from a settings page (change frequency, unsubscribe)
   5. Email delivery works end-to-end through Resend via Supabase Edge Function (emails arrive in inbox, not spam)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
-- [ ] 03-03: TBD
+- [ ] 03-01-PLAN.md — Merge PR #13 code onto main, resolve conflicts with Phase 2 municipality context, add subscription UI
+- [ ] 03-02-PLAN.md — Fix RPC search_path security advisory, smoke test subscription flow, document external config
 
 ### Phase 4: Home Page Enhancements
 **Goal**: The home page surfaces what is happening in council right now — active matters, recent decisions, and upcoming meetings — so returning visitors get immediate value without navigating deeper
@@ -106,6 +105,6 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 0/2 | Complete    | 2026-02-16 |
 | 2. Multi-Tenancy | 0/1 | Planned | - |
-| 3. Subscriptions & Notifications | 0/? | Not started | - |
+| 3. Subscriptions & Notifications | 0/2 | Planned | - |
 | 4. Home Page Enhancements | 0/? | Not started | - |
 | 5. Advanced Subscriptions | 0/? | Not started | - |
