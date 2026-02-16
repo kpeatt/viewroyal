@@ -1,10 +1,15 @@
 import argparse
 from pipeline import config
 from pipeline.paths import ARCHIVE_ROOT
-from pipeline.orchestrator import Archiver
+from pipeline.orchestrator import Archiver, load_municipality
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="View Royal CivicWeb & Vimeo Archiver")
+    parser = argparse.ArgumentParser(description="Municipal CivicWeb & Vimeo Archiver")
+
+    parser.add_argument(
+        "--municipality", type=str, default=None,
+        help="Municipality slug (e.g. 'view-royal'). Loads config from DB.",
+    )
 
     parser.add_argument(
         "--videos-only", action="store_true", help="Skip the document scanning phase."
@@ -88,10 +93,16 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Load municipality config if specified
+    municipality = None
+    if args.municipality:
+        municipality = load_municipality(args.municipality)
+        print(f"[*] Municipality: {municipality.name} ({municipality.slug})")
+
     # Use centralized ARCHIVE_ROOT as default
     output_dir = args.input_dir if args.input_dir else ARCHIVE_ROOT
 
-    app = Archiver()
+    app = Archiver(municipality=municipality)
 
     if args.target:
         # Targeted mode: diarize → ingest → embed for a single meeting

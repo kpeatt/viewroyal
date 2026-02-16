@@ -10,8 +10,9 @@ from pipeline import config, utils
 
 
 class VimeoClient:
-    def __init__(self):
+    def __init__(self, vimeo_user: str = "viewroyal"):
         self.token = config.VIMEO_ACCESS_TOKEN
+        self.vimeo_user = vimeo_user
         self.headers = {}
         # Cache to store transcript URLs {uri: url_or_none}
         self.track_url_cache = {}
@@ -33,7 +34,7 @@ class VimeoClient:
             return {}
 
         video_map = {}
-        api_url = "https://api.vimeo.com/users/viewroyal/videos"
+        api_url = f"https://api.vimeo.com/users/{self.vimeo_user}/videos"
         params = {
             "per_page": 100,
             "page": 1,
@@ -105,7 +106,7 @@ class VimeoClient:
 
         # We could use the search API, but usually fetching the latest
         # is enough for new meetings.
-        api_url = "https://api.vimeo.com/users/viewroyal/videos"
+        api_url = f"https://api.vimeo.com/users/{self.vimeo_user}/videos"
         params = {
             "per_page": 20,  # Just check recent ones
             "query": date_str,
