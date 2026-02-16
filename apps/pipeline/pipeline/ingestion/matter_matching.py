@@ -194,8 +194,9 @@ class MatterMatcher:
     Loaded once per ingestion session with all matters cached in memory.
     """
 
-    def __init__(self, supabase_client):
+    def __init__(self, supabase_client, municipality_id=None):
         self.supabase = supabase_client
+        self.municipality_id = municipality_id or 1
         self.matters = []
         self.identifier_index = defaultdict(list)  # normalized_id -> [matter]
         self.address_index = defaultdict(list)  # normalized_addr -> [matter]
@@ -215,7 +216,7 @@ class MatterMatcher:
         )
 
     def _fetch_all_matters(self) -> list[dict]:
-        """Fetch all matters with pagination."""
+        """Fetch all matters for this municipality with pagination."""
         all_data = []
         page = 0
         page_size = 1000
@@ -223,6 +224,7 @@ class MatterMatcher:
             res = (
                 self.supabase.table("matters")
                 .select("id, title, identifier, status, category")
+                .eq("municipality_id", self.municipality_id)
                 .range(page * page_size, (page + 1) * page_size - 1)
                 .execute()
             )
