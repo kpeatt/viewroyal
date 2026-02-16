@@ -1,6 +1,9 @@
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 
 export default function Terms() {
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const shortName = rootData?.municipality?.short_name || "View Royal";
   return (
     <main className="container mx-auto py-16 px-4 max-w-3xl">
       <h1 className="text-4xl font-black mb-8">Terms of Service</h1>
@@ -19,7 +22,7 @@ export default function Terms() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Official View Royal CivicWeb Portal
+            Official {shortName} CivicWeb Portal
           </a>
           .
         </p>

@@ -1,7 +1,8 @@
 import type { Route } from "./+types/elections";
 import { getElections } from "../services/elections";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 import { Gavel, ChevronRight, Calendar, Users, Trophy } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { formatDate } from "../lib/utils";
@@ -19,6 +20,8 @@ export async function loader() {
 
 export default function Elections({ loaderData }: Route.ComponentProps) {
   const { elections } = loaderData;
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const shortName = rootData?.municipality?.short_name || "View Royal";
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -34,7 +37,7 @@ export default function Elections({ loaderData }: Route.ComponentProps) {
           </div>
           <p className="text-xl text-zinc-500 max-w-2xl">
             Historical election results, candidate performance, and governance
-            transitions in View Royal.
+            transitions in {shortName}.
           </p>
         </header>
 

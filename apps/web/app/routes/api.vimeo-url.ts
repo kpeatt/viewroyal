@@ -1,4 +1,6 @@
 import { getVimeoVideoData } from "../services/vimeo.server";
+import { createSupabaseServerClient } from "../lib/supabase.server";
+import { getMunicipality } from "../services/municipality";
 
 export async function loader({ request }: { request: Request }) {
   const url = new URL(request.url);
@@ -10,7 +12,9 @@ export async function loader({ request }: { request: Request }) {
   }
 
   try {
-    const result = await getVimeoVideoData(videoUrl, meetingId || undefined);
+    const { supabase } = createSupabaseServerClient(request);
+    const municipality = await getMunicipality(supabase);
+    const result = await getVimeoVideoData(videoUrl, meetingId || undefined, municipality.website_url);
     return Response.json({
       direct_url: result?.direct_url || null,
       direct_audio_url: result?.direct_audio_url || null,

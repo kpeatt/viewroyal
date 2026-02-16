@@ -1,5 +1,7 @@
 import type { Route } from "./+types/api.ask";
 import { runQuestionAgent, type AgentEvent } from "../services/rag.server";
+import { createSupabaseServerClient } from "../lib/supabase.server";
+import { getMunicipality } from "../services/municipality";
 
 // Simple in-memory rate limiter: max requests per IP within a window
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -35,7 +37,7 @@ function getClientIP(request: Request): string {
 }
 
 // Helper to create the streaming response
-function createStreamingResponse(question: string, context?: string) {
+function createStreamingResponse(question: string, context?: string, municipalityName?: string) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -44,7 +46,7 @@ function createStreamingResponse(question: string, context?: string) {
       };
 
       try {
-        for await (const event of runQuestionAgent(question, context)) {
+        for await (const event of runQuestionAgent(question, context, undefined, municipalityName)) {
           enqueue(event);
         }
       } catch (error: any) {
@@ -85,11 +87,14 @@ export async function action({ request }: Route.ActionArgs) {
   if (!question) {
     return new Response("Question is required", { status: 400 });
   }
-  return createStreamingResponse(question, context);
+
+  const { supabase } = createSupabaseServerClient(request);
+  const municipality = await getMunicipality(supabase);
+  return createStreamingResponse(question, context, municipality.name);
 }
 
 // Also support GET for simple queries
-export function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const question = url.searchParams.get("q");
   const context = url.searchParams.get("context") || undefined;
@@ -127,5 +132,7 @@ export function loader({ request }: Route.LoaderArgs) {
     });
   }
 
-  return createStreamingResponse(question, context);
+  const { supabase } = createSupabaseServerClient(request);
+  const municipality = await getMunicipality(supabase);
+  return createStreamingResponse(question, context, municipality.name);
 }
