@@ -45,11 +45,10 @@ Plans:
   3. Service queries filter by municipality_id so data from different towns never leaks across contexts
   4. RAG answers reference the correct municipality name in system prompts and citations
   5. PR #36 is merged to main after PRs #35 and #37 with no regressions
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Merge PR #36 (municipality context layer), validate build, audit hardcoded strings, smoke test
 
 ### Phase 3: Subscriptions & Notifications
 **Goal**: Citizens can create accounts, subscribe to matters and councillors they care about, manage their preferences, and receive email notifications when subscribed items have new activity
@@ -106,7 +105,7 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Schema Foundation | 0/2 | Complete    | 2026-02-16 |
-| 2. Multi-Tenancy | 0/? | Not started | - |
+| 2. Multi-Tenancy | 0/1 | Planned | - |
 | 3. Subscriptions & Notifications | 0/? | Not started | - |
 | 4. Home Page Enhancements | 0/? | Not started | - |
 | 5. Advanced Subscriptions | 0/? | Not started | - |
