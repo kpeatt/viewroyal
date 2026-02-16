@@ -1,6 +1,8 @@
 import { getHomeData } from "../services/site";
 import { createSupabaseServerClient } from "../lib/supabase.server";
-import { Link } from "react-router";
+import { getMunicipality } from "../services/municipality";
+import { Link, useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 import {
   Calendar,
   Users,
@@ -22,10 +24,12 @@ import { MeetingListRow } from "../components/meeting/meeting-list-row";
 export async function loader({ request }: { request: Request }) {
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const data = await getHomeData(supabase);
+    const municipality = await getMunicipality(supabase);
+    const data = await getHomeData(supabase, municipality);
 
     return {
       ...data,
+      municipality,
     };
   } catch (error) {
     console.error("Error loading home data:", error);
@@ -42,7 +46,10 @@ export default function Home({ loaderData }: any) {
     recentMeetings,
     councilMembers,
     publicNotices,
+    municipality,
   } = loaderData;
+  const shortName = (municipality as Municipality)?.short_name || "View Royal";
+  const websiteUrl = (municipality as Municipality)?.website_url || "https://www.viewroyal.ca";
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -51,7 +58,7 @@ export default function Home({ loaderData }: any) {
         <div className="container mx-auto px-4 py-16 max-w-5xl">
           <div className="text-center mb-8">
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
-              What's happening in View Royal?
+              What's happening in {shortName}?
             </h1>
             <p className="text-blue-100 text-lg max-w-2xl mx-auto">
               Explore council meetings, decisions, and debates. Get instant
@@ -63,7 +70,7 @@ export default function Home({ loaderData }: any) {
           <div className="max-w-5xl mx-auto">
             <AskQuestion
               title=""
-              placeholder="Ask anything about View Royal council decisions..."
+              placeholder={`Ask anything about ${shortName} council decisions...`}
               className="bg-white text-zinc-900 shadow-2xl border-0"
             />
           </div>
@@ -353,7 +360,7 @@ export default function Home({ loaderData }: any) {
                     </a>
                   ))}
                   <a
-                    href="https://www.viewroyal.ca/EN/main/town/public.html"
+                    href={`${websiteUrl}/EN/main/town/public.html`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 p-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-colors"

@@ -1,3 +1,21 @@
+export interface Municipality {
+  id: number;
+  slug: string;
+  name: string;
+  short_name: string;
+  province?: string;
+  classification?: string;
+  website_url?: string;
+  rss_url?: string;
+  contact_email?: string;
+  map_center_lat?: number;
+  map_center_lng?: number;
+  ocd_id?: string;
+  meta?: any;
+  created_at: string;
+  updated_at: string;
+}
+
 export type MeetingType =
   | "Regular Council"
   | "Special Council"

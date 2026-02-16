@@ -1,14 +1,19 @@
 import { useMemo, useState } from "react";
 import type { Route } from "./+types/people";
+import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
 
-export const meta: Route.MetaFunction = () => [
-  { title: "Council Members | ViewRoyal.ai" },
-  { name: "description", content: "View Royal council members, attendance records, and voting history." },
-  { property: "og:title", content: "Council Members | ViewRoyal.ai" },
-  { property: "og:description", content: "View Royal council members, attendance records, and voting history." },
-  { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
-  { name: "twitter:card", content: "summary_large_image" },
-];
+export const meta: Route.MetaFunction = ({ matches }) => {
+  const municipality = getMunicipalityFromMatches(matches);
+  const shortName = municipality?.short_name || "View Royal";
+  return [
+    { title: "Council Members | ViewRoyal.ai" },
+    { name: "description", content: `${shortName} council members, attendance records, and voting history.` },
+    { property: "og:title", content: "Council Members | ViewRoyal.ai" },
+    { property: "og:description", content: `${shortName} council members, attendance records, and voting history.` },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
 import {
   getRawPeopleData,
   calculateAttendance,
@@ -16,8 +21,8 @@ import {
   type PersonWithStats,
 } from "../services/people";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
-import type { Election, Person } from "../lib/types";
-import { Link } from "react-router";
+import type { Election, Person, Municipality } from "../lib/types";
+import { Link, useRouteLoaderData } from "react-router";
 import {
   Users,
   Search,
@@ -135,6 +140,8 @@ function PeopleGrid({
 
 export default function PeopleList({ loaderData }: Route.ComponentProps) {
   const { rawData, elections } = loaderData;
+  const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
+  const shortName = rootData?.municipality?.short_name || "View Royal";
   const [searchTerm, setSearchTerm] = useState("");
 
   const people = rawData?.people || [];
@@ -258,7 +265,7 @@ export default function PeopleList({ loaderData }: Route.ComponentProps) {
               Council Dashboard
             </h1>
             <p className="text-zinc-500 mt-1">
-              Past and present members of View Royal Council.
+              Past and present members of {shortName} Council.
             </p>
           </div>
 
