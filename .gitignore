@@ -50,13 +50,13 @@ embeddings_*.csv
 # uv
 uv.lock
 requirements.txt
-scripts
 sql/migrations
-src/analysis
-src/legacy
-src/maintenance/archive
-src/maintenance/audit
-src/maintenance/db
-src/maintenance/manual
+
+# Pipeline scripts (one-off / maintenance — not part of core pipeline)
+apps/pipeline/scripts/
+
+# Legacy src/ (being migrated)
+src/
+
 GEMINI.md
 TASKLIST.md

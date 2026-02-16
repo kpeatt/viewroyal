@@ -9,11 +9,14 @@ ViewRoyal.ai — a civic intelligence platform for the Town of View Royal, BC. A
 ## Monorepo Structure
 
 ```
-apps/web/          # React Router 7 web app (Cloudflare Workers)
-apps/vimeo-proxy/  # Cloudflare Worker + Puppeteer for Vimeo URL extraction
-src/               # Python ETL pipeline
-sql/               # Database bootstrap (bootstrap.sql)
-tests/             # Python tests (pytest)
+apps/web/              # React Router 7 web app (Cloudflare Workers)
+apps/vimeo-proxy/      # Cloudflare Worker + Puppeteer for Vimeo URL extraction
+apps/pipeline/         # Python ETL pipeline
+  pipeline/            #   Core package (scrapers, ingestion, video, diarization)
+  tests/               #   Python tests (pytest)
+  scripts/             #   One-off maintenance/analysis scripts (gitignored)
+  main.py              #   Pipeline entry point
+sql/                   # Database bootstrap (bootstrap.sql)
 ```
 
 ## Commands
@@ -26,7 +29,7 @@ pnpm deploy           # Build + wrangler deploy
 pnpm typecheck        # React Router typegen + tsc
 ```
 
-### Python Pipeline
+### Python Pipeline (`apps/pipeline/`)
 ```bash
 uv run python main.py                    # Full 5-phase pipeline
 uv run python main.py --target 42        # Single meeting by ID
@@ -36,6 +39,7 @@ uv run python main.py --rediarize        # Re-diarize from cached transcripts
 uv run pytest                            # All tests
 uv run pytest tests/core/test_parser.py -v  # Single test file
 ```
+All pipeline commands run from `apps/pipeline/` (where `pyproject.toml` and `pytest.ini` live).
 
 ## Tech Stack
 
