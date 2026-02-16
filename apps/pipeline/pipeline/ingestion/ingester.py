@@ -1423,7 +1423,6 @@ class MeetingIngester:
                                 "start_time": seg["start_time"],
                                 "end_time": seg["end_time"],
                                 "text_content": seg["text"],
-                                "corrected_text_content": seg["text"],
                                 "attribution_source": "AI_DIARIZATION",
                             }
                         )
@@ -1435,13 +1434,33 @@ class MeetingIngester:
                             f"  Applying {len(corrections)} transcript corrections..."
                         )
                         for row in rows:
-                            current_text = row["corrected_text_content"]
+                            current_text = row["text_content"]
                             for corr in corrections:
                                 orig = corr.get("original_text")
                                 fix = corr.get("corrected_text")
                                 if orig and fix and orig in current_text:
                                     current_text = current_text.replace(orig, fix)
-                            row["corrected_text_content"] = current_text
+                            row["text_content"] = current_text
+
+                    # Consolidate consecutive same-speaker segments
+                    if len(rows) > 1:
+                        consolidated = [rows[0]]
+                        for row in rows[1:]:
+                            prev = consolidated[-1]
+                            if (
+                                row["speaker_name"] == prev["speaker_name"]
+                                and row["person_id"] == prev["person_id"]
+                            ):
+                                prev["text_content"] = prev["text_content"] + " " + row["text_content"]
+                                prev["end_time"] = row["end_time"]
+                            else:
+                                consolidated.append(row)
+                        if len(consolidated) < len(rows):
+                            print(
+                                f"  Consolidated {len(rows)} segments → {len(consolidated)} "
+                                f"({len(rows) - len(consolidated)} merged)"
+                            )
+                            rows = consolidated
 
                     batch_size = 100  # Smaller batches to avoid statement timeout
                     if not dry_run and rows:
@@ -1499,6 +1518,12 @@ class MeetingIngester:
                                 "id", mid
                             ).execute()
 
+                    # Delete key_statements for these items
+                    for iid in item_ids:
+                        self.supabase.table("key_statements").delete().eq(
+                            "agenda_item_id", iid
+                        ).execute()
+
                     # Finally delete agenda items
                     for iid in item_ids:
                         self.supabase.table("agenda_items").delete().eq(
@@ -1549,6 +1574,29 @@ class MeetingIngester:
             if not dry_run:
                 res = self.supabase.table("agenda_items").insert(item_data).execute()
                 agenda_item_id = res.data[0]["id"]
+
+            # Insert Key Statements
+            for ks in item.get("key_statements", []):
+                ks_speaker = ks.get("speaker")
+                ks_person_id = self.get_or_create_person(ks_speaker, dry_run) if ks_speaker else None
+
+                ks_data = {
+                    "meeting_id": meeting_id,
+                    "agenda_item_id": agenda_item_id,
+                    "speaker_name": ks_speaker,
+                    "person_id": ks_person_id,
+                    "statement_type": ks.get("statement_type", "claim"),
+                    "statement_text": ks.get("statement_text", ""),
+                    "context": ks.get("context"),
+                    "start_time": to_seconds(ks.get("timestamp")),
+                    "municipality_id": self.municipality_id,
+                }
+
+                if not dry_run and ks_data["statement_text"]:
+                    try:
+                        self.supabase.table("key_statements").insert(ks_data).execute()
+                    except Exception as e:
+                        print(f"  [!] Error inserting key_statement: {e}")
 
             # Validation for Motion Timestamps
             item_start = item_data.get("discussion_start_time")

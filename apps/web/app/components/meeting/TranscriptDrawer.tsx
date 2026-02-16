@@ -239,7 +239,7 @@ export function TranscriptDrawer({
                     >
                       <HighlightText
                         text={
-                          segment.corrected_text_content || segment.text_content
+                          segment.text_content
                         }
                         query={searchQuery}
                       />

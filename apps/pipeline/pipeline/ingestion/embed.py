@@ -26,17 +26,16 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-EMBEDDING_DIMENSIONS = 768
+EMBEDDING_DIMENSIONS = 384
 
 # Table -> (text_columns, select_columns)
 TABLE_CONFIG = {
-    "transcript_segments": {
-        "select": "id, text_content, corrected_text_content",
-        "text_fn": lambda r: (r[2] or r[1] or "").strip(),
-    },
+    # transcript_segments: embeddings removed in Phase 3c PR 4 (discussion-level embeddings replace these)
+    # "transcript_segments": { ... },
     "agenda_items": {
         "select": "id, title, description",
         "text_fn": lambda r: f"{r[1] or ''}\n{r[2] or ''}".strip(),
+        "custom_fetch_fn": "_fetch_agenda_items_with_discussion",
     },
     "motions": {
         "select": "id, text_content",
@@ -62,13 +61,16 @@ TABLE_CONFIG = {
         "select": "id, title, full_text",
         "text_fn": lambda r: f"{r[1] or ''}\n{r[2] or ''}".strip(),
     },
+    "key_statements": {
+        "select": "id, statement_text, context",
+        "text_fn": lambda r: f"{r[1] or ''}\n{r[2] or ''}".strip(),
+    },
 }
 
 # OpenAI allows up to 2048 inputs per request, but smaller batches are safer
 API_BATCH_SIZE = 128
 DB_BATCH_SIZE = 500  # rows per database update
 DEFAULT_MIN_WORDS = {
-    "transcript_segments": 15,  # skip short procedural utterances
     "agenda_items": 0,
     "motions": 0,
     "matters": 0,
@@ -76,6 +78,7 @@ DEFAULT_MIN_WORDS = {
     "bylaws": 0,
     "bylaw_chunks": 0,
     "documents": 10,
+    "key_statements": 5,
 }
 
 
@@ -150,12 +153,104 @@ def get_db_connection():
     )
 
 
+MAX_EMBED_CHARS = 8000  # text-embedding-3-small handles ~8k tokens; truncate input
+
+
+def _fetch_agenda_items_with_discussion(conn, force: bool = False):
+    """Custom fetch for agenda_items: joins transcript segments to build rich discussion text."""
+    where = "" if force else "WHERE ai.embedding IS NULL"
+    query = f"""
+        SELECT
+            ai.id,
+            ai.title,
+            ai.plain_english_summary,
+            ai.debate_summary,
+            ai.discussion_start_time,
+            ai.discussion_end_time,
+            ai.meeting_id
+        FROM agenda_items ai
+        {where}
+        ORDER BY ai.id
+    """
+    cur = conn.cursor()
+    cur.execute(query)
+    items = cur.fetchall()
+    cur.close()
+
+    if not items:
+        return []
+
+    # Batch-fetch transcript segments for all relevant meetings
+    meeting_ids = list({row[6] for row in items})
+
+    # Build a map: meeting_id -> list of segments
+    segments_by_meeting: dict[int, list] = {}
+    seg_cur = conn.cursor()
+    # Fetch in batches of 50 meetings to avoid huge IN clauses
+    for i in range(0, len(meeting_ids), 50):
+        batch_ids = meeting_ids[i : i + 50]
+        placeholders = ",".join(["%s"] * len(batch_ids))
+        seg_cur.execute(
+            f"""SELECT meeting_id, speaker_name, text_content as text,
+                       start_time, agenda_item_id
+                FROM transcript_segments
+                WHERE meeting_id IN ({placeholders})
+                ORDER BY start_time""",
+            batch_ids,
+        )
+        for seg in seg_cur:
+            segments_by_meeting.setdefault(seg[0], []).append(seg)
+    seg_cur.close()
+
+    # Build (id, text) pairs
+    results = []
+    for row in items:
+        item_id, title, summary, debate, start_t, end_t, meeting_id = row
+
+        parts = []
+        if title:
+            parts.append(title)
+        if summary:
+            parts.append(summary)
+        if debate:
+            parts.append(debate)
+
+        # Find matching transcript segments
+        meeting_segs = segments_by_meeting.get(meeting_id, [])
+        discussion_segs = []
+
+        for seg in meeting_segs:
+            seg_meeting_id, speaker, text, seg_start, seg_item_id = seg
+            # Match by agenda_item_id if available, else by time window
+            if seg_item_id == item_id:
+                discussion_segs.append((speaker, text))
+            elif seg_item_id is None and start_t is not None and end_t is not None:
+                if start_t <= seg_start <= end_t:
+                    discussion_segs.append((speaker, text))
+
+        if discussion_segs:
+            parts.append("---")
+            for speaker, text in discussion_segs:
+                line = f"{speaker or 'Unknown'}: {text}"
+                parts.append(line)
+
+        full_text = "\n".join(parts)
+        # Truncate to avoid exceeding token limits
+        if len(full_text) > MAX_EMBED_CHARS:
+            full_text = full_text[:MAX_EMBED_CHARS]
+
+        results.append((item_id, full_text))
+
+    return results
+
+
 def fetch_rows_needing_embeddings(conn, table: str, force: bool = False):
     """Fetch rows that need embeddings. Uses client-side cursor (pooler-compatible)."""
     config = TABLE_CONFIG[table]
+    embed_col = "embedding_hv" if table == "transcript_segments" else "embedding"
     query = f"SELECT {config['select']} FROM {table}"
     if not force:
-        query += " WHERE embedding IS NULL"
+        query += f" WHERE {embed_col} IS NULL"
     query += " ORDER BY id"
 
     cur = conn.cursor()
@@ -171,10 +266,11 @@ def update_embeddings_batch(conn, table: str, updates: list):
     cur = conn.cursor()
 
     # Create temp table
-    cur.execute("""
+    embedding_col = "embedding_hv" if table == "transcript_segments" else "embedding"
+    cur.execute(f"""
         CREATE TEMP TABLE IF NOT EXISTS _embed_tmp (
             id INTEGER PRIMARY KEY,
-            embedding vector(768)
+            embedding halfvec(384)
         ) ON COMMIT DROP
     """)
     cur.execute("TRUNCATE _embed_tmp")
@@ -191,7 +287,7 @@ def update_embeddings_batch(conn, table: str, updates: list):
     # Bulk update from temp table
     cur.execute(f"""
         UPDATE {table} t
-        SET embedding = e.embedding
+        SET {embedding_col} = e.embedding
         FROM _embed_tmp e
         WHERE t.id = e.id
     """)
@@ -214,10 +310,11 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
     conn = get_db_connection()
 
     # Count rows needing embeddings
+    embed_col = "embedding_hv" if table == "transcript_segments" else "embedding"
     cur = conn.cursor()
     count_query = f"SELECT COUNT(*) FROM {table}"
     if not force:
-        count_query += " WHERE embedding IS NULL"
+        count_query += f" WHERE {embed_col} IS NULL"
     cur.execute(count_query)
     total = cur.fetchone()[0]
     cur.close()
@@ -229,8 +326,19 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
 
     print(f"  {total} rows to process" + (f" (min {min_words} words)" if min_words else ""))
 
-    # Fetch rows
-    row_cursor, text_fn = fetch_rows_needing_embeddings(conn, table, force)
+    # Check for custom fetch function
+    config = TABLE_CONFIG[table]
+    custom_fn_name = config.get("custom_fetch_fn")
+    use_custom = custom_fn_name is not None
+
+    if use_custom:
+        # Custom fetch returns pre-built (id, text) pairs
+        custom_fn = globals()[custom_fn_name]
+        prebuilt_rows = custom_fn(conn, force)
+        print(f"  Custom fetch returned {len(prebuilt_rows)} rows with discussion text")
+    else:
+        # Standard fetch returns a cursor + text_fn
+        row_cursor, text_fn = fetch_rows_needing_embeddings(conn, table, force)
 
     # Process in batches
     batch_ids = []
@@ -240,13 +348,24 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
     db_buffer = []  # accumulate (id, embedding) for DB writes
     start_time = time.time()
 
-    for row in row_cursor:
-        text = text_fn(row)
+    # Build iterator based on fetch mode
+    if use_custom:
+        row_iter = iter(prebuilt_rows)
+    else:
+        row_iter = row_cursor
+
+    for row in row_iter:
+        if use_custom:
+            row_id, text = row
+        else:
+            text = text_fn(row)
+            row_id = row[0]
+
         if not text or (min_words and len(text.split()) < min_words):
             skipped += 1
             continue
 
-        batch_ids.append(row[0])
+        batch_ids.append(row_id)
         batch_texts.append(text)
 
         if len(batch_texts) >= API_BATCH_SIZE:
@@ -282,7 +401,8 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
     if db_buffer:
         update_embeddings_batch(conn, table, db_buffer)
 
-    row_cursor.close()
+    if not use_custom:
+        row_cursor.close()
     conn.close()
 
     elapsed = time.time() - start_time

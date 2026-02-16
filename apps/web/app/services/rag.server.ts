@@ -84,7 +84,6 @@ interface Vote {
 interface TranscriptSegmentRow {
   id: number;
   text_content: string;
-  corrected_text_content?: string;
   speaker_name?: string;
   person_id: number | null;
   start_time: number;
@@ -129,7 +128,6 @@ interface Tool<T extends Record<string, any>, R> {
 interface TranscriptSegment {
   id: number;
   text_content: string;
-  corrected_text_content?: string;
   speaker_name?: string;
   person_id: number | null;
   start_time: number;
@@ -184,7 +182,6 @@ function transformSegmentRow(row: TranscriptSegmentRow): TranscriptSegment {
   return {
     id: row.id,
     text_content: row.text_content,
-    corrected_text_content: row.corrected_text_content,
     speaker_name: row.speaker_name,
     person_id: row.person_id,
     start_time: row.start_time,
@@ -398,7 +395,6 @@ async function get_statements_by_person({
       `
         id,
         text_content,
-        corrected_text_content,
         speaker_name,
         person_id,
         start_time,
@@ -423,9 +419,53 @@ async function get_statements_by_person({
     return `Error: An error occurred while fetching statements for ${person_name}.`;
   }
 
-  return (data || []).map((row: TranscriptSegmentRow) =>
+  const transcriptResults = (data || []).map((row: TranscriptSegmentRow) =>
     transformSegmentRow(row),
   );
+
+  // Also fetch key_statements for this person
+  let ksQuery = getSupabase()
+    .from("key_statements")
+    .select(
+      `
+      id,
+      meeting_id,
+      speaker_name,
+      statement_type,
+      statement_text,
+      context,
+      meetings(meeting_date, type),
+      agenda_items(title)
+    `,
+    )
+    .eq("person_id", person.id);
+
+  if (topic) {
+    ksQuery = ksQuery.textSearch("statement_text", topic);
+  }
+
+  const { data: ksData } = await ksQuery
+    .order("meeting_id", { ascending: false })
+    .limit(20);
+
+  const keyStatements = (ksData || []).map((row: any) => {
+    const meeting = Array.isArray(row.meetings)
+      ? row.meetings[0]
+      : row.meetings;
+    return {
+      type: "key_statement" as const,
+      id: row.id,
+      meeting_id: row.meeting_id,
+      statement_type: row.statement_type,
+      statement_text: row.statement_text,
+      context: row.context,
+      speaker_name: row.speaker_name,
+      meetings: meeting,
+      agenda_items: row.agenda_items,
+    };
+  });
+
+  return { transcript_segments: transcriptResults, key_statements: keyStatements };
 }
 
 /**
@@ -453,24 +493,13 @@ async function search_transcript_segments({
   query: string;
   after_date?: string;
 }): Promise<TranscriptSegment[]> {
-  const embedding = await generateQueryEmbedding(query);
-  if (!embedding) return [];
-
   try {
-    // Fetch more candidates when filtering by date, since many may be filtered out
-    const matchCount = after_date ? 100 : 25;
-    const threshold = 0.5;
-
-    const { data } = await getSupabase().rpc("match_transcript_segments", {
-      query_embedding: embedding,
-      match_threshold: threshold,
-      match_count: matchCount,
-      filter_meeting_id: null,
-    });
-
-    if (!data || data.length === 0) return [];
-
-    const segmentIds = data.map((s: any) => s.id);
+    // Use full-text search on tsvector column (transcript embeddings were removed)
+    const tsQuery = query
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+      .join(" & ");
+    if (!tsQuery) return [];
 
     let enrichQuery = getSupabase()
       .from("transcript_segments")
@@ -478,7 +507,6 @@ async function search_transcript_segments({
         `
         id,
         text_content,
-        corrected_text_content,
         speaker_name,
         person_id,
         start_time,
@@ -487,7 +515,8 @@ async function search_transcript_segments({
         agenda_items(title)
       `,
       )
-      .in("id", segmentIds);
+      .textSearch("text_search", tsQuery)
+      .limit(25);
 
     if (after_date) {
       enrichQuery = enrichQuery.gte("meetings.meeting_date", after_date);
@@ -499,7 +528,7 @@ async function search_transcript_segments({
       transformSegmentRow(row),
     );
 
-    return results.slice(0, 25);
+    return results;
   } catch (error) {
     console.error("Transcript search failed:", error);
     return [];
@@ -638,6 +667,12 @@ async function search_agenda_items({
   after_date?: string;
 }): Promise<any[]> {
   try {
+    // Build full-text search query from input words
+    const tsQuery = query
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+      .join(" & ");
+
     let searchQuery = getSupabase()
       .from("agenda_items")
       .select(
@@ -653,9 +688,7 @@ async function search_agenda_items({
         meetings!inner(meeting_date, type)
       `,
       )
-      .or(
-        `title.ilike.%${query}%,plain_english_summary.ilike.%${query}%,debate_summary.ilike.%${query}%`,
-      )
+      .textSearch("text_search", tsQuery || query)
       .not("category", "eq", "Procedural")
       .order("meeting_id", { ascending: false })
       .limit(20);
@@ -682,6 +715,68 @@ async function search_agenda_items({
     });
   } catch (error) {
     console.error("Agenda item search failed:", error);
+    return [];
+  }
+}
+
+/**
+ * Search key statements (claims, proposals, objections, etc.) using vector similarity
+ */
+async function search_key_statements({
+  query,
+  after_date,
+}: {
+  query: string;
+  after_date?: string;
+}): Promise<any[]> {
+  const embedding = await generateQueryEmbedding(query);
+  if (!embedding) return [];
+
+  try {
+    const { data } = await getSupabase().rpc("match_key_statements", {
+      query_embedding: embedding,
+      match_threshold: 0.5,
+      match_count: after_date ? 50 : 20,
+    });
+
+    if (!data || data.length === 0) return [];
+
+    const statementIds = data.map((s: any) => s.id);
+
+    let enrichQuery = getSupabase()
+      .from("key_statements")
+      .select(
+        `
+        id,
+        meeting_id,
+        agenda_item_id,
+        speaker_name,
+        statement_type,
+        statement_text,
+        context,
+        meetings!inner(meeting_date, type),
+        agenda_items(title)
+      `,
+      )
+      .in("id", statementIds);
+
+    if (after_date) {
+      enrichQuery = enrichQuery.gte("meetings.meeting_date", after_date);
+    }
+
+    const { data: enriched } = await enrichQuery;
+
+    return (enriched || []).map((row: any) => {
+      const meeting = Array.isArray(row.meetings)
+        ? row.meetings[0]
+        : row.meetings;
+      return {
+        ...row,
+        meetings: meeting,
+      };
+    }).slice(0, 20);
+  } catch (error) {
+    console.error("Key statements search failed:", error);
     return [];
   }
 }
@@ -758,6 +853,18 @@ const tools: Tool<any, any>[] = [
     }) => search_agenda_items({ query, after_date }),
   },
   {
+    name: "search_key_statements",
+    description:
+      'search_key_statements(query: string, after_date?: string) — Searches extracted key statements (claims, proposals, objections, recommendations, financial impacts, public input) using semantic search. Returns speaker, statement type, statement text, and context. Best for finding specific claims or positions on a topic, or when you need attributed quotes.',
+    call: async ({
+      query,
+      after_date,
+    }: {
+      query: string;
+      after_date?: string;
+    }) => search_key_statements({ query, after_date }),
+  },
+  {
     name: "get_current_date",
     description:
       "get_current_date() — Returns the current date in YYYY-MM-DD format. Use this as the first step for any question involving a recent timeframe like 'recent', 'latest', 'this year', 'last month', etc.",
@@ -791,7 +898,8 @@ A separate synthesis model will write the final user-facing answer from your gat
 - \`search_matters\` — Best for broad overview questions: "What is council working on?", "What's happening with housing?", "What issues are active?" Matters are high-level topics that span multiple meetings. Can filter by status (Active, Adopted, Completed, Defeated).
 - \`search_agenda_items\` — Best for finding structured summaries of what was discussed at meetings. Returns plain English summaries and debate summaries. Good for "What was discussed about X?" or "What happened at the last meeting about Y?" Uses keyword matching, so use short specific terms.
 - \`search_motions\` — Best for "What decisions has council made about [topic]?" or "Has council voted on [topic]?" Use short, specific queries (e.g. "affordable housing", "tree bylaw", "speed limits").
-- \`search_transcript_segments\` — Best for finding exact quotes and what specific things were said in debate. Use when you need verbatim statements or context around discussions.
+- \`search_key_statements\` — Best for finding specific claims, proposals, objections, and recommendations made during debate. Returns attributed statements with speaker name and type. Use when you need to know who said what about a topic.
+- \`search_transcript_segments\` — Full-text search for transcript segments. Use when you need verbatim quotes or context around discussions.
 - \`get_current_date\` — Call this FIRST if the question contains temporal words like "recent", "latest", "this year", "last month", "past 6 months". Then use the date as after_date on subsequent calls.
 
 **3. Craft good search queries.** The search tools use semantic/vector search. Short, specific phrases work best:
@@ -859,7 +967,7 @@ You will receive a citizen's question and raw evidence gathered from official co
  * Normalize raw tool results into a consistent source shape for the client.
  */
 interface NormalizedSource {
-  type: "transcript" | "motion" | "vote";
+  type: "transcript" | "motion" | "vote" | "key_statement" | "matter" | "agenda_item";
   id: number;
   meeting_id: number;
   meeting_date: string;
@@ -875,7 +983,7 @@ function normalizeTranscriptSources(
     id: s.id,
     meeting_id: s.meeting_id,
     meeting_date: s.meetings?.meeting_date || "Unknown",
-    title: (s.corrected_text_content || s.text_content || "").slice(0, 120),
+    title: (s.text_content || "").slice(0, 120),
     speaker_name: s.speaker_name,
   }));
 }
@@ -889,6 +997,20 @@ function normalizeMotionSources(motions: any[]): NormalizedSource[] {
       meeting_id: meeting?.id || m.meeting_id || 0,
       meeting_date: meeting?.meeting_date || "Unknown",
       title: m.plain_english_summary || (m.text_content || "").slice(0, 120),
+    };
+  });
+}
+
+function normalizeKeyStatementSources(statements: any[]): NormalizedSource[] {
+  return statements.map((s) => {
+    const meeting = Array.isArray(s.meetings) ? s.meetings[0] : s.meetings;
+    return {
+      type: "key_statement" as const,
+      id: s.id,
+      meeting_id: s.meeting_id || 0,
+      meeting_date: meeting?.meeting_date || "Unknown",
+      title: `[${s.statement_type}] ${(s.statement_text || "").slice(0, 100)}`,
+      speaker_name: s.speaker_name,
     };
   });
 }
@@ -1057,6 +1179,8 @@ Respond with a single JSON object. No markdown fences.`;
         allSources.push(...normalizeMatterSources(toolResult));
       } else if (tool_name === "search_agenda_items") {
         allSources.push(...normalizeAgendaItemSources(toolResult));
+      } else if (tool_name === "search_key_statements") {
+        allSources.push(...normalizeKeyStatementSources(toolResult));
       } else {
         const first = toolResult[0];
         if (first.text_content !== undefined) {
@@ -1074,6 +1198,13 @@ Respond with a single JSON object. No markdown fences.`;
           ...normalizeVoteSources(toolResult.opposed_votes || []),
           ...normalizeVoteSources(toolResult.recent_votes || []),
         );
+      }
+      // Handle get_statements_by_person which now returns { transcript_segments, key_statements }
+      if (toolResult.transcript_segments) {
+        allSources.push(...normalizeTranscriptSources(toolResult.transcript_segments));
+      }
+      if (toolResult.key_statements) {
+        allSources.push(...normalizeKeyStatementSources(toolResult.key_statements));
       }
     }
   }

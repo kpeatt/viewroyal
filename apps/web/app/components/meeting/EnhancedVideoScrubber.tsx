@@ -172,7 +172,7 @@ export function EnhancedVideoScrubber({
                     type: "speaker",
                     label: speakerName,
                     detail:
-                      segment.corrected_text_content || segment.text_content,
+                      segment.text_content,
                     time: segment.start_time,
                     x: left + width / 2,
                   })
