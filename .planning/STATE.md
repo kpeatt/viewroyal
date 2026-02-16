@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 1: Schema Foundation
+**Current focus:** Phase 2: Council Member Profiles
 
 ## Current Position
 
-Phase: 1 of 5 (Schema Foundation)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-16 — Completed 01-01-PLAN.md
+Phase: 1 of 5 (Schema Foundation) -- COMPLETE
+Plan: 2 of 2 in current phase (all plans complete)
+Status: Phase Complete
+Last activity: 2026-02-16 — Completed 01-02-PLAN.md
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 2min
-- Total execution time: 0.03 hours
+- Total plans completed: 2
+- Average duration: 3min
+- Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-schema-foundation | 1 | 2min | 2min |
+| 01-schema-foundation | 2 | 6min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 2min
-- Trend: n/a (first plan)
+- Last 5 plans: 2min, 4min
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -48,6 +48,8 @@ Recent decisions affecting current work:
 - [01-01]: Merged PR #35 as-is (conflict-free, pre-verified)
 - [01-01]: Removed fastembed dependency; OpenAI text-embedding-3-small is sole embedding provider
 - [01-01]: Pre-existing workers/app.ts type error is out of scope (deferred)
+- [01-02]: Took PR #37 versions for all conflict sections (nullable speaker, simpler syntax, stricter prompt)
+- [01-02]: Removed duplicate key_statements deletion block from merge overlap
 
 ### Pending Todos
 
@@ -64,5 +66,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 01-01-PLAN.md (Schema Alignment)
-Resume file: .planning/phases/01-schema-foundation/01-01-SUMMARY.md
+Stopped at: Completed 01-02-PLAN.md (Key Statement Prompts) -- Phase 1 complete
+Resume file: .planning/phases/01-schema-foundation/01-02-SUMMARY.md
