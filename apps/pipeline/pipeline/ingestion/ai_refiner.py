@@ -126,6 +126,7 @@ class AgendaItemRecord(BaseModel):
     is_controversial: bool
     debate_summary: str | None
     key_quotes: list[KeyQuote]
+    key_statements: list[KeyStatement] = []
     discussion_start_time: float | None
     discussion_end_time: float | None
     motions: list[MotionRecord]
