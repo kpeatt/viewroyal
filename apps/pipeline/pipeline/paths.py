@@ -23,3 +23,10 @@ def get_report_path(filename):
 def get_archive_path(*args):
     """Returns a path relative to the archive root."""
     return os.path.join(ARCHIVE_ROOT, *args)
+
+
+def get_municipality_archive_root(slug: str) -> str:
+    """Returns archive root for a municipality, e.g. /project/archive/view-royal/"""
+    root = os.path.join(BASE_DIR, "archive", slug)
+    os.makedirs(root, exist_ok=True)
+    return root
