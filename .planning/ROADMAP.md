@@ -12,7 +12,7 @@ This milestone lands four open PRs in strict dependency order, then builds out t
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Schema Foundation** - Fix live bugs, merge embedding migration (#35) and key statement prompts (#37)
+- [x] **Phase 1: Schema Foundation** - Fix live bugs, merge embedding migration (#35) and key statement prompts (#37) (completed 2026-02-16)
 - [ ] **Phase 2: Multi-Tenancy** - Merge PR #36, replace all hardcoded "View Royal" with dynamic municipality context
 - [ ] **Phase 3: Subscriptions & Notifications** - Merge PR #13, land public signup, email delivery, and core subscription features
 - [ ] **Phase 4: Home Page Enhancements** - Surface active matters, recent decisions, and upcoming meetings on home page
@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Embedding dimensions are consistent — web app generates 384-dim vectors matching the database halfvec(384) columns
   3. PR #35 and PR #37 are merged to main with no duplicate or conflicting migrations against the 23 already applied
   4. Key statement extraction produces higher-quality results with improved prompts (verifiable by running pipeline on a test meeting)
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 01-01-PLAN.md — Merge PR #35 (embedding migration), fix dimension mismatch, remove corrected_text_content, add key statement search
@@ -105,7 +105,7 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Schema Foundation | 0/2 | Planned | - |
+| 1. Schema Foundation | 0/2 | Complete    | 2026-02-16 |
 | 2. Multi-Tenancy | 0/? | Not started | - |
 | 3. Subscriptions & Notifications | 0/? | Not started | - |
 | 4. Home Page Enhancements | 0/? | Not started | - |
