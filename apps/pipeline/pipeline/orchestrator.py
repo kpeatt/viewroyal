@@ -7,8 +7,8 @@ from pipeline import config, parser, utils
 from pipeline.paths import ARCHIVE_ROOT
 
 from .local_diarizer import LocalDiarizer
-from .scraper import CivicWebScraper
-from .vimeo import VimeoClient
+from .scrapers.civicweb import CivicWebScraper
+from .video.vimeo import VimeoClient
 
 
 class Archiver:
