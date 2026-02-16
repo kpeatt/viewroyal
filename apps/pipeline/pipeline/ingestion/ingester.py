@@ -1495,6 +1495,12 @@ class MeetingIngester:
                 if existing_items.data:
                     item_ids = [i["id"] for i in existing_items.data]
 
+                    # Delete key_statements for these items
+                    for iid in item_ids:
+                        self.supabase.table("key_statements").delete().eq(
+                            "agenda_item_id", iid
+                        ).execute()
+
                     # Get all motions for these items
                     existing_motions = (
                         self.supabase.table("motions")
@@ -1517,12 +1523,6 @@ class MeetingIngester:
                             self.supabase.table("motions").delete().eq(
                                 "id", mid
                             ).execute()
-
-                    # Delete key_statements for these items
-                    for iid in item_ids:
-                        self.supabase.table("key_statements").delete().eq(
-                            "agenda_item_id", iid
-                        ).execute()
 
                     # Finally delete agenda items
                     for iid in item_ids:
@@ -1575,28 +1575,27 @@ class MeetingIngester:
                 res = self.supabase.table("agenda_items").insert(item_data).execute()
                 agenda_item_id = res.data[0]["id"]
 
-            # Insert Key Statements
+            # Key Statements
             for ks in item.get("key_statements", []):
-                ks_speaker = ks.get("speaker")
-                ks_person_id = self.get_or_create_person(ks_speaker, dry_run) if ks_speaker else None
-
+                speaker_name = ks.get("speaker")
+                person_id = (
+                    self.get_or_create_person(speaker_name, dry_run)
+                    if speaker_name
+                    else None
+                )
                 ks_data = {
                     "meeting_id": meeting_id,
                     "agenda_item_id": agenda_item_id,
-                    "speaker_name": ks_speaker,
-                    "person_id": ks_person_id,
-                    "statement_type": ks.get("statement_type", "claim"),
-                    "statement_text": ks.get("statement_text", ""),
+                    "speaker_name": speaker_name,
+                    "person_id": person_id,
+                    "statement_type": ks.get("statement_type"),
+                    "statement_text": ks.get("statement_text"),
                     "context": ks.get("context"),
                     "start_time": to_seconds(ks.get("timestamp")),
                     "municipality_id": self.municipality_id,
                 }
-
-                if not dry_run and ks_data["statement_text"]:
-                    try:
-                        self.supabase.table("key_statements").insert(ks_data).execute()
-                    except Exception as e:
-                        print(f"  [!] Error inserting key_statement: {e}")
+                if not dry_run:
+                    self.supabase.table("key_statements").insert(ks_data).execute()
 
             # Validation for Motion Timestamps
             item_start = item_data.get("discussion_start_time")
