@@ -1,10 +1,9 @@
 """
-Bulk embedding generation using OpenAI text-embedding-3-small (768-dim).
+Bulk embedding generation using OpenAI text-embedding-3-small (384-dim halfvec).
 Writes embeddings directly to Supabase via psycopg2 COPY.
 
 Usage:
     uv run python src/pipeline/embed_local.py --table all
-    uv run python src/pipeline/embed_local.py --table transcript_segments
     uv run python src/pipeline/embed_local.py --table agenda_items --force
 """
 
@@ -247,10 +246,9 @@ def _fetch_agenda_items_with_discussion(conn, force: bool = False):
 def fetch_rows_needing_embeddings(conn, table: str, force: bool = False):
     """Fetch rows that need embeddings. Uses client-side cursor (pooler-compatible)."""
     config = TABLE_CONFIG[table]
-    embed_col = "embedding_hv" if table == "transcript_segments" else "embedding"
     query = f"SELECT {config['select']} FROM {table}"
     if not force:
-        query += f" WHERE {embed_col} IS NULL"
+        query += " WHERE embedding IS NULL"
     query += " ORDER BY id"
 
     cur = conn.cursor()
@@ -266,7 +264,6 @@ def update_embeddings_batch(conn, table: str, updates: list):
     cur = conn.cursor()
 
     # Create temp table
-    embedding_col = "embedding_hv" if table == "transcript_segments" else "embedding"
     cur.execute(f"""
         CREATE TEMP TABLE IF NOT EXISTS _embed_tmp (
             id INTEGER PRIMARY KEY,
@@ -287,7 +284,7 @@ def update_embeddings_batch(conn, table: str, updates: list):
     # Bulk update from temp table
     cur.execute(f"""
         UPDATE {table} t
-        SET {embedding_col} = e.embedding
+        SET embedding = e.embedding
         FROM _embed_tmp e
         WHERE t.id = e.id
     """)
@@ -310,11 +307,10 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
     conn = get_db_connection()
 
     # Count rows needing embeddings
-    embed_col = "embedding_hv" if table == "transcript_segments" else "embedding"
     cur = conn.cursor()
     count_query = f"SELECT COUNT(*) FROM {table}"
     if not force:
-        count_query += f" WHERE {embed_col} IS NULL"
+        count_query += " WHERE embedding IS NULL"
     cur.execute(count_query)
     total = cur.fetchone()[0]
     cur.close()
@@ -414,7 +410,7 @@ def main():
     parser.add_argument(
         "--table",
         default="all",
-        help="Table to embed (transcript_segments, motions, agenda_items, matters, meetings, or all)",
+        help="Table to embed (agenda_items, motions, matters, meetings, bylaws, bylaw_chunks, documents, key_statements, or all)",
     )
     parser.add_argument(
         "--force",
@@ -425,7 +421,7 @@ def main():
         "--min-words",
         type=int,
         default=None,
-        help="Skip rows with fewer words (default: 15 for transcript_segments, 0 for others)",
+        help="Skip rows with fewer words (default varies by table, e.g. 10 for documents)",
     )
     args = parser.parse_args()
 
