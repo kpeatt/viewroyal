@@ -293,11 +293,16 @@ class Archiver:
                             agenda_text = f.read()
                     else:
                         agenda_folder = os.path.join(meeting_root, "Agenda")
-                        pdf_files = glob.glob(
+                        pdf_files = sorted(glob.glob(
                             os.path.join(agenda_folder, "*.pdf")
-                        )
+                        ))
                         if pdf_files:
-                            agenda_text = parser.get_pdf_text(pdf_files[0])
+                            all_texts = []
+                            for pdf_file in pdf_files:
+                                text = parser.get_pdf_text(pdf_file)
+                                if text.strip():
+                                    all_texts.append(text)
+                            agenda_text = "\n\n---\n\n".join(all_texts)
 
                     minutes_text = ""
                     cached_minutes = os.path.join(meeting_root, "minutes.md")
@@ -306,11 +311,16 @@ class Archiver:
                             minutes_text = f.read()
                     else:
                         minutes_folder = os.path.join(meeting_root, "Minutes")
-                        pdf_files = glob.glob(
+                        pdf_files = sorted(glob.glob(
                             os.path.join(minutes_folder, "*.pdf")
-                        )
+                        ))
                         if pdf_files:
-                            minutes_text = parser.get_pdf_text(pdf_files[0])
+                            all_texts = []
+                            for pdf_file in pdf_files:
+                                text = parser.get_pdf_text(pdf_file)
+                                if text.strip():
+                                    all_texts.append(text)
+                            minutes_text = "\n\n---\n\n".join(all_texts)
 
                     if agenda_text:
                         context_str += agenda_text

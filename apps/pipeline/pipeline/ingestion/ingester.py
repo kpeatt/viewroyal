@@ -1,4 +1,5 @@
 import glob
+import hashlib
 import json
 import os
 import re
@@ -341,13 +342,16 @@ class MeetingIngester:
         else:
             # Fall back to PDF extraction
             agenda_folder = os.path.join(source_folder, "Agenda")
-            pdf_files = glob.glob(os.path.join(agenda_folder, "*.pdf"))
+            pdf_files = sorted(glob.glob(os.path.join(agenda_folder, "*.pdf")))
             if pdf_files:
-                agenda_text = parser.get_pdf_text(pdf_files[0])
-
-                # PyMuPDF failed (scanned image PDF) — try Marker OCR
-                if len(agenda_text.strip()) < 100:
-                    agenda_text = parser.get_pdf_text_ocr(pdf_files[0])
+                all_texts = []
+                for pdf_file in pdf_files:
+                    text = parser.get_pdf_text(pdf_file)
+                    if len(text.strip()) < 100:
+                        text = parser.get_pdf_text_ocr(pdf_file)
+                    if text.strip():
+                        all_texts.append(text)
+                agenda_text = "\n\n---\n\n".join(all_texts)
 
             if not agenda_text or len(agenda_text.strip()) < 100:
                 print(f"  [Fallback] Trying HTML for Agenda...")
@@ -370,13 +374,16 @@ class MeetingIngester:
         else:
             # Fall back to PDF extraction
             minutes_folder = os.path.join(folder_path, "Minutes")
-            pdf_files = glob.glob(os.path.join(minutes_folder, "*.pdf"))
+            pdf_files = sorted(glob.glob(os.path.join(minutes_folder, "*.pdf")))
             if pdf_files:
-                minutes_text = parser.get_pdf_text(pdf_files[0])
-
-                # PyMuPDF failed (scanned image PDF) — try Marker OCR
-                if len(minutes_text.strip()) < 100:
-                    minutes_text = parser.get_pdf_text_ocr(pdf_files[0])
+                all_texts = []
+                for pdf_file in pdf_files:
+                    text = parser.get_pdf_text(pdf_file)
+                    if len(text.strip()) < 100:
+                        text = parser.get_pdf_text_ocr(pdf_file)
+                    if text.strip():
+                        all_texts.append(text)
+                minutes_text = "\n\n---\n\n".join(all_texts)
 
             if not minutes_text or len(minutes_text.strip()) < 100:
                 print(f"  [Fallback] Trying HTML for Minutes...")
@@ -548,6 +555,103 @@ class MeetingIngester:
         # Fallback: return as-is if marker not found
         return folder_path
 
+    def _classify_document(self, filename):
+        """Classify a document by filename keywords."""
+        lower = filename.lower()
+        if "addend" in lower:
+            return "Addendum"
+        if "late" in lower and "item" in lower:
+            return "Late Items"
+        if "supplementa" in lower or "supplement" in lower:
+            return "Supplementary"
+        if "report" in lower:
+            return "Report"
+        if "agenda" in lower:
+            return "Agenda"
+        if "minute" in lower:
+            return "Minutes"
+        return "Other"
+
+    def _ingest_documents(self, meeting_id, folder_path, dry_run=False):
+        """Ingest PDF documents from Agenda/ and Minutes/ subfolders into the documents table."""
+        import fitz  # PyMuPDF
+
+        doc_count = 0
+
+        for subfolder_name in ["Agenda", "Minutes"]:
+            subfolder = os.path.join(folder_path, subfolder_name)
+            if not os.path.isdir(subfolder):
+                continue
+
+            pdf_files = sorted(glob.glob(os.path.join(subfolder, "*.pdf")))
+            for pdf_path in pdf_files:
+                filename = os.path.basename(pdf_path)
+                rel_path = os.path.relpath(pdf_path, folder_path)
+
+                # Extract text (with OCR fallback)
+                full_text = parser.get_pdf_text(pdf_path)
+                if len(full_text.strip()) < 100:
+                    full_text = parser.get_pdf_text_ocr(pdf_path)
+
+                # Page count via PyMuPDF
+                try:
+                    doc = fitz.open(pdf_path)
+                    page_count = len(doc)
+                    doc.close()
+                except Exception:
+                    page_count = None
+
+                # SHA256 hash
+                sha256 = hashlib.sha256()
+                with open(pdf_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        sha256.update(chunk)
+                file_hash = sha256.hexdigest()
+
+                # Source URL from companion .url file
+                source_url = None
+                url_file = f"{pdf_path}.url"
+                if os.path.exists(url_file):
+                    try:
+                        with open(url_file, "r", encoding="utf-8") as f:
+                            source_url = f.read().strip() or None
+                    except Exception:
+                        pass
+
+                # Classify
+                category = self._classify_document(filename)
+
+                # Title from filename (strip extension)
+                title = os.path.splitext(filename)[0]
+
+                doc_data = {
+                    "meeting_id": meeting_id,
+                    "title": title,
+                    "category": category,
+                    "source_url": source_url,
+                    "file_path": rel_path,
+                    "file_hash": file_hash,
+                    "full_text": full_text.strip() if full_text else None,
+                    "page_count": page_count,
+                    "municipality_id": self.municipality_id,
+                }
+
+                if dry_run:
+                    print(f"  [Dry Run] Document: {rel_path} ({category}, {page_count} pages)")
+                else:
+                    try:
+                        self.supabase.table("documents").upsert(
+                            doc_data, on_conflict="meeting_id,file_path"
+                        ).execute()
+                        doc_count += 1
+                    except Exception as e:
+                        print(f"  [!] Error ingesting document {rel_path}: {e}")
+
+        if doc_count > 0:
+            print(f"  [+] Ingested {doc_count} documents")
+
+        return doc_count
+
     def process_meeting(
         self,
         folder_path,
@@ -689,6 +793,9 @@ class MeetingIngester:
         else:
             print(f"  [Dry Run] Meeting Data: {meeting_data}")
 
+        # 1b. Ingest PDF documents into documents table
+        self._ingest_documents(meeting_id, folder_path, dry_run)
+
         # 2. Extract Raw Texts & Refine
         agenda_text, minutes_text, transcript_text = self.get_raw_texts(
             folder_path, skip_cache=force_refine
@@ -714,24 +821,6 @@ class MeetingIngester:
                 parser.parse_minutes_into_blocks(agenda_text)
             )
         )
-
-        # Truncate Agenda to "Skeleton" (remove attachments) if possible
-        # Look for the first "Termination" or "Adjournment" item
-        termination_match = re.search(
-            r"(\d{1,2}\.?\s*(?:TERMINATION|ADJOURNMENT|RISE AND REPORT|CLOSURE))",
-            agenda_md,
-            re.IGNORECASE,
-        )
-        if termination_match:
-            # Keep a small buffer after the match
-            cutoff = termination_match.end() + 200
-            if cutoff < len(agenda_md):
-                print(
-                    f"  [i] Truncating Agenda from {len(agenda_md)} to {cutoff} chars (Skeleton only)."
-                )
-                agenda_md = agenda_md[:cutoff]
-                # Also update agenda_text so the AI sees the truncated version
-                agenda_text = agenda_md
 
         # Calculate Ingestion Flags (before saving md files, so we can gate on them)
         has_agenda = len(agenda_text.strip()) > 100
