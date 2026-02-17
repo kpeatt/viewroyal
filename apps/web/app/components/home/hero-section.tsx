@@ -12,7 +12,7 @@ export function HeroSection({ shortName, user }: HeroSectionProps) {
     <div className="relative bg-gradient-to-b from-blue-600 to-blue-700 text-white overflow-hidden">
       {/* Decorative map background */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <ViewRoyalMap className="w-[800px] h-[600px] text-white opacity-[0.07]" />
+        <ViewRoyalMap className="w-[900px] h-[700px] opacity-40" />
       </div>
 
       <div className="relative container mx-auto px-4 py-12 md:py-16 max-w-5xl">
