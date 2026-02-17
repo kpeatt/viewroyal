@@ -1,5 +1,8 @@
 import type { Route } from "./+types/meeting-detail";
-import { getMeetingById } from "../services/meetings";
+import {
+  getMeetingById,
+  getDocumentSectionsForMeeting,
+} from "../services/meetings";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import type {
   Meeting,
@@ -131,9 +134,12 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const data = await getMeetingById(supabase, id);
+    const [data, documentSections] = await Promise.all([
+      getMeetingById(supabase, id),
+      getDocumentSectionsForMeeting(supabase, id),
+    ]);
 
-    return data;
+    return { ...data, documentSections };
   } catch (error: any) {
     console.error("[meeting-detail loader]", error?.message || error);
     if (error.message === "Meeting Not Found") {
@@ -157,6 +163,7 @@ export default function MeetingDetail({ loaderData }: any) {
     attendance: rawAttendance,
     people,
     activeCouncilMemberIds,
+    documentSections,
   } = loaderData;
 
   // Hydrate data from normalized people map
@@ -584,6 +591,7 @@ export default function MeetingDetail({ loaderData }: any) {
             {activeTab === "agenda" && (
               <AgendaOverview
                 items={agendaItems}
+                documentSections={documentSections}
                 expandedItemId={expandedAgendaItemId}
                 onItemClick={handleAgendaItemClick}
                 onWatchVideo={(startTime, itemId) => {
