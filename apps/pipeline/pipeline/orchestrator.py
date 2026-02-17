@@ -433,16 +433,20 @@ class Archiver:
                 print(f"  [!] Embedding failed for {table}: {e}")
 
     def backfill_document_sections(self, force=False):
-        """Backfill document_sections for all existing documents.
+        """Backfill extracted documents and sections for all existing documents.
 
-        Two-pass approach per user decision:
-        Pass 1 (this method): Create sections for all documents
+        Uses Gemini 2.5 Flash for boundary detection + content extraction.
+        Falls back to PyMuPDF chunker if Gemini fails.
+
+        Two-pass approach:
+        Pass 1 (this method): Extract and create sections for all documents
         Pass 2 (called separately): _embed_new_content() generates embeddings
 
-        Idempotent: skips documents that already have sections unless force=True.
-        Parse errors: logs and skips, continues with remaining documents.
+        Idempotent: skips documents that already have extracted_documents unless force=True.
         """
-        from pipeline.ingestion.document_chunker import chunk_document, link_sections_to_agenda_items
+        import time as _time
+
+        from pipeline.ingestion.document_extractor import extract_and_store_documents
 
         supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
         if not config.SUPABASE_URL or not supabase_key:
@@ -451,6 +455,24 @@ class Archiver:
 
         supabase = create_client(config.SUPABASE_URL, supabase_key)
         municipality_id = self.municipality.id if self.municipality else 1
+
+        # If force, delete ALL existing extraction data to start fresh
+        if force:
+            print("  [!] Force mode: deleting all extracted_documents, document_images, and document_sections...")
+            try:
+                # document_images has CASCADE from extracted_documents, so deleting
+                # extracted_documents handles images. document_sections with
+                # extracted_document_id will have that FK set to NULL via CASCADE.
+                # We also delete document_sections explicitly for a clean slate.
+                supabase.table("document_sections").delete().eq(
+                    "municipality_id", municipality_id
+                ).execute()
+                supabase.table("extracted_documents").delete().eq(
+                    "municipality_id", municipality_id
+                ).execute()
+                print("  [+] Cleared existing extraction data")
+            except Exception as e:
+                print(f"  [!] Error clearing data: {e}")
 
         # Fetch all documents with file paths
         result = supabase.table("documents").select(
@@ -478,20 +500,17 @@ class Archiver:
                 skipped += 1
                 continue
 
-            # Check idempotency (skip if sections exist, unless force)
+            # Check idempotency on extracted_documents table (not document_sections)
             if not force:
-                existing = supabase.table("document_sections").select(
-                    "id", count="exact"
-                ).eq("document_id", doc_id).execute()
-                if existing.count and existing.count > 0:
-                    skipped += 1
-                    continue
-
-            # If force, delete existing sections first
-            if force:
-                supabase.table("document_sections").delete().eq(
-                    "document_id", doc_id
-                ).execute()
+                try:
+                    existing = supabase.table("extracted_documents").select(
+                        "id", count="exact"
+                    ).eq("document_id", doc_id).execute()
+                    if existing.count and existing.count > 0:
+                        skipped += 1
+                        continue
+                except Exception:
+                    pass  # Table might not exist; proceed
 
             # Resolve full PDF path
             meeting_result = supabase.table("meetings").select(
@@ -505,7 +524,6 @@ class Archiver:
 
             archive_path = meeting_result.data["archive_path"]
             if not os.path.isabs(archive_path):
-                # DB stores paths relative to project root (e.g. "viewroyal_archive/...")
                 archive_path = os.path.join(BASE_DIR, archive_path)
 
             pdf_path = os.path.join(archive_path, file_path)
@@ -514,48 +532,24 @@ class Archiver:
                 skipped += 1
                 continue
 
-            # Chunk the document
+            # Extract using new Gemini pipeline (with automatic fallback)
             try:
-                sections = chunk_document(pdf_path, title)
-            except Exception as e:
-                print(f"  [!] Error chunking {title}: {e}")
-                errors += 1
-                continue
-
-            if not sections:
-                skipped += 1
-                continue
-
-            # Link to agenda items
-            try:
-                sections = link_sections_to_agenda_items(sections, meeting_id, supabase)
-            except Exception as e:
-                print(f"  [!] Error linking sections for {title}: {e}")
-                # Continue without links — sections are still valuable
-
-            # Insert sections
-            try:
-                rows = []
-                for s in sections:
-                    rows.append({
-                        "document_id": doc_id,
-                        "agenda_item_id": s.get("agenda_item_id"),
-                        "section_title": s.get("section_title"),
-                        "section_text": s["section_text"],
-                        "section_order": s["section_order"],
-                        "page_start": s.get("page_start"),
-                        "page_end": s.get("page_end"),
-                        "token_count": s.get("token_count"),
-                        "municipality_id": municipality_id,
-                    })
-                supabase.table("document_sections").insert(rows).execute()
+                stats = extract_and_store_documents(
+                    pdf_path, doc_id, meeting_id, supabase, municipality_id
+                )
                 processed += 1
-                print(f"  [+] {title}: {len(sections)} sections")
+                print(
+                    f"  [+] {title}: {stats['boundaries_found']} boundaries, "
+                    f"{stats['sections_created']} sections, {stats['images_extracted']} images"
+                )
             except Exception as e:
-                print(f"  [!] Error inserting sections for {title}: {e}")
+                print(f"  [!] Error extracting {title}: {e}")
                 errors += 1
 
-        print(f"\n  Backfill complete: {processed} documents sectioned, {skipped} skipped, {errors} errors")
+            # Rate limit: small delay between documents to respect Gemini limits
+            _time.sleep(1)
+
+        print(f"\n  Backfill complete: {processed} documents extracted, {skipped} skipped, {errors} errors")
 
     def _resolve_target(self, target: str) -> str:
         """Resolve a --target value to a folder path. Accepts DB ID or path."""
