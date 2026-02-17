@@ -15,7 +15,7 @@ from pipeline import utils
 from pipeline.alignment import align_meeting_items
 from pipeline.names import CANONICAL_NAMES
 from pipeline.ingestion.ai_refiner import refine_meeting_data
-from pipeline.ingestion.document_chunker import chunk_document, link_sections_to_agenda_items
+# document_chunker kept as fallback — imported dynamically in document_extractor.py
 from pipeline.ingestion.matter_matching import MatterMatcher
 from pipeline.video.vimeo import VimeoClient
 
@@ -767,12 +767,19 @@ class MeetingIngester:
         return doc_count
 
     def _ingest_document_sections(self, meeting_id, folder_path):
-        """Chunk PDF documents into sections and insert into document_sections table.
+        """Extract documents from PDFs using Gemini + PyMuPDF pipeline.
 
-        Called after _ingest_documents(). For each document with a file_path,
-        runs heading-based chunking, links sections to agenda items, and inserts.
-        Skips documents that already have sections (idempotency).
+        For each document with a file_path (agenda PDFs), runs:
+        1. Gemini boundary detection (document boundaries, types, agenda links)
+        2. Gemini content extraction (markdown per document)
+        3. PyMuPDF image extraction + R2 upload
+        4. Section splitting and insertion
+
+        Falls back to PyMuPDF font-analysis chunker if Gemini fails.
+        Skips documents that already have extracted_documents (idempotency).
         """
+        from pipeline.ingestion.document_extractor import extract_and_store_documents
+
         # Fetch documents for this meeting
         try:
             docs_result = (
@@ -782,7 +789,7 @@ class MeetingIngester:
                 .execute()
             )
         except Exception as e:
-            print(f"  [!] Error fetching documents for sectioning: {e}")
+            print(f"  [!] Error fetching documents for extraction: {e}")
             return
 
         if not docs_result.data:
@@ -795,10 +802,10 @@ class MeetingIngester:
             doc_id = doc["id"]
             doc_title = doc.get("title") or "Untitled"
 
-            # Check if document already has sections (idempotency)
+            # Check idempotency: skip if extracted_documents already exist
             try:
                 existing = (
-                    self.supabase.table("document_sections")
+                    self.supabase.table("extracted_documents")
                     .select("id", count="exact")
                     .eq("document_id", doc_id)
                     .execute()
@@ -813,45 +820,17 @@ class MeetingIngester:
             if not os.path.exists(pdf_path):
                 continue
 
-            # Chunk the document
+            # Extract documents using new Gemini pipeline (with fallback)
             try:
-                sections = chunk_document(pdf_path, doc_title)
+                stats = extract_and_store_documents(
+                    pdf_path, doc_id, meeting_id, self.supabase, self.municipality_id
+                )
+                print(
+                    f"  [+] Extracted {doc_title}: {stats['boundaries_found']} boundaries, "
+                    f"{stats['sections_created']} sections, {stats['images_extracted']} images"
+                )
             except Exception as e:
-                print(f"  [!] Error chunking {doc_title}: {e}")
-                continue
-
-            if not sections:
-                continue
-
-            # Link sections to agenda items
-            sections = link_sections_to_agenda_items(
-                sections, meeting_id, self.supabase
-            )
-
-            # Insert sections
-            rows = []
-            for section in sections:
-                rows.append({
-                    "document_id": doc_id,
-                    "agenda_item_id": section.get("agenda_item_id"),
-                    "section_title": section.get("section_title"),
-                    "section_text": section["section_text"],
-                    "section_order": section["section_order"],
-                    "page_start": section.get("page_start"),
-                    "page_end": section.get("page_end"),
-                    "token_count": section.get("token_count"),
-                    "municipality_id": self.municipality_id,
-                })
-
-            try:
-                # Insert in batches of 50 to avoid payload size limits
-                batch_size = 50
-                for i in range(0, len(rows), batch_size):
-                    batch = rows[i : i + batch_size]
-                    self.supabase.table("document_sections").insert(batch).execute()
-                print(f"  [+] Chunked {doc_title}: {len(sections)} sections")
-            except Exception as e:
-                print(f"  [!] Error inserting sections for {doc_title}: {e}")
+                print(f"  [!] Error extracting {doc_title}: {e}")
 
     def process_meeting(
         self,
