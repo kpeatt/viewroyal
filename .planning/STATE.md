@@ -2,16 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-17)
+See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Planning next milestone
+**Current focus:** v1.1 Deep Intelligence — defining requirements
 
 ## Current Position
 
-Milestone: v1.0 Land & Launch — SHIPPED 2026-02-17
-Status: Milestone complete
-Last activity: 2026-02-17 — v1.0 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-16 — Milestone v1.1 started
 
 ## Performance Metrics
 
@@ -46,9 +47,10 @@ None.
 
 - bootstrap.sql is out of date with 23+ applied migrations — technical debt to track
 - Email delivery requires external Resend configuration (documented in Phase 3 Plan 02)
+- `document_sections` table listed as validated in PROJECT.md but doesn't actually exist in schema — needs creation in v1.1
 
 ## Session Continuity
 
-Last session: 2026-02-17
-Stopped at: v1.0 milestone completed and archived
-Next action: `/gsd:new-milestone` to define v1.1 scope
+Last session: 2026-02-16
+Stopped at: Defining v1.1 requirements
+Next action: Complete requirements definition and roadmap creation
