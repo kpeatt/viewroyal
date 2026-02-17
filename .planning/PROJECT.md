@@ -47,15 +47,20 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(Empty — next milestone not yet scoped. Use `/gsd:new-milestone` to define.)
+## Current Milestone: v1.1 Deep Intelligence
+
+**Goal:** Deepen the platform's intelligence layer — chunk and embed documents for granular search, upgrade RAG with hybrid search and conversation memory, and build comprehensive council member profiles.
+
+**Target features:**
+- PDF document sectioning with per-section embeddings (agendas, addendums, supplementary schedules)
+- RAG enhancements: hybrid search, conversation memory, document sections as sources
+- Council member profiling: AI stance summaries, voting pattern analysis, activity/engagement metrics
 
 ### Out of Scope
 
-- Document viewer with official-document styling — next milestone candidate
-- Public API with OCD-compliant endpoints — next milestone candidate
-- RAG enhancements (hybrid search, conversation memory) — next milestone candidate
-- Council member profiling (AI-synthesized positions, effectiveness stats) — next milestone candidate
-- Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — next milestone candidate
+- Document viewer with official-document styling — future milestone candidate
+- Public API with OCD-compliant endpoints — future milestone candidate
+- Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — future milestone candidate
 - Second town onboarding (Esquimalt, RDOS) — deferred until v1.0 is stable in production
 - Push notifications / native app — overkill for current user base size
 - Social features (comments, reactions, forums) — undermines official record credibility
@@ -106,4 +111,4 @@ Tech stack: React Router 7, Cloudflare Workers, Supabase PostgreSQL + pgvector, 
 | Phase 6 gap closure from audit | Systematic requirement verification before shipping | ✓ Good — all gaps closed |
 
 ---
-*Last updated: 2026-02-17 after v1.0 milestone*
+*Last updated: 2026-02-16 after v1.1 milestone start*
