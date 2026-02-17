@@ -468,6 +468,37 @@ def _split_text_at_paragraphs(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
+def _normalize_for_matching(text: str) -> str:
+    """Normalize text for fuzzy matching: lowercase, strip punctuation, collapse whitespace."""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s]", " ", text)  # Replace punctuation with spaces
+    text = re.sub(r"\s+", " ", text).strip()  # Collapse whitespace
+    return text
+
+
+def _find_longest_common_word_sequence(text_a: str, text_b: str) -> int:
+    """
+    Find the length of the longest sequence of consecutive words from text_a
+    that appears in text_b.
+
+    Returns the character length of the longest matching word sequence.
+    """
+    words_a = text_a.split()
+    words_b_str = " " + text_b + " "  # Pad for word boundary matching
+
+    best_len = 0
+    for start in range(len(words_a)):
+        for end in range(start + 3, len(words_a) + 1):  # Minimum 3 words
+            candidate = " ".join(words_a[start:end])
+            if " " + candidate + " " in " " + words_b_str + " ":
+                if len(candidate) > best_len:
+                    best_len = len(candidate)
+            else:
+                break  # No point extending if shorter sequence doesn't match
+
+    return best_len
+
+
 def link_sections_to_agenda_items(
     sections: list[dict], meeting_id: int, supabase
 ) -> list[dict]:
@@ -480,6 +511,13 @@ def link_sections_to_agenda_items(
     Strategy 2 (title matching): If no number match, compare section_title against
     agenda_item.title using case-insensitive containment. Requires title length > 10
     chars to avoid false positives.
+
+    Strategy 3 (fuzzy title matching): For unlinked sections, find 3+ consecutive
+    words from section_title that match an agenda_item.title (or vice versa).
+    Requires 15+ char matching sequence to avoid false positives.
+
+    After linking, a deduplication pass limits over-linked agenda items (>10 sections)
+    to only their first 3 matches.
 
     Sets agenda_item_id on the section dict if a match is found.
     """
@@ -511,6 +549,12 @@ def link_sections_to_agenda_items(
             normalized = ai["item_order"].strip().rstrip(".")
             order_map[normalized] = ai["id"]
 
+    # Pre-compute normalized agenda item titles for fuzzy matching
+    normalized_ai_titles = []
+    for ai in agenda_items:
+        ai_title = ai.get("title") or ""
+        normalized_ai_titles.append(_normalize_for_matching(ai_title))
+
     # Number pattern: extract leading number like "8.1" from "8.1 Staff Report"
     number_pattern = re.compile(r"^(\d+(?:\.\d+)*)")
 
@@ -530,12 +574,88 @@ def link_sections_to_agenda_items(
         # Strategy 2: Title containment matching (only for longer titles)
         if len(title) > 10:
             title_lower = title.lower().strip()
+            matched = False
             for ai in agenda_items:
                 ai_title = (ai.get("title") or "").lower().strip()
                 if len(ai_title) > 10 and (
                     title_lower in ai_title or ai_title in title_lower
                 ):
                     section["agenda_item_id"] = ai["id"]
+                    matched = True
                     break
+            if matched:
+                continue
+
+        # Strategy 3: Fuzzy title matching (3+ consecutive words, 15+ chars)
+        if len(title) > 10:
+            norm_section = _normalize_for_matching(title)
+            best_match_id = None
+            best_match_len = 0
+
+            for i, ai in enumerate(agenda_items):
+                norm_ai = normalized_ai_titles[i]
+                if not norm_ai or len(norm_ai) < 10:
+                    continue
+
+                # Check both directions: section title words in AI title, and vice versa
+                match_len = max(
+                    _find_longest_common_word_sequence(norm_section, norm_ai),
+                    _find_longest_common_word_sequence(norm_ai, norm_section),
+                )
+
+                if match_len >= 15 and match_len > best_match_len:
+                    best_match_len = match_len
+                    best_match_id = ai["id"]
+
+            if best_match_id:
+                section["agenda_item_id"] = best_match_id
+                continue
+
+        # Strategy 3b: Fuzzy match against start of section TEXT (first 300 chars)
+        # Catches cases where section title is generic but text body mentions the agenda item
+        section_text = section.get("section_text") or ""
+        if len(section_text) > 50:
+            norm_text_start = _normalize_for_matching(section_text[:300])
+            best_match_id = None
+            best_match_len = 0
+
+            for i, ai in enumerate(agenda_items):
+                norm_ai = normalized_ai_titles[i]
+                if not norm_ai or len(norm_ai) < 15:
+                    continue
+
+                match_len = _find_longest_common_word_sequence(norm_ai, norm_text_start)
+
+                if match_len >= 20 and match_len > best_match_len:
+                    best_match_len = match_len
+                    best_match_id = ai["id"]
+
+            if best_match_id:
+                section["agenda_item_id"] = best_match_id
+
+    # Deduplication pass: if an agenda_item_id is linked to >10 sections,
+    # it's likely a false positive from a generic parent heading.
+    # Keep only the first 3 matches.
+    link_counts = Counter()
+    for section in sections:
+        aid = section.get("agenda_item_id")
+        if aid:
+            link_counts[aid] += 1
+
+    over_linked = {aid for aid, count in link_counts.items() if count > 10}
+    if over_linked:
+        logger.info("Deduplicating over-linked agenda items: %s", over_linked)
+        seen_counts = Counter()
+        for section in sections:
+            aid = section.get("agenda_item_id")
+            if aid in over_linked:
+                seen_counts[aid] += 1
+                if seen_counts[aid] > 3:
+                    section["agenda_item_id"] = None
+
+    # TODO: Strategy 4 (positional/sequential): For agenda packages, use document
+    # structure position (page order) to link staff reports to nearby agenda items.
+    # This would use the table of contents page numbers and section positions to
+    # infer which agenda item a staff report belongs to. Not implemented in v1.
 
     return sections
