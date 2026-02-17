@@ -265,3 +265,105 @@ export interface Candidacy {
   meta?: any;
   created_at: string;
 }
+
+// ── User Subscriptions & Alerts ──
+
+export type SubscriptionType =
+  | "matter"
+  | "topic"
+  | "person"
+  | "neighborhood"
+  | "digest";
+
+export type DigestFrequency = "each_meeting" | "weekly";
+
+export interface UserProfile {
+  id: string; // uuid from auth.users
+  display_name?: string;
+  address?: string;
+  neighborhood?: string;
+  notification_email?: string;
+  email_verified: boolean;
+  digest_frequency: DigestFrequency;
+  digest_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Subscription {
+  id: number;
+  user_id: string;
+  type: SubscriptionType;
+  matter_id?: number;
+  topic_id?: number;
+  person_id?: number;
+  neighborhood?: string;
+  proximity_radius_m: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  matter?: Matter;
+  topic?: Topic;
+  person?: Person;
+}
+
+export interface AlertLogEntry {
+  id: number;
+  user_id: string;
+  subscription_id?: number;
+  meeting_id?: number;
+  agenda_item_id?: number;
+  motion_id?: number;
+  alert_type: string;
+  email_sent: boolean;
+  sent_at?: string;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface MeetingDigest {
+  meeting: {
+    id: number;
+    title: string;
+    meeting_date: string;
+    type: string;
+    summary: string;
+    has_minutes: boolean;
+    has_transcript: boolean;
+  };
+  key_decisions: {
+    motion_id: number;
+    agenda_item_title: string;
+    motion_text: string;
+    result: string;
+    yes_votes: number;
+    no_votes: number;
+    is_divided: boolean;
+    financial_cost?: number;
+    neighborhood?: string;
+    related_address?: string;
+  }[];
+  controversial_items: {
+    id: number;
+    title: string;
+    summary: string;
+    debate_summary: string;
+    neighborhood?: string;
+    related_address?: string;
+  }[];
+  attendance: {
+    person_name: string;
+    mode: string;
+  }[];
+}
+
+export interface NearbyMatter {
+  id: number;
+  title: string;
+  identifier?: string;
+  category?: string;
+  status: string;
+  distance_m: number;
+  related_address?: string;
+}

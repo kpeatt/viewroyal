@@ -6,6 +6,7 @@ import { getMunicipality } from "../services/municipality";
 import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
 import type { Person, Municipality, Membership, Attendance, Vote } from "../lib/types";
 import { Link, useRouteLoaderData } from "react-router";
+import { SubscribeButton } from "../components/subscribe-button";
 
 export const meta: Route.MetaFunction = ({ data, matches }) => {
   if (!data?.person) return [{ title: "Person | ViewRoyal.ai" }];
@@ -254,9 +255,12 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
               </div>
 
               <CardHeader className="pb-2">
-                <CardTitle className="text-3xl font-black tracking-tight text-zinc-900">
-                  {person.name}
-                </CardTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-3xl font-black tracking-tight text-zinc-900">
+                    {person.name}
+                  </CardTitle>
+                  {person.is_councillor && <SubscribeButton type="person" targetId={person.id} label="Follow" />}
+                </div>
 
                 <div className="flex flex-col gap-1 mt-1">
                   {activeMemberships.map((m) => (

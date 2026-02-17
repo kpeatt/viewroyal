@@ -2,6 +2,7 @@ import type { Route } from "./+types/matter-detail";
 import { getMatterById } from "../services/matters";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link } from "react-router";
+import { SubscribeButton } from "../components/subscribe-button";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.matter) return [{ title: "Matter | ViewRoyal.ai" }];
@@ -122,6 +123,7 @@ export default function MatterDetail({ loaderData }: Route.ComponentProps) {
               >
                 {matter.status}
               </span>
+              <SubscribeButton type="matter" targetId={matter.id} label="Follow Matter" />
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900 mb-4">
               {matter.title}

@@ -21,7 +21,9 @@ export default [
   route("about", "routes/about.tsx"),
   route("alignment", "routes/alignment.tsx"),
   route("login", "routes/login.tsx"),
+  route("signup", "routes/signup.tsx"),
   route("logout", "routes/logout.tsx"),
+  route("settings", "routes/settings.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
   route("speaker-alias", "routes/speaker-alias.tsx"),
@@ -29,6 +31,8 @@ export default [
 
   // API routes
   route("api/ask", "routes/api.ask.tsx"),
+  route("api/digest", "routes/api.digest.tsx"),
+  route("api/subscribe", "routes/api.subscribe.tsx"),
   route("api/report-video-failure", "routes/api.report-video-failure.ts"),
   route("api/bylaws/:id/download", "routes/api.bylaws.$id.download.tsx"),
   route("api/intel/:id", "routes/api.intel.tsx"),
