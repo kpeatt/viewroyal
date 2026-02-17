@@ -529,13 +529,15 @@ def extract_content(
 
     file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
 
-    # For large PDFs, extract just the relevant pages to a temp file
-    if file_size_mb > MAX_FILE_API_MB:
+    # For PDFs over 5MB, extract just the needed pages — avoids uploading
+    # a 50MB PDF 45 times for 45 different page ranges. Individual document
+    # page ranges are typically 1-20 pages and well under the inline limit.
+    if file_size_mb > 5:
         pdf_part = _extract_page_range(pdf_path, page_start, page_end, client)
         if pdf_part is None:
-            logger.error("Cannot extract pages %d-%d from large PDF", page_start, page_end)
+            logger.error("Cannot extract pages %d-%d from PDF", page_start, page_end)
             return ""
-        # When using extracted pages, pages are renumbered starting at 1
+        # Extracted pages are renumbered starting at 1
         prompt = CONTENT_PROMPT_TEMPLATE.format(
             page_start=1,
             page_end=page_end - page_start + 1,
