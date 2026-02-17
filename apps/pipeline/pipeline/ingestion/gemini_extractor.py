@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 MAX_INLINE_MB = 20       # PDFs under this use inline bytes
-MAX_FILE_API_MB = 50     # PDFs between 20-50MB use File API upload
+MAX_FILE_API_MB = 50     # Gemini PDF processing limit is 50MB
 MAX_OUTPUT_TOKENS = 65536 # Gemini 2.5 Flash supports 64K output
 
 # Pricing for cost estimation (Gemini 2.5 Flash)
@@ -162,8 +162,7 @@ def _prepare_pdf_part(pdf_path: str, client: genai.Client):
     """Prepare a PDF for sending to Gemini.
 
     - < 20MB: inline bytes
-    - 20-50MB: File API upload
-    - > 50MB: raises ValueError (caller should split first)
+    - >= 20MB: File API upload (supports up to 2GB)
 
     Returns the part/file reference suitable for contents=[...].
     """
@@ -184,16 +183,38 @@ def _prepare_pdf_part(pdf_path: str, client: genai.Client):
     else:
         logger.info("PDF %.1fMB — uploading via File API", size_mb)
         uploaded = client.files.upload(file=pdf_path)
+
+        # Wait for file processing to complete (required before use)
+        max_wait = 300  # 5 minutes max
+        waited = 0
+        while waited < max_wait:
+            file_info = client.files.get(name=uploaded.name)
+            state = file_info.state.name if hasattr(file_info.state, 'name') else str(file_info.state)
+            if state == "ACTIVE":
+                logger.info("File API upload ready (waited %ds)", waited)
+                break
+            if state == "FAILED":
+                raise ValueError(f"File API processing failed for {pdf_path}")
+            time.sleep(3)
+            waited += 3
+
+        if waited >= max_wait:
+            logger.warning("File API processing timed out after %ds", max_wait)
+
         return uploaded
 
 
 # ── Helper: split large PDFs ────────────────────────────────────────────
 
 def _split_large_pdf(pdf_path: str, max_pages: int = 500) -> list[tuple[str, int]]:
-    """Split a PDF into chunks of max_pages pages.
+    """Split a PDF into chunks that each stay under MAX_FILE_API_MB.
 
     Includes the first 4 pages (agenda/TOC) in every chunk so Gemini can
     always reference agenda items.
+
+    Uses adaptive chunking: starts with estimated page count, validates
+    actual file size, and halves if a chunk exceeds the limit (PDF shared
+    resources make file size unpredictable from page count alone).
 
     Returns list of (temp_file_path, page_offset) tuples.
     The caller is responsible for cleaning up temp files.
@@ -209,48 +230,136 @@ def _split_large_pdf(pdf_path: str, max_pages: int = 500) -> list[tuple[str, int
     doc = fitz.open(pdf_path)
     total_pages = len(doc)
 
-    if total_pages <= max_pages:
+    # Estimate initial chunk size from average MB/page
+    file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
+    if file_size_mb > MAX_FILE_API_MB and total_pages > 0:
+        bytes_per_page = file_size_mb / total_pages
+        # Target 30% of limit — very conservative because PDF shared
+        # resources (fonts, images) inflate extracted chunks unpredictably
+        target_mb = MAX_FILE_API_MB * 0.3
+        size_based_max = max(5, int(target_mb / bytes_per_page))
+        if size_based_max < max_pages:
+            logger.info(
+                "PDF is %.1fMB (%.1fMB/page avg) — targeting %d pages/chunk",
+                file_size_mb, bytes_per_page, size_based_max,
+            )
+            max_pages = size_based_max
+
+    if total_pages <= max_pages and file_size_mb <= MAX_FILE_API_MB:
         doc.close()
         return [(pdf_path, 0)]
 
-    logger.info(
-        "Splitting %d-page PDF into chunks of %d pages", total_pages, max_pages
-    )
-
-    # First 4 pages = agenda/TOC overlap
     overlap_pages = min(4, total_pages)
     chunks = []
 
-    # Start chunking from page overlap_pages onward
     chunk_start = overlap_pages
     while chunk_start < total_pages:
-        chunk_end = min(chunk_start + max_pages - overlap_pages, total_pages)
+        # Try creating a chunk, validate size, halve if too large
+        pages_to_take = min(max_pages - overlap_pages, total_pages - chunk_start)
+        chunk_path = None
 
+        while pages_to_take >= 5:
+            chunk_end = chunk_start + pages_to_take
+
+            new_doc = fitz.open()
+            new_doc.insert_pdf(doc, from_page=0, to_page=overlap_pages - 1)
+            new_doc.insert_pdf(doc, from_page=chunk_start, to_page=chunk_end - 1)
+
+            # Downsample images to 72 DPI — Gemini only needs text readability
+            try:
+                new_doc.rewrite_images(dpi=72)
+            except Exception:
+                pass  # Some PDFs may not support this; continue anyway
+
+            tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+            new_doc.ez_save(tmp.name)
+            new_doc.close()
+            tmp.close()
+
+            chunk_mb = os.path.getsize(tmp.name) / (1024 * 1024)
+
+            if chunk_mb <= MAX_FILE_API_MB:
+                chunk_path = tmp.name
+                logger.info(
+                    "  Chunk: pages %d-%d → %.1fMB (%d pages + %d overlap)",
+                    chunk_start + 1, chunk_end, chunk_mb,
+                    pages_to_take, overlap_pages,
+                )
+                break
+            else:
+                # Too large — clean up and try fewer pages
+                os.unlink(tmp.name)
+                old_count = pages_to_take
+                pages_to_take = pages_to_take // 2
+                logger.info(
+                    "  Chunk too large (%.1fMB) — reducing from %d to %d pages",
+                    chunk_mb, old_count, pages_to_take,
+                )
+
+        if chunk_path:
+            chunks.append((chunk_path, chunk_start))
+            chunk_start += pages_to_take
+        else:
+            # Could not create a small enough chunk — skip these pages
+            logger.warning(
+                "  Skipping pages %d-%d: cannot reduce below 50MB",
+                chunk_start + 1, chunk_start + pages_to_take,
+            )
+            chunk_start += pages_to_take
+
+    doc.close()
+    logger.info("Split into %d chunks", len(chunks))
+    return chunks
+
+
+# ── Helper: extract page range for content extraction of large PDFs ─────
+
+def _extract_page_range(pdf_path: str, page_start: int, page_end: int, client):
+    """Extract a page range from a large PDF into a temp file and prepare for Gemini.
+
+    Used when the full PDF exceeds MAX_FILE_API_MB. Extracts just the needed
+    pages so the chunk fits within the File API limit.
+
+    Args:
+        pdf_path: Path to the original large PDF
+        page_start: 1-indexed start page
+        page_end: 1-indexed end page
+        client: Gemini client instance
+
+    Returns the part/file reference, or None on failure.
+    """
+    import tempfile
+
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.error("PyMuPDF required for page extraction")
+        return None
+
+    try:
+        doc = fitz.open(pdf_path)
         new_doc = fitz.open()
-        # Always include the first overlap_pages (agenda/TOC)
-        new_doc.insert_pdf(doc, from_page=0, to_page=overlap_pages - 1)
-        # Then the chunk-specific pages
-        new_doc.insert_pdf(doc, from_page=chunk_start, to_page=chunk_end - 1)
+        # Convert 1-indexed to 0-indexed
+        new_doc.insert_pdf(doc, from_page=page_start - 1, to_page=page_end - 1)
 
         tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         new_doc.save(tmp.name)
         new_doc.close()
+        doc.close()
         tmp.close()
 
-        # page_offset: the real page number that chunk_start corresponds to
-        # In the chunk file, after the overlap_pages, the first new page
-        # corresponds to chunk_start in the original
-        chunks.append((tmp.name, chunk_start))
-        logger.info(
-            "  Chunk: pages %d-%d (file pages %d-%d + %d overlap)",
-            chunk_start + 1, chunk_end, overlap_pages + 1,
-            overlap_pages + (chunk_end - chunk_start), overlap_pages,
-        )
+        part = _prepare_pdf_part(tmp.name, client)
 
-        chunk_start = chunk_end
+        # Clean up temp file
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
 
-    doc.close()
-    return chunks
+        return part
+    except Exception as e:
+        logger.error("Failed to extract pages %d-%d: %s", page_start, page_end, e)
+        return None
 
 
 # ── Helper: merge boundaries from chunked PDFs ──────────────────────────
@@ -418,16 +527,30 @@ def extract_content(
         page_end,
     )
 
-    try:
-        pdf_part = _prepare_pdf_part(pdf_path, client)
-    except ValueError as e:
-        logger.error("Cannot extract content: %s", e)
-        return ""
+    file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
 
-    prompt = CONTENT_PROMPT_TEMPLATE.format(
-        page_start=page_start,
-        page_end=page_end,
-    )
+    # For large PDFs, extract just the relevant pages to a temp file
+    if file_size_mb > MAX_FILE_API_MB:
+        pdf_part = _extract_page_range(pdf_path, page_start, page_end, client)
+        if pdf_part is None:
+            logger.error("Cannot extract pages %d-%d from large PDF", page_start, page_end)
+            return ""
+        # When using extracted pages, pages are renumbered starting at 1
+        prompt = CONTENT_PROMPT_TEMPLATE.format(
+            page_start=1,
+            page_end=page_end - page_start + 1,
+        )
+    else:
+        try:
+            pdf_part = _prepare_pdf_part(pdf_path, client)
+        except ValueError as e:
+            logger.error("Cannot extract content: %s", e)
+            return ""
+
+        prompt = CONTENT_PROMPT_TEMPLATE.format(
+            page_start=page_start,
+            page_end=page_end,
+        )
 
     text = _call_gemini(
         client,
