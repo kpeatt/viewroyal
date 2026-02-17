@@ -34,6 +34,7 @@ export function SubscribeButton({
     const checkStatus = async () => {
       try {
         const res = await fetch(`/api/subscribe?type=${type}&target_id=${targetId}`);
+        if (!res.ok) { setChecked(true); return; }
         const data = (await res.json()) as { subscribed: boolean; subscription_id: number | null };
         setSubscribed(data.subscribed);
         setSubscriptionId(data.subscription_id);
@@ -84,11 +85,12 @@ export function SubscribeButton({
     setLoading(true);
     try {
       if (subscribed && subscriptionId) {
-        await fetch("/api/subscribe", {
+        const res = await fetch("/api/subscribe", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ subscription_id: subscriptionId }),
         });
+        if (!res.ok) { console.error("Unsubscribe failed:", res.status); return; }
         setSubscribed(false);
         setSubscriptionId(null);
       } else {
@@ -109,6 +111,7 @@ export function SubscribeButton({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+        if (!res.ok) { console.error("Subscribe failed:", res.status); return; }
         const data = (await res.json()) as { subscription?: { id: number } };
         setSubscribed(true);
         setSubscriptionId(data.subscription?.id || null);

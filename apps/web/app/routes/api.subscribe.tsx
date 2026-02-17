@@ -4,8 +4,18 @@ import {
   addSubscription,
   removeSubscription,
   checkSubscription,
+  getUserProfile,
+  upsertUserProfile,
 } from "../services/subscriptions";
 import type { SubscriptionType } from "../lib/types";
+
+/** Ensure the user has a profile row (required by subscriptions FK constraint) */
+async function ensureUserProfile(supabase: ReturnType<typeof createSupabaseServerClient>["supabase"], userId: string) {
+  const profile = await getUserProfile(supabase, userId);
+  if (!profile) {
+    await upsertUserProfile(supabase, userId, {});
+  }
+}
 
 /**
  * POST /api/subscribe
@@ -52,46 +62,57 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  if (request.method === "DELETE") {
-    const body = (await request.json()) as { subscription_id?: number };
-    const subscriptionId = body.subscription_id;
+  try {
+    if (request.method === "DELETE") {
+      const body = (await request.json()) as { subscription_id?: number };
+      const subscriptionId = body.subscription_id;
 
-    if (!subscriptionId) {
-      return Response.json({ error: "subscription_id required" }, { status: 400 });
+      if (!subscriptionId) {
+        return Response.json({ error: "subscription_id required" }, { status: 400 });
+      }
+
+      await removeSubscription(supabase, user.id, subscriptionId);
+      return Response.json({ success: true });
     }
 
-    await removeSubscription(supabase, user.id, subscriptionId);
-    return Response.json({ success: true });
+    // POST - add subscription
+    const body = (await request.json()) as {
+      type?: string;
+      matter_id?: number;
+      topic_id?: number;
+      person_id?: number;
+      neighborhood?: string;
+      proximity_radius_m?: number;
+    };
+    const { type, matter_id, topic_id, person_id, neighborhood, proximity_radius_m } =
+      body;
+
+    if (!type) {
+      return Response.json({ error: "type is required" }, { status: 400 });
+    }
+
+    // Auto-create profile if missing (FK constraint requires it)
+    await ensureUserProfile(supabase, user.id);
+
+    const sub = await addSubscription(
+      supabase,
+      user.id,
+      type as SubscriptionType,
+      {
+        matter_id: matter_id || undefined,
+        topic_id: topic_id || undefined,
+        person_id: person_id || undefined,
+        neighborhood: neighborhood || undefined,
+        proximity_radius_m: proximity_radius_m || undefined,
+      },
+    );
+
+    return Response.json({ success: true, subscription: sub });
+  } catch (err) {
+    console.error("Subscribe action error:", err);
+    return Response.json(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      { status: 500 },
+    );
   }
-
-  // POST - add subscription
-  const body = (await request.json()) as {
-    type?: string;
-    matter_id?: number;
-    topic_id?: number;
-    person_id?: number;
-    neighborhood?: string;
-    proximity_radius_m?: number;
-  };
-  const { type, matter_id, topic_id, person_id, neighborhood, proximity_radius_m } =
-    body;
-
-  if (!type) {
-    return Response.json({ error: "type is required" }, { status: 400 });
-  }
-
-  const sub = await addSubscription(
-    supabase,
-    user.id,
-    type as SubscriptionType,
-    {
-      matter_id: matter_id || undefined,
-      topic_id: topic_id || undefined,
-      person_id: person_id || undefined,
-      neighborhood: neighborhood || undefined,
-      proximity_radius_m: proximity_radius_m || undefined,
-    },
-  );
-
-  return Response.json({ success: true, subscription: sub });
 }
