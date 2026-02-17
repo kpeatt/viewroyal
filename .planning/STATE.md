@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 
 ## Current Position
 
-Phase: 4 of 5 (Home Page Enhancements)
+Phase: 5 of 5 (Advanced Subscriptions)
 Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-16 — Completed 04-01-PLAN.md
+Status: Ready
+Last activity: 2026-02-16 — Completed 04-02-PLAN.md (Phase 4 complete)
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 7min
-- Total execution time: 0.6 hours
+- Total plans completed: 7
+- Average duration: 8.5min
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [███████░░░] 70%
 | 01-schema-foundation | 2 | 6min | 3min |
 | 02-multi-tenancy | 1 | 8min | 8min |
 | 03-subscriptions-notifications | 2 | 19min | 10min |
-| 04-home-page-enhancements | 1 | 5min | 5min |
+| 04-home-page-enhancements | 2 | 30min | 15min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 8min, 4min, 15min, 5min
-- Trend: stable
+- Last 5 plans: 8min, 4min, 15min, 5min, 25min
+- Trend: increasing (more complex UI work)
 
 *Updated after each plan completion*
 
@@ -66,6 +66,11 @@ Recent decisions affecting current work:
 - [04-01]: Async IIFE pattern for Supabase batch queries to resolve PromiseLike/Promise type mismatch
 - [04-01]: Hand-drawn simplified SVG outline for ViewRoyalMap instead of GeoJSON conversion (per user directive)
 - [04-01]: Transitional home.tsx UI using new data shape (full redesign in Plan 02)
+- [04-02]: Map opacity increased from 0.07 to 0.4 for better visual impact in hero background
+- [04-02]: Agenda items display plain_english_summary with category badges for richer context
+- [04-02]: Decisions limited to 8 recent + toggle to view divided votes (improved UX)
+- [04-02]: Active matters shown as 4-6 visible cards for focus and performance
+- [04-02]: Public Notices RSS feed restored per user feedback for civic awareness
 
 ### Pending Todos
 
@@ -82,5 +87,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 04-01-PLAN.md
-Resume file: .planning/phases/04-home-page-enhancements/04-01-SUMMARY.md
+Stopped at: Completed 04-02-PLAN.md (Phase 4 complete)
+Resume file: .planning/phases/04-home-page-enhancements/04-02-SUMMARY.md
