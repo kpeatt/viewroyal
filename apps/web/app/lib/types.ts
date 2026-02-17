@@ -286,6 +286,7 @@ export interface UserProfile {
   email_verified: boolean;
   digest_frequency: DigestFrequency;
   digest_enabled: boolean;
+  onboarding_completed?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -299,6 +300,8 @@ export interface Subscription {
   person_id?: number;
   neighborhood?: string;
   proximity_radius_m: number;
+  keyword?: string;
+  keyword_embedding?: number[];
   is_active: boolean;
   created_at: string;
   updated_at: string;

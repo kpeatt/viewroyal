@@ -41,16 +41,6 @@ export async function action({ request }: Route.ActionArgs) {
     if (profileError) {
       console.error("Error creating user profile:", profileError);
     }
-
-    // Auto-subscribe to digest
-    const { error: subError } = await supabase.from("subscriptions").insert({
-      user_id: data.user.id,
-      type: "digest",
-    });
-
-    if (subError) {
-      console.error("Error creating default subscription:", subError);
-    }
   }
 
   // If email confirmation is required, tell the user

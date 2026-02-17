@@ -7,6 +7,7 @@ import {
   getUserProfile,
   upsertUserProfile,
 } from "../services/subscriptions";
+import { generateQueryEmbedding } from "../lib/embeddings.server";
 import type { SubscriptionType } from "../lib/types";
 
 /** Ensure the user has a profile row (required by subscriptions FK constraint) */
@@ -83,8 +84,9 @@ export async function action({ request }: Route.ActionArgs) {
       person_id?: number;
       neighborhood?: string;
       proximity_radius_m?: number;
+      keyword?: string;
     };
-    const { type, matter_id, topic_id, person_id, neighborhood, proximity_radius_m } =
+    const { type, matter_id, topic_id, person_id, neighborhood, proximity_radius_m, keyword } =
       body;
 
     if (!type) {
@@ -93,6 +95,15 @@ export async function action({ request }: Route.ActionArgs) {
 
     // Auto-create profile if missing (FK constraint requires it)
     await ensureUserProfile(supabase, user.id);
+
+    // For keyword-based topic subscriptions, generate the embedding
+    let keyword_embedding: number[] | undefined;
+    if (type === "topic" && keyword && !topic_id) {
+      const embedding = await generateQueryEmbedding(keyword);
+      if (embedding) {
+        keyword_embedding = embedding;
+      }
+    }
 
     const sub = await addSubscription(
       supabase,
@@ -104,6 +115,8 @@ export async function action({ request }: Route.ActionArgs) {
         person_id: person_id || undefined,
         neighborhood: neighborhood || undefined,
         proximity_radius_m: proximity_radius_m || undefined,
+        keyword: keyword || undefined,
+        keyword_embedding,
       },
     );
 
