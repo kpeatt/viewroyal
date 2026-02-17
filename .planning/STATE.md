@@ -77,6 +77,9 @@ Recent decisions affecting current work:
 - [05-01]: Digest auto-subscribe removed from signup -- now opt-in only
 - [05-01]: Onboarding route registered as placeholder (redirects to /settings until Plan 02)
 - [05-01]: Pipeline geocoding uses bounded=0 for better coverage near View Royal borders
+- [05-02]: React state for wizard steps (not URL params) for smoother UX
+- [05-02]: Root loader redirect excludes /onboarding, /logout, /api/*, /login to prevent loops
+- [05-02]: Subscription insert changed to upsert with composite onConflict for deduplication
 - [05-03]: Highlighting uses RPC results directly -- no re-matching logic in Edge Function
 - [05-03]: Keyword subscribers highlight ALL items (RPC already confirmed match at meeting level)
 - [05-03]: Pre-meeting mode skips person subscription matching (no motions pre-meeting)
@@ -97,5 +100,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 05-03-PLAN.md (Phase 05 complete, all phases complete)
+Stopped at: Completed 05-02-PLAN.md (backfill after checkpoint approval) and 05-03-PLAN.md (Phase 05 complete, all phases complete)
 Resume file: .planning/phases/05-advanced-subscriptions/05-03-SUMMARY.md
