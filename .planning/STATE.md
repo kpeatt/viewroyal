@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 7.1 (Upgrade document extraction with Gemini 2.5 Flash)
-Plan: 2 of 3 in current phase
-Status: Executing
-Last activity: 2026-02-17 -- Completed Plan 02 (extraction orchestrator + pipeline integration)
+Plan: 3 of 3 in current phase (task 2/2 — human-verify checkpoint)
+Status: Paused
+Last activity: 2026-02-17 -- Paused at Plan 03 checkpoint; user wants Gemini Batch API for full backfill
 
 Progress: [███████████████░░░░░] 76% (16/~21 plans across all milestones)
 
@@ -74,6 +74,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 07.1-02-PLAN.md (extraction orchestrator + pipeline integration)
-Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/07.1-02-SUMMARY.md
-Next action: Execute 07.1-03-PLAN.md (backfill all 722 agenda PDFs)
+Stopped at: Plan 03 task 2/2 (human-verify checkpoint) — user decided full backfill needs Gemini Batch API
+Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
+Next action: Research Gemini Batch API, plan batch architecture, then complete backfill
