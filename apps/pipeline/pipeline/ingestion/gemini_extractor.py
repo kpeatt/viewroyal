@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ── Configuration ────────────────────────────────────────────────────────
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-MAX_INLINE_MB = 20       # PDFs under this use inline bytes
+MAX_INLINE_MB = 50       # Inline payload supports up to 100MB (Jan 2026)
 MAX_FILE_API_MB = 50     # Gemini PDF processing limit is 50MB
 MAX_OUTPUT_TOKENS = 65536 # Gemini 2.5 Flash supports 64K output
 
