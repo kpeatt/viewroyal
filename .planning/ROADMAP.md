@@ -2,23 +2,82 @@
 
 ## Milestones
 
-- ✅ **v1.0 Land & Launch** — Phases 1-6 (shipped 2026-02-17) — [Archive](milestones/v1.0-ROADMAP.md)
+- ✅ **v1.0 Land & Launch** -- Phases 1-6 (shipped 2026-02-17) -- [Archive](milestones/v1.0-ROADMAP.md)
+- 🚧 **v1.1 Deep Intelligence** -- Phases 7-9 (in progress)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 Land & Launch (Phases 1-6) — SHIPPED 2026-02-17</summary>
+<summary>✅ v1.0 Land & Launch (Phases 1-6) -- SHIPPED 2026-02-17</summary>
 
-- [x] Phase 1: Schema Foundation (2/2 plans) — completed 2026-02-16
-- [x] Phase 2: Multi-Tenancy (1/1 plans) — completed 2026-02-16
-- [x] Phase 3: Subscriptions & Notifications (2/2 plans) — completed 2026-02-17
-- [x] Phase 4: Home Page Enhancements (2/2 plans) — completed 2026-02-16
-- [x] Phase 5: Advanced Subscriptions (3/3 plans) — completed 2026-02-16
-- [x] Phase 6: Gap Closure & Cleanup (1/1 plans) — completed 2026-02-17
+- [x] Phase 1: Schema Foundation (2/2 plans) -- completed 2026-02-16
+- [x] Phase 2: Multi-Tenancy (1/1 plans) -- completed 2026-02-16
+- [x] Phase 3: Subscriptions & Notifications (2/2 plans) -- completed 2026-02-17
+- [x] Phase 4: Home Page Enhancements (2/2 plans) -- completed 2026-02-16
+- [x] Phase 5: Advanced Subscriptions (3/3 plans) -- completed 2026-02-16
+- [x] Phase 6: Gap Closure & Cleanup (1/1 plans) -- completed 2026-02-17
 
 </details>
 
+### v1.1 Deep Intelligence
+
+- [ ] **Phase 7: Document Intelligence** - Pipeline chunks PDFs into sections with embeddings and full-text search, backfills existing documents
+- [ ] **Phase 8: Unified Search & Hybrid RAG** - Single search page with intent detection, hybrid search across all content types, conversation memory
+- [ ] **Phase 9: AI Profiling & Comparison** - Speaking time metrics, AI stance summaries with evidence, side-by-side councillor comparison
+
+## Phase Details
+
+### Phase 7: Document Intelligence
+**Goal**: Every PDF document in the system is chunked into searchable, embeddable sections that downstream features can query
+**Depends on**: Phase 6 (v1.0 complete)
+**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05
+**Success Criteria** (what must be TRUE):
+  1. Running the pipeline on a meeting with PDF attachments produces document_sections rows with heading-derived titles and content
+  2. Each document section has a halfvec(384) embedding and a populated tsvector column
+  3. Document sections are linked to the correct agenda items (verifiable on meeting detail page or via DB query)
+  4. All previously-ingested documents have been backfilled into sections with embeddings (no orphan documents without sections)
+  5. A full-text search query against document_sections returns relevant section-level results (not whole-document matches)
+**Plans**: 2 plans
+
+Plans:
+- [ ] 07-01-PLAN.md -- Schema + pipeline chunker (document_sections table, document_chunker.py, embed.py integration)
+- [ ] 07-02-PLAN.md -- Web UI + backfill CLI (accordion display on meeting pages, --backfill-sections flag)
+
+### Phase 8: Unified Search & Hybrid RAG
+**Goal**: Users search and ask questions from a single page that intelligently handles both keyword lookups and natural language questions, with conversation continuity
+**Depends on**: Phase 7
+**Requirements**: SRCH-01, SRCH-02, SRCH-03, SRCH-04, SRCH-05, SRCH-06
+**Success Criteria** (what must be TRUE):
+  1. A single /search page exists and the old separate Search and Ask pages are removed or redirect to it
+  2. Typing a keyword query (e.g. "bylaw 1234") shows a results list; typing a question (e.g. "what did council decide about the new park?") triggers an AI answer with citations
+  3. Search results include matches from document sections, key statements, transcript segments, and motions
+  4. User can ask a follow-up question (e.g. "who voted against it?") and the AI answer references context from the previous exchange
+  5. Conversation history persists within a browser session but resets on new session, capped at 5 turns
+**Plans**: TBD
+
+Plans:
+- [ ] 08-01: TBD
+- [ ] 08-02: TBD
+- [ ] 08-03: TBD
+
+### Phase 9: AI Profiling & Comparison
+**Goal**: Citizens can understand each councillor's speaking engagement, positions on key topics through AI-generated summaries backed by evidence, and compare any two councillors side by side
+**Depends on**: Phase 8 (hybrid search improves stance evidence retrieval)
+**Requirements**: PROF-02, PROF-04, PROF-05, PROF-06
+**Success Criteria** (what must be TRUE):
+  1. Councillor page shows speaking time metrics calculated from transcript segment durations
+  2. Councillor page shows AI-generated stance summaries grouped by topic (e.g. "Housing", "Environment"), each grounded in specific meeting references
+  3. Each stance summary displays a confidence score and links to the source evidence (transcript segments, motions, or document sections)
+  4. User can select two councillors and see a side-by-side comparison of their voting records, activity metrics, and stance summaries
+**Plans**: TBD
+
+Plans:
+- [ ] 09-01: TBD
+- [ ] 09-02: TBD
+
 ## Progress
+
+**Execution Order:** 7 -> 8 -> 9
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -28,3 +87,6 @@
 | 4. Home Page Enhancements | v1.0 | 2/2 | Complete | 2026-02-16 |
 | 5. Advanced Subscriptions | v1.0 | 3/3 | Complete | 2026-02-16 |
 | 6. Gap Closure & Cleanup | v1.0 | 1/1 | Complete | 2026-02-17 |
+| 7. Document Intelligence | v1.1 | 0/2 | Planned | - |
+| 8. Unified Search & Hybrid RAG | v1.1 | 0/? | Not started | - |
+| 9. AI Profiling & Comparison | v1.1 | 0/? | Not started | - |
