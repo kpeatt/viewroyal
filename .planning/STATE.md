@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.1 Deep Intelligence -- Phase 7 Document Intelligence
+**Current focus:** v1.1 Deep Intelligence -- Phase 7.1 Upgrade Document Extraction
 
 ## Current Position
 
-Phase: 7 of 9 (Document Intelligence) -- COMPLETE
-Plan: 3 of 3 in current phase (phase complete)
-Status: Phase Complete
-Last activity: 2026-02-17 -- Completed 07-03 (document section quality audit + noise filtering)
+Phase: 7.1 (Upgrade document extraction with Docling and Gemini) -- INSERTED
+Plan: 0 of ? in current phase (not yet planned)
+Status: Inserted, awaiting planning
+Last activity: 2026-02-17 -- Inserted Phase 7.1 after completed Phase 7
 
 Progress: [██████████████░░░░░░] 70% (14/~20 plans across all milestones)
 
@@ -53,6 +53,10 @@ v1.1 decisions:
 - DOC linking uses 4-strategy approach: number match, title containment, fuzzy title, fuzzy text-body
 - DOC Strategy 4 (positional/sequential matching) deferred to future iteration
 
+### Roadmap Evolution
+
+- Phase 07.1 inserted after Phase 07: Upgrade document extraction with Docling and Gemini (URGENT)
+
 ### Pending Todos
 
 None.
@@ -64,5 +68,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 07-03-PLAN.md (document section quality + noise filtering) -- Phase 7 complete
-Next action: Begin Phase 8 planning
+Stopped at: Phase 7.1 context gathered
+Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/07.1-CONTEXT.md
+Next action: Plan Phase 7.1 (/gsd:plan-phase 7.1)
