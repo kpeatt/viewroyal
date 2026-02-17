@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 5: Advanced Subscriptions
+**Current focus:** Phase 6: Gap Closure & Cleanup
 
 ## Current Position
 
-Phase: 5 of 5 (Advanced Subscriptions)
-Plan: 3 of 3 in current phase
-Status: Phase Complete
-Last activity: 2026-02-17 — Completed 05-03-PLAN.md
+Phase: 6 of 6 (Gap Closure & Cleanup)
+Plan: 0 of ? in current phase
+Status: Not started
+Last activity: 2026-02-17 — Gap closure phase added after audit
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
