@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 
 ## Current Position
 
-Phase: 7.1 (Upgrade document extraction with Docling and Gemini) -- INSERTED
-Plan: 0 of ? in current phase (not yet planned)
-Status: Inserted, awaiting planning
-Last activity: 2026-02-17 -- Inserted Phase 7.1 after completed Phase 7
+Phase: 7.1 (Upgrade document extraction with Gemini 2.5 Flash)
+Plan: 1 of 3 in current phase
+Status: Executing
+Last activity: 2026-02-17 -- Completed Plan 01 (schema + Gemini extractor)
 
-Progress: [██████████████░░░░░░] 70% (14/~20 plans across all milestones)
+Progress: [██████████████░░░░░░] 71% (15/~21 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 8.1min
-- Total execution time: 1.91 hours
+- Total plans completed: 15
+- Average duration: 7.9min
+- Total execution time: 1.98 hours
 
 **By Phase:**
 
@@ -34,6 +34,7 @@ Progress: [██████████████░░░░░░] 70% (14
 | 05-advanced-subscriptions | 3 | 25min | 8min |
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
 | 07-document-intelligence | 3 | 15min | 5min |
+| 07.1-upgrade-document-extraction | 1 | 4min | 4min |
 
 ## Accumulated Context
 
@@ -52,6 +53,9 @@ v1.1 decisions:
 - DOC noise headings (CARRIED, OR, etc.) filtered; sub-headings (BACKGROUND, PURPOSE) folded into parents
 - DOC linking uses 4-strategy approach: number match, title containment, fuzzy title, fuzzy text-body
 - DOC Strategy 4 (positional/sequential matching) deferred to future iteration
+- DOC-7.1 Gemini 2.5 Flash replaces PyMuPDF font-analysis for document extraction (two-pass: boundaries + content)
+- DOC-7.1 extracted_documents intermediate table between documents and document_sections for natural hierarchy
+- DOC-7.1 Three-tier PDF size handling: inline (<20MB), File API (20-50MB), PyMuPDF split (>50MB)
 
 ### Roadmap Evolution
 
@@ -68,6 +72,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Phase 7.1 context gathered
-Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/07.1-CONTEXT.md
-Next action: Plan Phase 7.1 (/gsd:plan-phase 7.1)
+Stopped at: Completed 07.1-01-PLAN.md (schema + Gemini extractor)
+Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/07.1-01-SUMMARY.md
+Next action: Execute 07.1-02-PLAN.md (extraction orchestrator + pipeline integration)
