@@ -80,6 +80,18 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--backfill-sections",
+        action="store_true",
+        help="Backfill document sections for all existing documents (two-pass: sections first, embeddings second).",
+    )
+
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-processing (delete and recreate existing data). Used with --backfill-sections.",
+    )
+
+    parser.add_argument(
         "--target",
         type=str,
         help="Target a specific meeting by DB ID or folder path (force re-processes).",
@@ -125,6 +137,12 @@ if __name__ == "__main__":
     elif args.embed_only:
         print("\n--- Embedding Only ---")
         app._embed_new_content()
+    elif args.backfill_sections:
+        print("\n--- Backfill Document Sections ---")
+        app.backfill_document_sections(force=args.force)
+        if not args.skip_embed:
+            print("\n--- Embedding Document Sections ---")
+            app._embed_new_content()
     elif args.process_only or args.rediarize:
         if app.ai_enabled:
             mode = "Re-diarizing" if args.rediarize else "Processing"
