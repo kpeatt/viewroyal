@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Subscriptions & Notifications** - Merge PR #13, land public signup, email delivery, and core subscription features (completed 2026-02-17)
 - [ ] **Phase 4: Home Page Enhancements** - Surface active matters, recent decisions, and upcoming meetings on home page
 - [ ] **Phase 5: Advanced Subscriptions** - Topic subscriptions, neighbourhood subscriptions, and weekly digest email
+- [ ] **Phase 6: Gap Closure & Cleanup** - Fix audit gaps (HOME-01/02 counts, integration fixes, dead code, UX polish)
 
 ## Phase Details
 
@@ -96,10 +97,29 @@ Plans:
 - [ ] 05-02-PLAN.md — Post-signup onboarding wizard (topics, location, digest), enhanced settings page with topic/keyword management
 - [ ] 05-03-PLAN.md — Digest email subscription highlighting + friendly tone, pre-meeting alert capability in Edge Function
 
+### Phase 6: Gap Closure & Cleanup
+**Goal**: All audit gaps closed — requirement counts corrected, integration issues fixed, dead code removed, and UX rough edges polished
+**Depends on**: Phase 5
+**Requirements**: HOME-01 (partial→satisfied), HOME-02 (partial→satisfied)
+**Gap Closure**: Closes gaps from v1-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. Home page shows 6 active matters (not 4) satisfying HOME-01
+  2. Decisions feed shows 10+ motions by default (not 8) satisfying HOME-02
+  3. `api.subscribe` GET returns correct subscription status for neighborhood type
+  4. No orphaned exports in subscriptions.ts (addKeywordSubscription removed)
+  5. home.tsx uses root loader municipality data (no redundant DB query)
+  6. Signup redirectTo defaults to `/` or `/onboarding` (no double-redirect)
+  7. Settings page exposes digest frequency selector (not hardcoded to each_meeting)
+  8. api.geocode.tsx uses bounded=0 matching pipeline behavior
+**Plans:** 0 plans
+
+Plans:
+- (to be planned)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not each other).
 
 | Phase | Plans Complete | Status | Completed |
@@ -109,3 +129,4 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 | 3. Subscriptions & Notifications | 0/2 | Complete    | 2026-02-17 |
 | 4. Home Page Enhancements | 0/? | Not started | - |
 | 5. Advanced Subscriptions | 0/3 | Planned | - |
+| 6. Gap Closure & Cleanup | 0/? | Not started | - |
