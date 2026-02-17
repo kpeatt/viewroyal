@@ -1,7 +1,7 @@
 # Requirements: ViewRoyal.ai
 
 **Defined:** 2026-02-16
-**Core Value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
+**Core Value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
 
 ## v1.1 Requirements
 
@@ -18,7 +18,7 @@ Requirements for v1.1 Deep Intelligence milestone. Each maps to roadmap phases.
 ### Search & Intelligence
 
 - [ ] **SRCH-01**: Unified search page replaces separate Search and Ask pages with a single input
-- [ ] **SRCH-02**: System detects query intent — keyword queries show results list, questions trigger AI answer with citations
+- [ ] **SRCH-02**: System detects query intent -- keyword queries show results list, questions trigger AI answer with citations
 - [ ] **SRCH-03**: Hybrid search RPC combines vector similarity and full-text search using Reciprocal Rank Fusion
 - [ ] **SRCH-04**: Search covers document sections, key statements, transcript segments, and motions
 - [ ] **SRCH-05**: User can ask follow-up questions that reference previous answers in the same session
@@ -26,12 +26,15 @@ Requirements for v1.1 Deep Intelligence milestone. Each maps to roadmap phases.
 
 ### Council Profiling
 
-- [ ] **PROF-01**: Councillor page shows detailed voting history with yea/nay/abstain indicators per motion
-- [ ] **PROF-02**: Councillor page shows activity metrics (speaking time, attendance rate, motions proposed)
-- [ ] **PROF-03**: Councillor page shows voting alignment with other council members
+- [ ] **PROF-02**: Councillor page shows speaking time metrics calculated from transcript segment durations
 - [ ] **PROF-04**: AI-generated stance summaries per councillor per topic, grounded in meeting evidence
 - [ ] **PROF-05**: Stance summaries include confidence scoring and links to source evidence
 - [ ] **PROF-06**: User can compare two councillors side-by-side (voting record, stances, activity)
+
+### Already Validated (shipped in v1.0)
+
+- ✓ **PROF-01**: Councillor page shows detailed voting history with yea/nay/abstain indicators per motion -- v1.0
+- ✓ **PROF-03**: Councillor page shows voting alignment with other council members -- v1.0
 
 ## Future Requirements
 
@@ -64,7 +67,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Social features (comments, reactions, forums) | Undermines official record credibility |
 | Real-time live meeting notifications | Architecture mismatch (batch pipeline) |
 | SMS notifications | Cost/compliance overhead unjustified at scale |
-| Automated fact-checking of AI summaries | Source data is official council records — implies source might be wrong |
+| Automated fact-checking of AI summaries | Source data is official council records -- implies source might be wrong |
 | Multi-model embedding comparison | Standardized on halfvec(384); switching adds complexity without benefit |
 | Document OCR/image analysis | PyMuPDF extraction sufficient for digital-native PDFs |
 | LangChain/LlamaIndex integration | Overkill for straightforward chunking and RAG patterns |
@@ -76,28 +79,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOC-01 | — | Pending |
-| DOC-02 | — | Pending |
-| DOC-03 | — | Pending |
-| DOC-04 | — | Pending |
-| DOC-05 | — | Pending |
-| SRCH-01 | — | Pending |
-| SRCH-02 | — | Pending |
-| SRCH-03 | — | Pending |
-| SRCH-04 | — | Pending |
-| SRCH-05 | — | Pending |
-| SRCH-06 | — | Pending |
-| PROF-01 | — | Pending |
-| PROF-02 | — | Pending |
-| PROF-03 | — | Pending |
-| PROF-04 | — | Pending |
-| PROF-05 | — | Pending |
+| DOC-01 | Phase 7 | Pending |
+| DOC-02 | Phase 7 | Pending |
+| DOC-03 | Phase 7 | Pending |
+| DOC-04 | Phase 7 | Pending |
+| DOC-05 | Phase 7 | Pending |
+| SRCH-01 | Phase 8 | Pending |
+| SRCH-02 | Phase 8 | Pending |
+| SRCH-03 | Phase 8 | Pending |
+| SRCH-04 | Phase 8 | Pending |
+| SRCH-05 | Phase 8 | Pending |
+| SRCH-06 | Phase 8 | Pending |
+| PROF-02 | Phase 9 | Pending |
+| PROF-04 | Phase 9 | Pending |
+| PROF-05 | Phase 9 | Pending |
+| PROF-06 | Phase 9 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- v1.1 requirements: 15 total (+ 2 already validated)
+- Mapped to phases: 15
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-16*
-*Last updated: 2026-02-16 after initial definition*
+*Last updated: 2026-02-16 after roadmap revision (dropped Phase 9, validated PROF-01/PROF-03)*

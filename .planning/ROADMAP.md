@@ -21,7 +21,7 @@
 
 ### v1.1 Deep Intelligence
 
-- [ ] **Phase 7: Document Intelligence** - Pipeline chunks PDFs into sections with embeddings and full-text search, backfills existing documents
+- [x] **Phase 7: Document Intelligence** - Pipeline chunks PDFs into sections with embeddings and full-text search, backfills existing documents (completed 2026-02-17)
 - [ ] **Phase 8: Unified Search & Hybrid RAG** - Single search page with intent detection, hybrid search across all content types, conversation memory
 - [ ] **Phase 9: AI Profiling & Comparison** - Speaking time metrics, AI stance summaries with evidence, side-by-side councillor comparison
 
@@ -87,6 +87,6 @@ Plans:
 | 4. Home Page Enhancements | v1.0 | 2/2 | Complete | 2026-02-16 |
 | 5. Advanced Subscriptions | v1.0 | 3/3 | Complete | 2026-02-16 |
 | 6. Gap Closure & Cleanup | v1.0 | 1/1 | Complete | 2026-02-17 |
-| 7. Document Intelligence | v1.1 | 0/2 | Planned | - |
+| 7. Document Intelligence | v1.1 | Complete    | 2026-02-17 | - |
 | 8. Unified Search & Hybrid RAG | v1.1 | 0/? | Not started | - |
 | 9. AI Profiling & Comparison | v1.1 | 0/? | Not started | - |
