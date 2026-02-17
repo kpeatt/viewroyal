@@ -36,6 +36,7 @@ import {
   Clock,
   ChevronLeft,
   ExternalLink,
+  FileText,
   Sparkles,
   CheckCircle2,
   XCircle,
@@ -134,12 +135,17 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const [data, documentSections] = await Promise.all([
+    const [data, documentSections, docsRes] = await Promise.all([
       getMeetingById(supabase, id),
       getDocumentSectionsForMeeting(supabase, id),
+      supabase
+        .from("documents")
+        .select("id, title, category, source_url, page_count")
+        .eq("meeting_id", id)
+        .order("title"),
     ]);
 
-    return { ...data, documentSections };
+    return { ...data, documentSections, documents: docsRes.data || [] };
   } catch (error: any) {
     console.error("[meeting-detail loader]", error?.message || error);
     if (error.message === "Meeting Not Found") {
@@ -164,6 +170,7 @@ export default function MeetingDetail({ loaderData }: any) {
     people,
     activeCouncilMemberIds,
     documentSections,
+    documents: rawDocuments,
   } = loaderData;
 
   // Hydrate data from normalized people map
@@ -575,6 +582,41 @@ export default function MeetingDetail({ loaderData }: any) {
                     </div>
                   )}
                 </div>
+
+                {/* Documents */}
+                {rawDocuments && rawDocuments.length > 0 && (
+                  <div className="px-6 py-4 border-t border-zinc-100">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5" />
+                      Documents
+                    </h3>
+                    <ul className="space-y-2">
+                      {rawDocuments.map((doc: any) => (
+                        <li key={doc.id} className="flex items-center justify-between">
+                          <Link
+                            to={`/meetings/${meeting.id}/documents/${doc.id}`}
+                            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                          >
+                            {doc.title}
+                          </Link>
+                          <div className="flex items-center gap-3 text-xs text-zinc-400">
+                            {doc.page_count && <span>{doc.page_count} pages</span>}
+                            {doc.source_url && (
+                              <a
+                                href={doc.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-zinc-600"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* No content fallback */}
                 {!meeting.summary && keyDecisions.length === 0 && (
