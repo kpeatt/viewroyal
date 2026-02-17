@@ -40,13 +40,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const url = new URL(request.url);
   const type = url.searchParams.get("type") as SubscriptionType;
-  const targetId = Number(url.searchParams.get("target_id"));
+  const targetId = url.searchParams.get("target_id") ? Number(url.searchParams.get("target_id")) : undefined;
+  const neighborhood = url.searchParams.get("neighborhood") || undefined;
 
-  if (!type || !targetId) {
+  if (!type || (!targetId && type !== "neighborhood" && type !== "digest")) {
     return Response.json({ error: "type and target_id required" }, { status: 400 });
   }
 
-  const sub = await checkSubscription(supabase, user.id, type, targetId);
+  const sub = await checkSubscription(supabase, user.id, type, targetId, neighborhood);
   return Response.json({
     subscribed: !!sub,
     subscription_id: sub?.id || null,
