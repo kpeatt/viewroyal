@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 3: Subscriptions & Notifications
+**Current focus:** Phase 4: Home Page Enhancements
 
 ## Current Position
 
-Phase: 3 of 5 (Subscriptions & Notifications)
-Plan: 2 of 2 in current phase (PHASE COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-16 — Completed 03-02-PLAN.md
+Phase: 4 of 5 (Home Page Enhancements)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-16 — Completed 04-01-PLAN.md
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 7min
 - Total execution time: 0.6 hours
 
@@ -30,10 +30,11 @@ Progress: [██████░░░░] 60%
 | 01-schema-foundation | 2 | 6min | 3min |
 | 02-multi-tenancy | 1 | 8min | 8min |
 | 03-subscriptions-notifications | 2 | 19min | 10min |
+| 04-home-page-enhancements | 1 | 5min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 4min, 8min, 4min, 15min
-- Trend: stable (spike due to smoke test + bugfix)
+- Last 5 plans: 4min, 8min, 4min, 15min, 5min
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -61,6 +62,10 @@ Recent decisions affecting current work:
 - [03-01]: Anonymous users get 'Get Alerts' link to /signup in navbar
 - [03-02]: Used ALTER FUNCTION SET search_path (not CREATE OR REPLACE) for simpler security fix
 - [03-02]: Auto-create user_profiles row on first subscribe to handle pre-existing accounts (FK constraint fix)
+- [04-01]: Removed municipality parameter from getHomeData() (council members and public notices removed from home page)
+- [04-01]: Async IIFE pattern for Supabase batch queries to resolve PromiseLike/Promise type mismatch
+- [04-01]: Hand-drawn simplified SVG outline for ViewRoyalMap instead of GeoJSON conversion (per user directive)
+- [04-01]: Transitional home.tsx UI using new data shape (full redesign in Plan 02)
 
 ### Pending Todos
 
@@ -77,5 +82,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 03-02-PLAN.md (Phase 03 complete)
-Resume file: .planning/phases/03-subscriptions-notifications/03-02-SUMMARY.md
+Stopped at: Completed 04-01-PLAN.md
+Resume file: .planning/phases/04-home-page-enhancements/04-01-SUMMARY.md
