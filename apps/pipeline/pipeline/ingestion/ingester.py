@@ -15,6 +15,7 @@ from pipeline import utils
 from pipeline.alignment import align_meeting_items
 from pipeline.names import CANONICAL_NAMES
 from pipeline.ingestion.ai_refiner import refine_meeting_data
+from pipeline.ingestion.document_chunker import chunk_document, link_sections_to_agenda_items
 from pipeline.ingestion.matter_matching import MatterMatcher
 from pipeline.video.vimeo import VimeoClient
 
@@ -765,6 +766,93 @@ class MeetingIngester:
 
         return doc_count
 
+    def _ingest_document_sections(self, meeting_id, folder_path):
+        """Chunk PDF documents into sections and insert into document_sections table.
+
+        Called after _ingest_documents(). For each document with a file_path,
+        runs heading-based chunking, links sections to agenda items, and inserts.
+        Skips documents that already have sections (idempotency).
+        """
+        # Fetch documents for this meeting
+        try:
+            docs_result = (
+                self.supabase.table("documents")
+                .select("id, title, file_path")
+                .eq("meeting_id", meeting_id)
+                .execute()
+            )
+        except Exception as e:
+            print(f"  [!] Error fetching documents for sectioning: {e}")
+            return
+
+        if not docs_result.data:
+            return
+
+        for doc in docs_result.data:
+            if not doc.get("file_path"):
+                continue
+
+            doc_id = doc["id"]
+            doc_title = doc.get("title") or "Untitled"
+
+            # Check if document already has sections (idempotency)
+            try:
+                existing = (
+                    self.supabase.table("document_sections")
+                    .select("id", count="exact")
+                    .eq("document_id", doc_id)
+                    .execute()
+                )
+                if existing.count and existing.count > 0:
+                    continue
+            except Exception:
+                pass  # Table might not exist yet; proceed anyway
+
+            # Resolve full PDF path
+            pdf_path = os.path.join(folder_path, doc["file_path"])
+            if not os.path.exists(pdf_path):
+                continue
+
+            # Chunk the document
+            try:
+                sections = chunk_document(pdf_path, doc_title)
+            except Exception as e:
+                print(f"  [!] Error chunking {doc_title}: {e}")
+                continue
+
+            if not sections:
+                continue
+
+            # Link sections to agenda items
+            sections = link_sections_to_agenda_items(
+                sections, meeting_id, self.supabase
+            )
+
+            # Insert sections
+            rows = []
+            for section in sections:
+                rows.append({
+                    "document_id": doc_id,
+                    "agenda_item_id": section.get("agenda_item_id"),
+                    "section_title": section.get("section_title"),
+                    "section_text": section["section_text"],
+                    "section_order": section["section_order"],
+                    "page_start": section.get("page_start"),
+                    "page_end": section.get("page_end"),
+                    "token_count": section.get("token_count"),
+                    "municipality_id": self.municipality_id,
+                })
+
+            try:
+                # Insert in batches of 50 to avoid payload size limits
+                batch_size = 50
+                for i in range(0, len(rows), batch_size):
+                    batch = rows[i : i + batch_size]
+                    self.supabase.table("document_sections").insert(batch).execute()
+                print(f"  [+] Chunked {doc_title}: {len(sections)} sections")
+            except Exception as e:
+                print(f"  [!] Error inserting sections for {doc_title}: {e}")
+
     def process_meeting(
         self,
         folder_path,
@@ -908,6 +996,10 @@ class MeetingIngester:
 
         # 1b. Ingest PDF documents into documents table
         self._ingest_documents(meeting_id, folder_path, dry_run)
+
+        # 1c. Chunk documents into sections (after documents are ingested)
+        if not dry_run:
+            self._ingest_document_sections(meeting_id, folder_path)
 
         # 2. Extract Raw Texts & Refine
         agenda_text, minutes_text, transcript_text = self.get_raw_texts(

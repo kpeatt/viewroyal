@@ -64,6 +64,10 @@ TABLE_CONFIG = {
         "select": "id, statement_text, context",
         "text_fn": lambda r: f"{r[1] or ''}\n{r[2] or ''}".strip(),
     },
+    "document_sections": {
+        "select": "id, section_title, section_text",
+        "text_fn": lambda r: f"{r[1] or ''}\n{r[2] or ''}".strip(),
+    },
 }
 
 # OpenAI allows up to 2048 inputs per request, but smaller batches are safer
@@ -78,6 +82,7 @@ DEFAULT_MIN_WORDS = {
     "bylaw_chunks": 0,
     "documents": 10,
     "key_statements": 5,
+    "document_sections": 5,
 }
 
 
