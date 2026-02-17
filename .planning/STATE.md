@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 3 of 5 (Subscriptions & Notifications)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-16 — Completed 03-01-PLAN.md
+Plan: 2 of 2 in current phase (PHASE COMPLETE)
+Status: Phase Complete
+Last activity: 2026-02-16 — Completed 03-02-PLAN.md
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 5min
-- Total execution time: 0.3 hours
+- Total plans completed: 5
+- Average duration: 7min
+- Total execution time: 0.6 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 01-schema-foundation | 2 | 6min | 3min |
 | 02-multi-tenancy | 1 | 8min | 8min |
-| 03-subscriptions-notifications | 1 | 4min | 4min |
+| 03-subscriptions-notifications | 2 | 19min | 10min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 4min, 8min, 4min
-- Trend: stable
+- Last 5 plans: 2min, 4min, 8min, 4min, 15min
+- Trend: stable (spike due to smoke test + bugfix)
 
 *Updated after each plan completion*
 
@@ -59,6 +59,8 @@ Recent decisions affecting current work:
 - [03-01]: Hardcoded VIEW_ROYAL_NEIGHBORHOODS array left as-is with TODO for future dynamic loading
 - [03-01]: SubscribeButton placed inline with status badges on matter-detail, alongside CardTitle on person-profile
 - [03-01]: Anonymous users get 'Get Alerts' link to /signup in navbar
+- [03-02]: Used ALTER FUNCTION SET search_path (not CREATE OR REPLACE) for simpler security fix
+- [03-02]: Auto-create user_profiles row on first subscribe to handle pre-existing accounts (FK constraint fix)
 
 ### Pending Todos
 
@@ -75,5 +77,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 03-01-PLAN.md
-Resume file: .planning/phases/03-subscriptions-notifications/03-01-SUMMARY.md
+Stopped at: Completed 03-02-PLAN.md (Phase 03 complete)
+Resume file: .planning/phases/03-subscriptions-notifications/03-02-SUMMARY.md
