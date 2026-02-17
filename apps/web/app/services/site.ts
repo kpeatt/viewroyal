@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Municipality } from "../lib/types";
 
 export async function getPublicNotices(rssUrl?: string) {
   if (!rssUrl) return [];
@@ -75,158 +74,261 @@ export async function getAboutStats(supabase: SupabaseClient) {
   };
 }
 
-export async function getHomeData(supabase: SupabaseClient, municipality?: Municipality) {
+export async function getHomeData(supabase: SupabaseClient) {
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Vancouver",
   });
 
-  // Run all independent queries in parallel
-  const [
-    latestMeetingRes,
-    upcomingMeetingsRes,
-    recentMeetingsRes,
-    councilMembersRes,
-    publicNotices,
-  ] = await Promise.all([
-    // Latest meeting with transcript (narrow select — no embedding/meta/transcript_text)
-    supabase
-      .from("meetings")
-      .select(
-        "id, title, type, meeting_date, video_url, summary, video_duration_seconds, organizations(name)",
-      )
-      .eq("has_transcript", true)
-      .order("meeting_date", { ascending: false })
-      .limit(1)
-      .single(),
+  // ── Batch 1: Independent queries in parallel ──
 
-    // Upcoming meetings (future dates in Vancouver time)
-    supabase
-      .from("meetings")
-      .select(
-        "id, title, meeting_date, type, has_agenda, agenda_url, has_transcript, has_minutes, organizations(name)",
-      )
-      .gt("meeting_date", today)
-      .order("meeting_date", { ascending: true })
-      .limit(4),
+  let recentMeeting: any = null;
+  let upcomingMeeting: any = null;
+  let activeMattersRaw: any[] = [];
+  let recentMotionsRaw: any[] = [];
 
-    // Recent past meetings
-    supabase
-      .from("meetings")
-      .select(
-        "id, title, meeting_date, type, has_agenda, agenda_url, has_transcript, has_minutes, organizations(name)",
-      )
-      .lte("meeting_date", today)
-      .order("meeting_date", { ascending: false })
-      .limit(5),
+  try {
+    const [
+      recentMeetingRes,
+      upcomingMeetingRes,
+      activeMattersRes,
+      recentMotionsRes,
+    ] = await Promise.all([
+      // 1. Most recent meeting with transcript
+      supabase
+        .from("meetings")
+        .select(
+          "id, title, type, meeting_date, summary, video_duration_seconds, organizations(name)",
+        )
+        .eq("has_transcript", true)
+        .order("meeting_date", { ascending: false })
+        .limit(1)
+        .single(),
 
-    // Active council members via memberships
-    supabase
-      .from("memberships")
-      .select(
-        `
-        role,
-        person:people(id, name, image_url)
-      `,
-      )
-      .eq("organization_id", municipality?.id || 1) // Council organization
-      .or(`end_date.is.null,end_date.gte.${today}`)
-      .order("role", { ascending: true }),
+      // 2. Next upcoming meeting (singular)
+      supabase
+        .from("meetings")
+        .select(
+          "id, title, meeting_date, type, has_agenda, organizations(name)",
+        )
+        .gt("meeting_date", today)
+        .order("meeting_date", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
 
-    getPublicNotices(municipality?.rss_url),
-  ]);
+      // 3. Active matters (6, ordered by last_seen)
+      // NOTE: Do NOT select plain_english_summary from matters (always null)
+      supabase
+        .from("matters")
+        .select("id, title, category, status, first_seen, last_seen")
+        .eq("status", "Active")
+        .order("last_seen", { ascending: false, nullsFirst: false })
+        .limit(6),
 
-  // Process council members - dedupe and sort (Mayor first)
-  type PersonData = { id: number; name: string; image_url: string | null };
-  const councilMembers =
-    councilMembersRes.data
-      ?.filter((m) => m.person)
-      .reduce(
-        (acc, m) => {
-          // Supabase returns single relation as object, handle both cases
-          const personData = m.person as unknown;
-          const person = (
-            Array.isArray(personData) ? personData[0] : personData
-          ) as PersonData;
-          if (person && !acc.find((p) => p.id === person.id)) {
-            acc.push({
-              ...person,
-              role: m.role || "Councillor",
-            });
-          }
-          return acc;
-        },
-        [] as Array<PersonData & { role: string }>,
-      )
-      .sort((a, b) => {
-        // Mayor first, then alphabetical
-        if (a.role === "Mayor") return -1;
-        if (b.role === "Mayor") return 1;
-        return a.name.localeCompare(b.name);
-      }) || [];
-
-  // Get key decisions and agenda count for latest meeting (second parallel batch)
-  const latestMeetingId = latestMeetingRes.data?.id;
-  let keyDecisions: Array<{ id: number; summary: string; result: string }> = [];
-  let agendaItemCount = 0;
-  let allMeetingMotions: any[] = [];
-
-  if (latestMeetingId) {
-    const [motionsRes, { count }] = await Promise.all([
-      // Motions scoped to latest meeting (instead of fetching 20 and filtering client-side)
+      // 4. Recent non-procedural motions with vote data (15)
+      // NOTE: Do NOT use motions.yes_votes/no_votes (always 0) — use nested votes(vote)
       supabase
         .from("motions")
         .select(
-          "id, text_content, plain_english_summary, result, meeting_id, disposition, agenda_items(category)",
+          "id, plain_english_summary, text_content, result, disposition, financial_cost, meeting_id, meetings!inner(id, meeting_date, title), votes(vote)",
         )
-        .eq("meeting_id", latestMeetingId)
-        .not("result", "is", null),
-
-      // Agenda item count for latest meeting
-      supabase
-        .from("agenda_items")
-        .select("*", { count: "exact", head: true })
-        .eq("meeting_id", latestMeetingId),
+        .not("result", "is", null)
+        .neq("disposition", "Procedural")
+        .order("meeting_id", { ascending: false })
+        .limit(15),
     ]);
 
-    agendaItemCount = count || 0;
-    allMeetingMotions = motionsRes.data || [];
-
-    keyDecisions = allMeetingMotions
-      .filter((m) => {
-        // Filter out procedural motions from key decisions display
-        if (m.disposition === "Procedural") return false;
-        const category = (m.agenda_items as any)?.category;
-        if (category === "Procedural") return false;
-        return true;
-      })
-      .slice(0, 3)
-      .map((m) => ({
-        id: m.id,
-        summary: m.plain_english_summary || m.text_content,
-        result: m.result,
-      }));
+    recentMeeting = recentMeetingRes.data;
+    upcomingMeeting = upcomingMeetingRes.data;
+    activeMattersRaw = activeMattersRes.data || [];
+    recentMotionsRaw = recentMotionsRes.data || [];
+  } catch (error) {
+    console.error("Error in home data batch 1:", error);
   }
 
-  // Calculate meeting stats
-  const latestMeetingStats = {
-    agendaItems: agendaItemCount,
-    totalMotions: allMeetingMotions.length,
-    motionsPassed: allMeetingMotions.filter((m) => m.result === "CARRIED")
-      .length,
-    duration: latestMeetingRes.data?.video_duration_seconds
-      ? Math.round(latestMeetingRes.data.video_duration_seconds / 60)
-      : null,
+  // ── Batch 2: Dependent queries ──
+
+  let agendaPreview: string[] = [];
+  let matterSummaryMap = new Map<number, string>();
+  let recentMeetingDecisions: Array<{
+    id: number;
+    summary: string;
+    result: string;
+  }> = [];
+  let recentMeetingStats = {
+    agendaItems: 0,
+    totalMotions: 0,
+    motionsPassed: 0,
+    dividedVotes: 0,
+    duration: null as number | null,
   };
 
+  try {
+    const batch2Promises: Promise<any>[] = [];
+
+    // 5. Agenda preview for upcoming meeting (if it has an agenda)
+    if (upcomingMeeting?.has_agenda) {
+      batch2Promises.push(
+        (async () => {
+          const res = await supabase
+            .from("agenda_items")
+            .select("title, category")
+            .eq("meeting_id", upcomingMeeting.id)
+            .neq("category", "Procedural")
+            .limit(4);
+          return { type: "agendaPreview" as const, data: res.data };
+        })(),
+      );
+    }
+
+    // 6. Matter summaries from agenda_items (for active matters)
+    const matterIds = activeMattersRaw.map((m) => m.id);
+    if (matterIds.length > 0) {
+      batch2Promises.push(
+        (async () => {
+          const res = await supabase
+            .from("agenda_items")
+            .select("matter_id, plain_english_summary, created_at")
+            .in("matter_id", matterIds)
+            .not("plain_english_summary", "is", null)
+            .order("created_at", { ascending: false });
+          return { type: "matterSummaries" as const, data: res.data };
+        })(),
+      );
+    }
+
+    // 7. Key decisions + stats for recent meeting
+    if (recentMeeting?.id) {
+      batch2Promises.push(
+        (async () => {
+          const res = await supabase
+            .from("motions")
+            .select(
+              "id, text_content, plain_english_summary, result, disposition, agenda_items(category), votes(vote)",
+            )
+            .eq("meeting_id", recentMeeting.id)
+            .not("result", "is", null);
+          return { type: "meetingMotions" as const, data: res.data };
+        })(),
+      );
+      batch2Promises.push(
+        (async () => {
+          const res = await supabase
+            .from("agenda_items")
+            .select("*", { count: "exact", head: true })
+            .eq("meeting_id", recentMeeting.id);
+          return { type: "agendaCount" as const, count: res.count };
+        })(),
+      );
+    }
+
+    const batch2Results = await Promise.all(batch2Promises);
+
+    for (const result of batch2Results) {
+      switch (result.type) {
+        case "agendaPreview":
+          agendaPreview = (result.data || []).map(
+            (t: { title: string }) => t.title,
+          );
+          break;
+
+        case "matterSummaries":
+          // Build map: for each matter_id, keep only the first (most recent) summary
+          for (const s of result.data || []) {
+            if (!matterSummaryMap.has(s.matter_id)) {
+              matterSummaryMap.set(s.matter_id, s.plain_english_summary);
+            }
+          }
+          break;
+
+        case "meetingMotions": {
+          const allMotions = result.data || [];
+          const nonProcedural = allMotions.filter((m: any) => {
+            if (m.disposition === "Procedural") return false;
+            const category = (m.agenda_items as any)?.category;
+            if (category === "Procedural") return false;
+            return true;
+          });
+
+          recentMeetingDecisions = nonProcedural.slice(0, 3).map((m: any) => ({
+            id: m.id,
+            summary: m.plain_english_summary || m.text_content,
+            result: m.result,
+          }));
+
+          // Count divided votes (motions where any vote is "No")
+          const dividedCount = allMotions.filter((m: any) => {
+            const votes = m.votes || [];
+            return votes.some((v: { vote: string }) => v.vote === "No");
+          }).length;
+
+          recentMeetingStats = {
+            agendaItems: 0, // filled below from agendaCount
+            totalMotions: allMotions.length,
+            motionsPassed: allMotions.filter(
+              (m: any) => m.result === "CARRIED",
+            ).length,
+            dividedVotes: dividedCount,
+            duration: recentMeeting?.video_duration_seconds
+              ? Math.round(recentMeeting.video_duration_seconds / 60)
+              : null,
+          };
+          break;
+        }
+
+        case "agendaCount":
+          recentMeetingStats.agendaItems = result.count || 0;
+          break;
+      }
+    }
+  } catch (error) {
+    console.error("Error in home data batch 2:", error);
+  }
+
+  // ── Post-processing ──
+
+  // Active matters: merge summaries from agenda_items
+  const activeMatters = activeMattersRaw.map((m) => ({
+    id: m.id,
+    title: m.title,
+    category: m.category,
+    status: m.status,
+    first_seen: m.first_seen,
+    last_seen: m.last_seen,
+    summary: matterSummaryMap.get(m.id) || null,
+  }));
+
+  // Decisions feed: process vote data from nested votes(vote)
+  const recentDecisions = recentMotionsRaw.map((m: any) => {
+    const votes = m.votes || [];
+    const yesCount = votes.filter(
+      (v: { vote: string }) => v.vote === "Yes",
+    ).length;
+    const noCount = votes.filter(
+      (v: { vote: string }) => v.vote === "No",
+    ).length;
+    const isDivided = noCount > 0;
+    return {
+      id: m.id,
+      summary: m.plain_english_summary || m.text_content,
+      result: m.result,
+      financialCost: m.financial_cost,
+      meetingId: m.meeting_id,
+      meetingDate: (m.meetings as any)?.meeting_date,
+      meetingTitle: (m.meetings as any)?.title,
+      yesCount,
+      noCount,
+      isDivided,
+    };
+  });
+
   return {
-    latestMeeting: latestMeetingRes.data,
-    latestMeetingStats,
-    keyDecisions,
-    upcomingMeetings: upcomingMeetingsRes.data || [],
-    recentMeetings: (recentMeetingsRes.data || []).filter(
-      (m: any) => m.id !== latestMeetingId,
-    ),
-    councilMembers,
-    publicNotices,
+    upcomingMeeting: upcomingMeeting
+      ? { ...upcomingMeeting, agendaPreview }
+      : null,
+    recentMeeting,
+    recentMeetingStats,
+    recentMeetingDecisions,
+    activeMatters,
+    recentDecisions,
   };
 }
