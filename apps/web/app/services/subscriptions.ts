@@ -86,6 +86,8 @@ export async function addSubscription(
     person_id?: number;
     neighborhood?: string;
     proximity_radius_m?: number;
+    keyword?: string;
+    keyword_embedding?: number[];
   },
 ): Promise<Subscription> {
   const { data, error } = await supabase
@@ -94,6 +96,31 @@ export async function addSubscription(
       user_id: userId,
       type,
       ...target,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Subscription;
+}
+
+/**
+ * Add a keyword-based topic subscription with semantic embedding.
+ * The keyword text and its 384-dim embedding are stored for cosine similarity matching.
+ */
+export async function addKeywordSubscription(
+  supabase: SupabaseClient,
+  userId: string,
+  keyword: string,
+  embedding: number[],
+): Promise<Subscription> {
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .insert({
+      user_id: userId,
+      type: "topic" as SubscriptionType,
+      keyword,
+      keyword_embedding: embedding,
     })
     .select()
     .single();

@@ -3,7 +3,9 @@ import hashlib
 import json
 import os
 import re
+import time
 
+import requests as http_requests
 from bs4 import BeautifulSoup
 from google import genai
 from supabase import Client, create_client
@@ -534,6 +536,117 @@ class MeetingIngester:
             return [p.strip() for p in parts if p.strip()]
 
         return [address_str]
+
+    # ── Geocoding ──
+
+    NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+    NOMINATIM_USER_AGENT = "ViewRoyal.ai/1.0 (civic platform)"
+    VIEW_ROYAL_VIEWBOX = "-123.55,48.42,-123.40,48.48"
+    # Patterns that indicate a non-geocodable address value
+    NON_ADDRESS_PREFIXES = ("various", "n/a", "tbd", "none", "multiple", "all", "general")
+
+    def geocode_address(self, address):
+        """Geocode a single address using Nominatim, biased to View Royal, BC.
+        Returns (lat, lng) tuple or None. Includes 1.1s rate-limit delay."""
+        if not address or not address.strip():
+            return None
+
+        addr = address.strip()
+        # Skip non-address values
+        if addr.lower().startswith(self.NON_ADDRESS_PREFIXES):
+            return None
+
+        # Append city context if not present
+        addr_lower = addr.lower()
+        if "view royal" not in addr_lower and "victoria" not in addr_lower and "bc" not in addr_lower:
+            addr = f"{addr}, View Royal, BC, Canada"
+
+        try:
+            resp = http_requests.get(
+                self.NOMINATIM_URL,
+                params={
+                    "q": addr,
+                    "format": "json",
+                    "limit": 1,
+                    "viewbox": self.VIEW_ROYAL_VIEWBOX,
+                    "bounded": 0,  # Prefer but don't restrict to viewbox
+                },
+                headers={"User-Agent": self.NOMINATIM_USER_AGENT},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            results = resp.json()
+
+            if results:
+                lat = float(results[0]["lat"])
+                lng = float(results[0]["lon"])
+                return (lat, lng)
+        except Exception as e:
+            print(f"    [!] Geocoding error for '{address}': {e}")
+
+        return None
+
+    def _geocode_agenda_items(self, meeting_id, items_data, dry_run=False):
+        """Geocode agenda items that have related_address but no geo data.
+        Updates the geo column via raw SQL (PostGIS geography)."""
+        geocoded_count = 0
+        geocode_cache = {}
+
+        for item in items_data:
+            addresses = item.get("related_address", [])
+            if not addresses or not isinstance(addresses, list):
+                continue
+
+            item_id = item.get("_db_id")
+            if not item_id:
+                continue
+
+            # Only geocode items that don't already have geo data
+            try:
+                existing = (
+                    self.supabase.table("agenda_items")
+                    .select("geo")
+                    .eq("id", item_id)
+                    .single()
+                    .execute()
+                )
+                if existing.data and existing.data.get("geo"):
+                    continue
+            except Exception:
+                continue
+
+            # Try to geocode the first valid address
+            for addr in addresses:
+                if not addr or not addr.strip():
+                    continue
+                addr = addr.strip()
+                if addr.lower().startswith(self.NON_ADDRESS_PREFIXES):
+                    continue
+
+                if addr in geocode_cache:
+                    result = geocode_cache[addr]
+                else:
+                    result = self.geocode_address(addr)
+                    geocode_cache[addr] = result
+                    # Nominatim rate limit: 1 request per second
+                    time.sleep(1.1)
+
+                if result and not dry_run:
+                    lat, lng = result
+                    try:
+                        self.supabase.table("agenda_items").update(
+                            {"geo": f"SRID=4326;POINT({lng} {lat})"}
+                        ).eq("id", item_id).execute()
+                        geocoded_count += 1
+                        print(f"    [Geo] {addr} -> ({lat:.6f}, {lng:.6f})")
+                    except Exception as e:
+                        print(f"    [!] Failed to update geo for item {item_id}: {e}")
+                    break  # Only need one successful geocode per item
+
+        if geocoded_count > 0:
+            print(f"  [+] Geocoded {geocoded_count} agenda items")
+
+        return geocoded_count
 
     def _normalize_archive_path(self, folder_path):
         """Normalize archive path to always be relative (viewroyal_archive/... or archive/slug/...)."""
@@ -1574,6 +1687,8 @@ class MeetingIngester:
             if not dry_run:
                 res = self.supabase.table("agenda_items").insert(item_data).execute()
                 agenda_item_id = res.data[0]["id"]
+                # Track for geocoding pass
+                item["_db_id"] = agenda_item_id
 
             # Key Statements
             for ks in item.get("key_statements", []):
@@ -1686,6 +1801,10 @@ class MeetingIngester:
                                 "recusal_reason": v.get("reason"),
                             }
                             self.supabase.table("votes").insert(vote_data).execute()
+
+        # 7. Geocode agenda items with related_address but no geo data
+        if refined.get("items") and not dry_run:
+            self._geocode_agenda_items(meeting_id, refined["items"], dry_run)
 
         return {
             "meeting": meeting_data,

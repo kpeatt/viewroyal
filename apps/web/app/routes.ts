@@ -29,8 +29,11 @@ export default [
   route("speaker-alias", "routes/speaker-alias.tsx"),
   route("admin/people", "routes/admin-people.tsx"),
 
+  route("onboarding", "routes/onboarding.tsx"),
+
   // API routes
   route("api/ask", "routes/api.ask.tsx"),
+  route("api/geocode", "routes/api.geocode.tsx"),
   route("api/digest", "routes/api.digest.tsx"),
   route("api/subscribe", "routes/api.subscribe.tsx"),
   route("api/report-video-failure", "routes/api.report-video-failure.ts"),
