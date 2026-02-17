@@ -432,6 +432,130 @@ class Archiver:
             except Exception as e:
                 print(f"  [!] Embedding failed for {table}: {e}")
 
+    def backfill_document_sections(self, force=False):
+        """Backfill document_sections for all existing documents.
+
+        Two-pass approach per user decision:
+        Pass 1 (this method): Create sections for all documents
+        Pass 2 (called separately): _embed_new_content() generates embeddings
+
+        Idempotent: skips documents that already have sections unless force=True.
+        Parse errors: logs and skips, continues with remaining documents.
+        """
+        from pipeline.ingestion.document_chunker import chunk_document, link_sections_to_agenda_items
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, skipping backfill.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+        municipality_id = self.municipality.id if self.municipality else 1
+
+        # Fetch all documents with file paths
+        result = supabase.table("documents").select(
+            "id, meeting_id, title, file_path"
+        ).eq("municipality_id", municipality_id).execute()
+
+        documents = result.data or []
+        print(f"  Found {len(documents)} documents to process")
+
+        if not documents:
+            print("  [!] No documents found. Run pipeline ingestion first.")
+            return
+
+        processed = 0
+        skipped = 0
+        errors = 0
+
+        for doc in documents:
+            doc_id = doc["id"]
+            meeting_id = doc["meeting_id"]
+            title = doc["title"] or f"Document {doc_id}"
+            file_path = doc.get("file_path")
+
+            if not file_path:
+                skipped += 1
+                continue
+
+            # Check idempotency (skip if sections exist, unless force)
+            if not force:
+                existing = supabase.table("document_sections").select(
+                    "id", count="exact"
+                ).eq("document_id", doc_id).execute()
+                if existing.count and existing.count > 0:
+                    skipped += 1
+                    continue
+
+            # If force, delete existing sections first
+            if force:
+                supabase.table("document_sections").delete().eq(
+                    "document_id", doc_id
+                ).execute()
+
+            # Resolve full PDF path
+            meeting_result = supabase.table("meetings").select(
+                "archive_path"
+            ).eq("id", meeting_id).single().execute()
+
+            if not meeting_result.data or not meeting_result.data.get("archive_path"):
+                print(f"  [!] No archive_path for meeting {meeting_id}, skipping {title}")
+                skipped += 1
+                continue
+
+            archive_path = meeting_result.data["archive_path"]
+            if not os.path.isabs(archive_path):
+                archive_path = os.path.join(self.archive_root, archive_path)
+
+            pdf_path = os.path.join(archive_path, file_path)
+            if not os.path.exists(pdf_path):
+                print(f"  [!] PDF not found: {pdf_path}, skipping {title}")
+                skipped += 1
+                continue
+
+            # Chunk the document
+            try:
+                sections = chunk_document(pdf_path, title)
+            except Exception as e:
+                print(f"  [!] Error chunking {title}: {e}")
+                errors += 1
+                continue
+
+            if not sections:
+                skipped += 1
+                continue
+
+            # Link to agenda items
+            try:
+                sections = link_sections_to_agenda_items(sections, meeting_id, supabase)
+            except Exception as e:
+                print(f"  [!] Error linking sections for {title}: {e}")
+                # Continue without links — sections are still valuable
+
+            # Insert sections
+            try:
+                rows = []
+                for s in sections:
+                    rows.append({
+                        "document_id": doc_id,
+                        "agenda_item_id": s.get("agenda_item_id"),
+                        "section_title": s.get("section_title"),
+                        "section_text": s["section_text"],
+                        "section_order": s["section_order"],
+                        "page_start": s.get("page_start"),
+                        "page_end": s.get("page_end"),
+                        "token_count": s.get("token_count"),
+                        "municipality_id": municipality_id,
+                    })
+                supabase.table("document_sections").insert(rows).execute()
+                processed += 1
+                print(f"  [+] {title}: {len(sections)} sections")
+            except Exception as e:
+                print(f"  [!] Error inserting sections for {title}: {e}")
+                errors += 1
+
+        print(f"\n  Backfill complete: {processed} documents sectioned, {skipped} skipped, {errors} errors")
+
     def _resolve_target(self, target: str) -> str:
         """Resolve a --target value to a folder path. Accepts DB ID or path."""
         if target.isdigit():
