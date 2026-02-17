@@ -13,6 +13,9 @@ import { PublicNoticesSection } from "../components/home/public-notices-section"
 export async function loader({ request }: { request: Request }) {
   try {
     const { supabase } = createSupabaseServerClient(request);
+    // getMunicipality call is intentionally duplicated from root loader.
+    // The home loader needs rss_url at server time for getPublicNotices(),
+    // and React Router 7 child loaders cannot access parent loader data on the server.
     const municipality = await getMunicipality(supabase);
     const [data, publicNotices] = await Promise.all([
       getHomeData(supabase),

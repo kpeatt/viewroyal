@@ -81,7 +81,7 @@ export async function action({ request }: Route.ActionArgs) {
       address,
       neighborhood,
       notification_email,
-      digest_frequency: "each_meeting",
+      digest_frequency: ((formData.get("digest_frequency") as string) || "each_meeting") as "each_meeting" | "weekly",
       digest_enabled,
     });
 
@@ -689,6 +689,22 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 Key decisions, vote results, and what it means for your
                 neighbourhood -- sent after each meeting with content.
               </p>
+              <div className="ml-7 mt-2 space-y-1">
+                <label className="text-sm font-medium text-zinc-700">
+                  Digest Frequency
+                </label>
+                <select
+                  name="digest_frequency"
+                  defaultValue={profile?.digest_frequency || "each_meeting"}
+                  className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="each_meeting">After each meeting</option>
+                  <option value="weekly">Weekly summary</option>
+                </select>
+                <p className="text-xs text-zinc-400">
+                  Choose how often you receive digest emails.
+                </p>
+              </div>
             </div>
 
             <Button type="submit" className="w-full">
