@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 
 ## Current Position
 
-Phase: 7 of 9 (Document Intelligence)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-17 -- Completed 07-01 (document sections schema + chunker)
+Phase: 7 of 9 (Document Intelligence) -- COMPLETE
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase Complete
+Last activity: 2026-02-17 -- Completed 07-02 (document sections display + backfill CLI)
 
-Progress: [████████████░░░░░░░░] 60% (12/~20 plans across all milestones)
+Progress: [█████████████░░░░░░░] 65% (13/~20 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 8.6min
-- Total execution time: 1.72 hours
+- Total plans completed: 13
+- Average duration: 8.3min
+- Total execution time: 1.79 hours
 
 **By Phase:**
 
@@ -33,7 +33,7 @@ Progress: [████████████░░░░░░░░] 60% (12
 | 04-home-page-enhancements | 2 | 30min | 15min |
 | 05-advanced-subscriptions | 3 | 25min | 8min |
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
-| 07-document-intelligence | 1 | 4min | 4min |
+| 07-document-intelligence | 2 | 8min | 4min |
 
 ## Accumulated Context
 
@@ -47,6 +47,8 @@ v1.1 decisions:
 - PROF-02 narrowed to speaking time only (attendance + motions already exist)
 - DOC heading detection uses PyMuPDF dict-mode font analysis (body_size * 1.2 threshold) rather than marker-pdf ML models
 - DOC section size cap at 8000 chars matching embed.py MAX_EMBED_CHARS, split at paragraph boundaries
+- DOC sections fetched via two-step query (documents -> document_sections) since sections lack direct meeting_id
+- DOC backfill uses two-pass approach: create sections first (resilience), generate embeddings second
 
 ### Pending Todos
 
@@ -59,5 +61,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 07-01-PLAN.md (document sections schema + pipeline chunker)
-Next action: Execute 07-02-PLAN.md (backfill + web display)
+Stopped at: Completed 07-02-PLAN.md (document sections display + backfill CLI) -- Phase 7 complete
+Next action: Begin Phase 8 planning
