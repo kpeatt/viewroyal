@@ -1,31 +1,25 @@
 import { getHomeData } from "../services/site";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getMunicipality } from "../services/municipality";
-import { Link, useRouteLoaderData } from "react-router";
+import { Link } from "react-router";
 import type { Municipality } from "../lib/types";
 import {
   Calendar,
-  Users,
   ArrowRight,
   Clock,
-  ChevronRight,
-  Gavel,
   CheckCircle2,
   XCircle,
   PlayCircle,
-  Bell,
-  History as HistoryIcon,
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { formatDate } from "../lib/utils";
 import { AskQuestion } from "../components/ask-question";
-import { MeetingListRow } from "../components/meeting/meeting-list-row";
 
 export async function loader({ request }: { request: Request }) {
   try {
     const { supabase } = createSupabaseServerClient(request);
     const municipality = await getMunicipality(supabase);
-    const data = await getHomeData(supabase, municipality);
+    const data = await getHomeData(supabase);
 
     return {
       ...data,
@@ -39,17 +33,15 @@ export async function loader({ request }: { request: Request }) {
 
 export default function Home({ loaderData }: any) {
   const {
-    latestMeeting,
-    latestMeetingStats,
-    keyDecisions,
-    upcomingMeetings,
-    recentMeetings,
-    councilMembers,
-    publicNotices,
+    upcomingMeeting,
+    recentMeeting,
+    recentMeetingStats,
+    recentMeetingDecisions,
+    activeMatters,
+    recentDecisions,
     municipality,
   } = loaderData;
   const shortName = (municipality as Municipality)?.short_name || "View Royal";
-  const websiteUrl = (municipality as Municipality)?.website_url || "https://www.viewroyal.ca";
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -78,64 +70,89 @@ export default function Home({ loaderData }: any) {
       </div>
 
       <div className="container mx-auto py-12 px-4 max-w-6xl">
-        {/* Latest Meeting Section */}
-        {latestMeeting && (
+        {/* Upcoming Meeting */}
+        {upcomingMeeting && (
+          <section className="mb-12">
+            <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Upcoming Meeting
+            </h2>
+            <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-[10px]">
+                  {upcomingMeeting.type || "Council Meeting"}
+                </Badge>
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 mb-1">
+                {upcomingMeeting.title}
+              </h3>
+              <p className="text-sm text-zinc-500">
+                {formatDate(upcomingMeeting.meeting_date)}
+              </p>
+              {upcomingMeeting.agendaPreview?.length > 0 && (
+                <ul className="mt-3 space-y-1">
+                  {upcomingMeeting.agendaPreview.map(
+                    (title: string, i: number) => (
+                      <li
+                        key={i}
+                        className="text-sm text-zinc-600 line-clamp-1"
+                      >
+                        {title}
+                      </li>
+                    ),
+                  )}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Recent Meeting */}
+        {recentMeeting && (
           <section className="mb-12">
             <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
               <PlayCircle className="h-4 w-4" />
-              Latest Meeting
+              Recent Meeting
             </h2>
             <Link
-              to={`/meetings/${latestMeeting.id}`}
+              to={`/meetings/${recentMeeting.id}`}
               className="block bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden p-6 hover:border-blue-200 hover:shadow-md transition-all group"
             >
-              {/* Header */}
-              <div className="flex items-start gap-4 mb-5">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-[10px]">
-                      {latestMeeting.type || "Council Meeting"}
-                    </Badge>
-                  </div>
-                  <h3 className="text-lg font-bold text-zinc-900 mb-1">
-                    {latestMeeting.title}
-                  </h3>
-                  <div className="flex items-center gap-3 text-sm text-zinc-500">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(latestMeeting.meeting_date)}
-                    </div>
-                    {latestMeetingStats?.duration && (
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />
-                        {Math.floor(latestMeetingStats.duration / 60)}h{" "}
-                        {latestMeetingStats.duration % 60}m
-                      </div>
-                    )}
-                  </div>
+              <div className="flex items-center gap-2 mb-1">
+                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-[10px]">
+                  {recentMeeting.type || "Council Meeting"}
+                </Badge>
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 mb-1">
+                {recentMeeting.title}
+              </h3>
+              <div className="flex items-center gap-3 text-sm text-zinc-500 mb-4">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {formatDate(recentMeeting.meeting_date)}
                 </div>
+                {recentMeetingStats?.duration && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    {Math.floor(recentMeetingStats.duration / 60)}h{" "}
+                    {recentMeetingStats.duration % 60}m
+                  </div>
+                )}
               </div>
 
-              {/* Summary */}
-              {latestMeeting.summary && (
-                <div className="mb-5">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-                    Summary
-                  </h4>
-                  <p className="text-sm text-zinc-600 leading-relaxed">
-                    {latestMeeting.summary}
-                  </p>
-                </div>
+              {recentMeeting.summary && (
+                <p className="text-sm text-zinc-600 leading-relaxed mb-4">
+                  {recentMeeting.summary}
+                </p>
               )}
 
-              {/* Key Decisions */}
-              {keyDecisions.length > 0 && (
-                <div className="mb-5 p-4 bg-zinc-50 rounded-xl">
+              {recentMeetingDecisions.length > 0 && (
+                <div className="mb-4 p-4 bg-zinc-50 rounded-xl">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
                     Key Decisions
                   </h4>
                   <ul className="space-y-2">
-                    {keyDecisions.map((decision: any) => (
+                    {recentMeetingDecisions.map((decision: any) => (
                       <li
                         key={decision.id}
                         className="flex items-start gap-2 text-sm"
@@ -154,24 +171,23 @@ export default function Home({ loaderData }: any) {
                 </div>
               )}
 
-              {/* Stats row */}
-              {(latestMeetingStats?.agendaItems > 0 ||
-                latestMeetingStats?.totalMotions > 0) && (
-                <div className="flex gap-6 mb-5 pb-5 border-b border-zinc-100">
-                  {latestMeetingStats.agendaItems > 0 && (
+              {(recentMeetingStats?.agendaItems > 0 ||
+                recentMeetingStats?.totalMotions > 0) && (
+                <div className="flex gap-6 mb-4 pb-4 border-b border-zinc-100">
+                  {recentMeetingStats.agendaItems > 0 && (
                     <div>
                       <div className="text-2xl font-bold text-zinc-900">
-                        {latestMeetingStats.agendaItems}
+                        {recentMeetingStats.agendaItems}
                       </div>
                       <div className="text-xs text-zinc-500">Agenda Items</div>
                     </div>
                   )}
-                  {latestMeetingStats.totalMotions > 0 && (
+                  {recentMeetingStats.totalMotions > 0 && (
                     <div>
                       <div className="text-2xl font-bold text-zinc-900">
-                        {latestMeetingStats.motionsPassed}
+                        {recentMeetingStats.motionsPassed}
                         <span className="text-sm font-normal text-zinc-400">
-                          /{latestMeetingStats.totalMotions}
+                          /{recentMeetingStats.totalMotions}
                         </span>
                       </div>
                       <div className="text-xs text-zinc-500">
@@ -179,10 +195,19 @@ export default function Home({ loaderData }: any) {
                       </div>
                     </div>
                   )}
+                  {recentMeetingStats.dividedVotes > 0 && (
+                    <div>
+                      <div className="text-2xl font-bold text-zinc-900">
+                        {recentMeetingStats.dividedVotes}
+                      </div>
+                      <div className="text-xs text-zinc-500">
+                        Divided Votes
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* CTA */}
               <div className="inline-flex items-center gap-2 text-blue-600 font-semibold group-hover:text-blue-700 transition-colors">
                 View Full Meeting Details
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -191,188 +216,106 @@ export default function Home({ loaderData }: any) {
           </section>
         )}
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Column */}
-          <div className="lg:col-span-7 space-y-8">
-            {/* Recent Meetings */}
-            <section>
-              <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <HistoryIcon className="h-4 w-4" />
-                  Recent Meetings
-                </span>
+        {/* Active Matters */}
+        {activeMatters.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center justify-between">
+              <span>Active Matters</span>
+              <Link
+                to="/matters"
+                className="text-[10px] text-blue-600 hover:underline font-semibold"
+              >
+                View All
+              </Link>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeMatters.map((matter: any) => (
                 <Link
-                  to="/meetings"
-                  className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  key={matter.id}
+                  to={`/matters/${matter.id}`}
+                  className="block bg-white rounded-2xl border border-zinc-200 shadow-sm p-4 hover:border-blue-200 hover:shadow-md transition-all"
                 >
-                  View All
-                </Link>
-              </h2>
-              <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
-                {recentMeetings.map((meeting: any) => (
-                  <MeetingListRow key={meeting.id} meeting={meeting} />
-                ))}
-              </div>
-            </section>
-            {/* Upcoming Meetings */}
-            <section>
-              <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Upcoming Meetings
-              </h2>
-              {upcomingMeetings.length > 0 ? (
-                <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
-                  {upcomingMeetings.map((meeting: any) => (
-                    <MeetingListRow
-                      key={meeting.id}
-                      meeting={meeting}
-                      showDateIcon
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-8 text-center text-zinc-500">
-                  No upcoming meetings scheduled.
-                </div>
-              )}
-            </section>
-          </div>
-
-          {/* Right Column - Council Members */}
-          <div className="lg:col-span-5 space-y-8">
-            <section>
-              <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Your Council
-                </span>
-                <Link
-                  to="/people"
-                  className="text-[10px] text-blue-600 hover:underline font-semibold"
-                >
-                  View All
-                </Link>
-              </h2>
-              <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
-                {/* Mayor - Featured */}
-                {councilMembers[0] && councilMembers[0].role === "Mayor" && (
-                  <Link
-                    to={`/people/${councilMembers[0].id}`}
-                    className="flex items-center gap-4 p-5 bg-gradient-to-r from-blue-50 to-white border-b border-zinc-100 hover:from-blue-100 transition-colors group"
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] mb-2"
                   >
-                    <div className="h-16 w-16 rounded-full bg-zinc-100 border-2 border-blue-200 overflow-hidden shrink-0">
-                      {councilMembers[0].image_url ? (
-                        <img
-                          src={councilMembers[0].image_url}
-                          alt={councilMembers[0].name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center text-zinc-300">
-                          <Users className="h-8 w-8" />
-                        </div>
+                    {matter.category || "General"}
+                  </Badge>
+                  <h3 className="text-sm font-bold text-zinc-900 line-clamp-2 mb-1">
+                    {matter.title}
+                  </h3>
+                  {matter.summary && (
+                    <p className="text-xs text-zinc-500 line-clamp-2">
+                      {matter.summary}
+                    </p>
+                  )}
+                  {matter.last_seen && (
+                    <p className="text-[10px] text-zinc-400 mt-2">
+                      Last discussed {formatDate(matter.last_seen)}
+                    </p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Recent Decisions */}
+        {recentDecisions.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center justify-between">
+              <span>Recent Decisions</span>
+              <Link
+                to="/meetings"
+                className="text-[10px] text-blue-600 hover:underline font-semibold"
+              >
+                View All
+              </Link>
+            </h2>
+            <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
+              {recentDecisions.map((decision: any) => (
+                <Link
+                  key={decision.id}
+                  to={`/meetings/${decision.meetingId}`}
+                  className="flex items-start gap-3 p-4 hover:bg-zinc-50 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-zinc-700 line-clamp-2">
+                      {decision.summary}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge
+                        variant={
+                          decision.result === "CARRIED"
+                            ? "default"
+                            : "destructive"
+                        }
+                        className="text-[10px]"
+                      >
+                        {decision.result}
+                      </Badge>
+                      {decision.isDivided && (
+                        <span className="text-[10px] font-medium text-amber-600">
+                          {decision.yesCount}-{decision.noCount}
+                        </span>
+                      )}
+                      {decision.financialCost > 0 && (
+                        <Badge variant="outline" className="text-[10px]">
+                          ${decision.financialCost.toLocaleString()}
+                        </Badge>
+                      )}
+                      {decision.meetingDate && (
+                        <span className="text-[10px] text-zinc-400">
+                          {formatDate(decision.meetingDate)}
+                        </span>
                       )}
                     </div>
-                    <div className="flex-1">
-                      <div className="text-lg font-bold text-zinc-900 group-hover:text-blue-600 transition-colors">
-                        {councilMembers[0].name}
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className="bg-blue-100 text-blue-700 border-0"
-                      >
-                        Mayor
-                      </Badge>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-zinc-300 group-hover:text-blue-600 transition-colors" />
-                  </Link>
-                )}
-
-                {/* Councillors Grid */}
-                <div className="grid grid-cols-2 divide-x divide-zinc-100">
-                  {councilMembers.slice(1).map((person: any, i: number) => (
-                    <Link
-                      key={person.id}
-                      to={`/people/${person.id}`}
-                      className={`flex flex-col items-center gap-2 p-4 hover:bg-zinc-50 transition-colors group ${
-                        i % 2 === 0 && i === councilMembers.length - 2
-                          ? "col-span-2"
-                          : ""
-                      } ${i >= 2 ? "border-t border-zinc-100" : ""}`}
-                    >
-                      <div className="h-12 w-12 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden">
-                        {person.image_url ? (
-                          <img
-                            src={person.image_url}
-                            alt={person.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-zinc-300">
-                            <Users className="h-5 w-5" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors">
-                          {person.name}
-                        </div>
-                        <div className="text-[10px] text-zinc-400 uppercase tracking-wider">
-                          Councillor
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            {/* Public Notices */}
-            {publicNotices && publicNotices.length > 0 && (
-              <section>
-                <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Public Notices
-                </h2>
-                <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden divide-y divide-zinc-100">
-                  {publicNotices.map((notice: any, i: number) => (
-                    <a
-                      key={i}
-                      href={notice.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-start gap-4 p-4 hover:bg-zinc-50 transition-colors group"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                          {notice.title}
-                        </div>
-                        <div className="text-xs text-zinc-500 mt-1">
-                          {new Date(notice.date).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </div>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-zinc-300 group-hover:text-blue-600 transition-colors shrink-0 self-center" />
-                    </a>
-                  ))}
-                  <a
-                    href={`${websiteUrl}/EN/main/town/public.html`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 p-3 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    View All Notices
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                </div>
-              </section>
-            )}
-          </div>
-        </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
