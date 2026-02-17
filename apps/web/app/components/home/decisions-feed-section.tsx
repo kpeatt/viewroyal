@@ -28,7 +28,7 @@ export function DecisionsFeedSection({ decisions }: DecisionsFeedSectionProps) {
 
   const dividedDecisions = decisions.filter((d) => d.isDivided);
   const displayedDecisions =
-    filter === "divided" ? dividedDecisions : decisions.slice(0, 8);
+    filter === "divided" ? dividedDecisions : decisions.slice(0, 10);
 
   return (
     <section>
