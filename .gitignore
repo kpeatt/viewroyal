@@ -43,6 +43,7 @@ models/
 reports/
 logs/
 embeddings_*.csv
+backfill_progress.json
 
 # MCP config (local paths/keys)
 .mcp.json

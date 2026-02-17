@@ -1,7 +1,11 @@
 import glob
+import json
 import os
+import time as _time
+from datetime import datetime, timezone
 
 from supabase import create_client
+from tqdm import tqdm
 
 from pipeline import config, parser, utils
 from pipeline.paths import ARCHIVE_ROOT, BASE_DIR, get_municipality_archive_root
@@ -10,6 +14,12 @@ from pipeline.scrapers.civicweb import CivicWebScraper
 
 from .local_diarizer import LocalDiarizer
 from .video.vimeo import VimeoClient
+
+# Progress file for resumable backfill
+BACKFILL_PROGRESS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "backfill_progress.json",
+)
 
 # Register built-in scrapers
 register_scraper("civicweb", CivicWebScraper)
@@ -550,6 +560,270 @@ class Archiver:
             _time.sleep(1)
 
         print(f"\n  Backfill complete: {processed} documents extracted, {skipped} skipped, {errors} errors")
+
+    def backfill_extracted_documents(self, force=False, limit=None):
+        """Backfill document extraction for all meetings with agenda PDFs from the local archive.
+
+        Walks the archive directory structure to find Agenda PDFs, looks up
+        each meeting in the database by archive_path, creates document records
+        if needed, and runs the full Gemini extraction pipeline.
+
+        Uses a local JSON progress file for resumability — can be interrupted
+        and restarted without reprocessing completed meetings.
+
+        Args:
+            force: If True, delete progress file and all extraction data, start fresh.
+            limit: If set, only process this many meetings (for testing).
+        """
+        from pipeline.ingestion.document_extractor import extract_and_store_documents
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, skipping extraction.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+        municipality_id = self.municipality.id if self.municipality else 1
+
+        # Load or initialize progress
+        progress = self._load_backfill_progress(force)
+
+        if force:
+            print("  [!] Force mode: deleting all extraction data and progress...")
+            try:
+                supabase.table("document_sections").delete().eq(
+                    "municipality_id", municipality_id
+                ).execute()
+                supabase.table("extracted_documents").delete().eq(
+                    "municipality_id", municipality_id
+                ).execute()
+                print("  [+] Cleared existing extraction data")
+            except Exception as e:
+                print(f"  [!] Error clearing data: {e}")
+
+        processed_ids = set(progress.get("processed_meeting_ids", []))
+        error_log = progress.get("errors", {})
+
+        # Build index of meetings by archive_path for fast lookup
+        print("  Loading meetings from database...")
+        all_meetings = []
+        offset = 0
+        page_size = 1000
+        while True:
+            result = supabase.table("meetings").select(
+                "id, archive_path, title, meeting_date"
+            ).not_.is_("archive_path", "null").range(offset, offset + page_size - 1).execute()
+            batch = result.data or []
+            all_meetings.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+
+        # Build lookup: relative archive_path -> meeting record
+        meeting_by_path = {}
+        for m in all_meetings:
+            ap = m.get("archive_path", "")
+            if ap:
+                meeting_by_path[ap] = m
+
+        print(f"  Loaded {len(meeting_by_path)} meetings with archive paths")
+
+        # Walk the archive to find all Agenda directories with PDFs
+        print("  Scanning archive for agenda PDFs...")
+        meeting_folders = []  # list of (meeting_folder_abs, pdf_paths)
+
+        for root, dirs, files in os.walk(self.archive_root):
+            if "Agenda" not in dirs:
+                continue
+
+            agenda_dir = os.path.join(root, "Agenda")
+            pdfs = sorted(glob.glob(os.path.join(agenda_dir, "*.pdf")))
+            if pdfs:
+                meeting_folders.append((root, pdfs))
+
+        print(f"  Found {len(meeting_folders)} meeting folders with agenda PDFs")
+
+        if limit:
+            meeting_folders = meeting_folders[:limit]
+            print(f"  Limiting to {limit} meetings")
+
+        # Track stats
+        total = len(meeting_folders)
+        processed_count = 0
+        skipped_count = 0
+        error_count = 0
+        start_time = _time.time()
+
+        for meeting_folder, pdf_paths in tqdm(meeting_folders, desc="Extracting documents", unit="meeting"):
+            # Derive relative archive_path from absolute path
+            rel_path = os.path.relpath(meeting_folder, BASE_DIR)
+            meeting = meeting_by_path.get(rel_path)
+
+            if not meeting:
+                tqdm.write(f"  [!] No DB meeting for: {rel_path}")
+                skipped_count += 1
+                continue
+
+            meeting_id = meeting["id"]
+            meeting_title = meeting.get("title", "Unknown")
+            meeting_date = meeting.get("meeting_date", "")
+
+            # Check if already processed (resumability)
+            if meeting_id in processed_ids and not force:
+                skipped_count += 1
+                continue
+
+            # Process each agenda PDF for this meeting
+            meeting_had_error = False
+            total_boundaries = 0
+            total_sections = 0
+            total_images = 0
+
+            for pdf_path in pdf_paths:
+                pdf_filename = os.path.basename(pdf_path)
+                rel_file_path = os.path.join("Agenda", pdf_filename)
+
+                # Find or create document record
+                doc_id = self._find_or_create_document(
+                    supabase, meeting_id, pdf_filename, rel_file_path, municipality_id
+                )
+                if not doc_id:
+                    tqdm.write(f"  [!] Could not create document for {pdf_filename}")
+                    meeting_had_error = True
+                    continue
+
+                # Run extraction
+                try:
+                    stats = extract_and_store_documents(
+                        pdf_path, doc_id, meeting_id, supabase, municipality_id
+                    )
+                    total_boundaries += stats.get("boundaries_found", 0)
+                    total_sections += stats.get("sections_created", 0)
+                    total_images += stats.get("images_extracted", 0)
+                except Exception as e:
+                    tqdm.write(f"  [!] Error extracting {pdf_filename}: {e}")
+                    meeting_had_error = True
+
+            if meeting_had_error:
+                error_log[str(meeting_id)] = f"Partial or full failure for {meeting_title}"
+                error_count += 1
+            else:
+                processed_count += 1
+
+            # Mark meeting as processed regardless of errors (to avoid re-trying on resume)
+            processed_ids.add(meeting_id)
+
+            tqdm.write(
+                f"  [{meeting_date}] {meeting_title}: "
+                f"{total_boundaries} boundaries, {total_sections} sections, {total_images} images"
+            )
+
+            # Save progress after each meeting
+            self._save_backfill_progress(processed_ids, error_log)
+
+            # Rate limit: 2-second delay between meetings for Gemini API
+            _time.sleep(2)
+
+        elapsed = _time.time() - start_time
+        elapsed_min = elapsed / 60
+
+        print(f"\n  === Extraction Backfill Complete ===")
+        print(f"  Processed: {processed_count}")
+        print(f"  Skipped:   {skipped_count}")
+        print(f"  Errors:    {error_count}")
+        print(f"  Time:      {elapsed_min:.1f} minutes")
+
+        if error_log:
+            print(f"\n  Errors encountered ({len(error_log)}):")
+            for mid, msg in list(error_log.items())[:10]:
+                print(f"    Meeting {mid}: {msg}")
+            if len(error_log) > 10:
+                print(f"    ... and {len(error_log) - 10} more")
+
+    def _find_or_create_document(self, supabase, meeting_id, pdf_filename, rel_file_path, municipality_id):
+        """Find existing document record or create one for the given PDF.
+
+        Returns the document_id or None on failure.
+        """
+        # Try to find existing document by meeting_id + file_path
+        try:
+            result = supabase.table("documents").select("id").eq(
+                "meeting_id", meeting_id
+            ).eq("file_path", rel_file_path).execute()
+
+            if result.data:
+                return result.data[0]["id"]
+        except Exception:
+            pass
+
+        # Create new document record
+        try:
+            # Generate file_hash from the PDF path
+            title = os.path.splitext(pdf_filename)[0]
+
+            doc_data = {
+                "meeting_id": meeting_id,
+                "title": title,
+                "category": "Agenda",
+                "file_path": rel_file_path,
+                "municipality_id": municipality_id,
+            }
+            result = supabase.table("documents").insert(doc_data).execute()
+            if result.data:
+                return result.data[0]["id"]
+        except Exception as e:
+            tqdm.write(f"    [!] Failed to create document record: {e}")
+
+        return None
+
+    def _load_backfill_progress(self, force=False):
+        """Load progress from the backfill progress JSON file.
+
+        If force=True or file doesn't exist, returns empty progress.
+        """
+        if force and os.path.exists(BACKFILL_PROGRESS_FILE):
+            os.remove(BACKFILL_PROGRESS_FILE)
+
+        if os.path.exists(BACKFILL_PROGRESS_FILE):
+            try:
+                with open(BACKFILL_PROGRESS_FILE, "r", encoding="utf-8") as f:
+                    progress = json.load(f)
+                count = len(progress.get("processed_meeting_ids", []))
+                print(f"  Resuming from progress file: {count} meetings already processed")
+                return progress
+            except (json.JSONDecodeError, IOError):
+                print("  [!] Could not read progress file, starting fresh")
+
+        return {
+            "processed_meeting_ids": [],
+            "errors": {},
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _save_backfill_progress(self, processed_ids, errors):
+        """Save progress to the backfill progress JSON file."""
+        progress = {
+            "processed_meeting_ids": sorted(processed_ids),
+            "errors": errors,
+            "started_at": None,  # Preserved from initial load
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Preserve started_at from existing file
+        if os.path.exists(BACKFILL_PROGRESS_FILE):
+            try:
+                with open(BACKFILL_PROGRESS_FILE, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                progress["started_at"] = existing.get("started_at")
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        if not progress["started_at"]:
+            progress["started_at"] = datetime.now(timezone.utc).isoformat()
+
+        with open(BACKFILL_PROGRESS_FILE, "w", encoding="utf-8") as f:
+            json.dump(progress, f, indent=2)
 
     def _resolve_target(self, target: str) -> str:
         """Resolve a --target value to a folder path. Accepts DB ID or path."""
