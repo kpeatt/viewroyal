@@ -82,18 +82,19 @@ Plans:
 - [ ] 04-02-PLAN.md — Complete UI rewrite: 5 section components (Hero, Upcoming Meeting, Recent Meeting, Active Matters, Decisions Feed) + home route redesign
 
 ### Phase 5: Advanced Subscriptions
-**Goal**: Users can subscribe to topics and neighbourhoods for targeted notifications, and all subscribers receive a weekly digest summarizing council activity
+**Goal**: Users can subscribe to topics and neighbourhoods for targeted notifications, and all subscribers receive a post-meeting digest with personalized highlights
 **Depends on**: Phase 3
 **Requirements**: SUB-03, SUB-04, SUB-05
 **Success Criteria** (what must be TRUE):
   1. A user can subscribe to a topic or category and receive email when matching agenda items or motions appear
   2. A user can subscribe to a neighbourhood and receive email when geographically relevant matters are discussed
-  3. All subscribers receive a weekly digest email summarizing the past week of council activity (personalized if they have subscriptions, generic otherwise)
-**Plans**: TBD
+  3. All subscribers receive a post-meeting digest email summarizing council activity (personalized if they have subscriptions, generic otherwise)
+**Plans:** 3 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md — Schema extensions (topics seed, keyword columns, onboarding flag), RPC topic matching, geocoding API, pipeline geocoding, fix auto-subscribe
+- [ ] 05-02-PLAN.md — Post-signup onboarding wizard (topics, location, digest), enhanced settings page with topic/keyword management
+- [ ] 05-03-PLAN.md — Digest email subscription highlighting + friendly tone, pre-meeting alert capability in Edge Function
 
 ## Progress
 
@@ -107,4 +108,4 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 | 2. Multi-Tenancy | 0/1 | Planned | - |
 | 3. Subscriptions & Notifications | 0/2 | Complete    | 2026-02-17 |
 | 4. Home Page Enhancements | 0/? | Not started | - |
-| 5. Advanced Subscriptions | 0/? | Not started | - |
+| 5. Advanced Subscriptions | 0/3 | Planned | - |
