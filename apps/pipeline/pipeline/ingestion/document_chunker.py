@@ -19,7 +19,34 @@ import pipeline.parser as parser
 logger = logging.getLogger(__name__)
 
 MAX_SECTION_CHARS = 8000  # Match embed.py MAX_EMBED_CHARS
-MIN_SECTION_CHARS = 100  # Skip trivially small sections
+MIN_SECTION_CHARS = 150  # Skip trivially small sections
+
+# Noise headings: motion results and procedural markers that should never be sections
+NOISE_HEADINGS = {
+    "CARRIED", "DEFEATED", "TABLED", "OPPOSED", "WITHDRAWN",
+    "OR",
+    "REVIEWED BY: INITIALS", "REVIEWED BY:",
+    "(CONTINUED FROM PREVIOUS PAGE)", "(CONT'D)",
+    "COMMENTS",
+}
+
+# Sub-headings: internal structure within staff reports, folded into parent section
+SUB_HEADINGS = {
+    "BACKGROUND:", "BACKGROUND",
+    "PURPOSE:", "PURPOSE",
+    "RECOMMENDATION:", "RECOMMENDATIONS:",
+    "ANALYSIS:", "ANALYSIS",
+    "ATTACHMENTS:", "ATTACHMENT:",
+    "ALIGNMENT:", "ALIGNMENT",
+    "PUBLIC PARTICIPATION GOAL:", "PUBLIC PARTICIPATION GOAL",
+    "OPTIONS:", "OPTIONS",
+    "FINANCIAL IMPLICATIONS:", "FINANCIAL IMPLICATIONS",
+    "POLICY IMPLICATIONS:", "POLICY IMPLICATIONS",
+    "DISCUSSION:", "DISCUSSION",
+}
+
+# Maximum times a heading can repeat before it's treated as a repeating table header
+REPEAT_HEADING_THRESHOLD = 5
 
 
 def chunk_document(pdf_path: str, doc_title: str) -> list[dict]:
@@ -50,10 +77,21 @@ def chunk_document(pdf_path: str, doc_title: str) -> list[dict]:
     if not sections:
         return _fixed_size_fallback(pdf_path, doc_title)
 
-    # Phase 3: Enforce size cap and filter small sections
+    # Phase 2b: Merge repeating table-row headings
+    sections = _merge_repeating_headings(sections)
+
+    # Phase 3: Enforce size cap and filter small/empty sections
     final_sections = []
     for section in sections:
-        text_len = len(section["section_text"])
+        text = section["section_text"]
+        title = section.get("section_title") or ""
+
+        # Drop heading-only sections (text is just the heading with no body)
+        text_stripped = text.strip()
+        if title and text_stripped == title.strip():
+            continue
+
+        text_len = len(text)
         if text_len > MAX_SECTION_CHARS:
             parts = _split_oversized_section(section, MAX_SECTION_CHARS)
             final_sections.extend(parts)
@@ -183,6 +221,35 @@ def _split_at_headings(doc, body_size: float) -> list[dict]:
                     # Entire line is heading text
                     heading_text = " ".join(line_texts_heading)
 
+                    # Check for noise headings — treat as body text
+                    heading_upper = heading_text.strip().upper()
+                    if heading_upper in NOISE_HEADINGS:
+                        # Treat as body text instead of starting a new section
+                        if heading_buffer:
+                            merged_title = _finalize_heading_buffer()
+                            _flush_section()
+                            current_title = merged_title
+                            current_page_start = page_num + 1
+                            heading_buffer = []
+                            heading_buffer_y = None
+                        current_text_parts.append(heading_text.strip())
+                        current_page_end = page_num + 1
+                        continue
+
+                    # Check for sub-headings — fold into parent section
+                    if heading_upper in SUB_HEADINGS:
+                        if heading_buffer:
+                            merged_title = _finalize_heading_buffer()
+                            _flush_section()
+                            current_title = merged_title
+                            current_page_start = page_num + 1
+                            heading_buffer = []
+                            heading_buffer_y = None
+                        # Append as bold text within current section
+                        current_text_parts.append(f"\n\n**{heading_text.strip()}**\n")
+                        current_page_end = page_num + 1
+                        continue
+
                     # Check if this is adjacent to the previous heading (merge)
                     if heading_buffer and heading_buffer_y is not None:
                         if abs(line_y - heading_buffer_y) < 5:
@@ -236,6 +303,59 @@ def _split_at_headings(doc, body_size: float) -> list[dict]:
     _flush_section()
 
     return sections
+
+
+def _merge_repeating_headings(sections: list[dict]) -> list[dict]:
+    """
+    Merge sections with the same title that appears 5+ times.
+
+    These are typically repeating table headers on multi-page tables
+    (e.g., "COUNCIL RESOLUTION FOLLOW UP LIST" appearing on every page).
+    Concatenates their text in order, keeps first page_start and last page_end.
+    """
+    # Count title occurrences
+    title_counts = Counter()
+    for s in sections:
+        t = s.get("section_title") or ""
+        if t:
+            title_counts[t] += 1
+
+    # Find titles that repeat too many times
+    repeating_titles = {t for t, c in title_counts.items() if c >= REPEAT_HEADING_THRESHOLD}
+
+    if not repeating_titles:
+        return sections
+
+    logger.info("Merging repeating headings: %s", repeating_titles)
+
+    # Group repeating sections; keep non-repeating in order
+    merged = []
+    repeat_groups = {}  # title -> accumulated section
+
+    for s in sections:
+        t = s.get("section_title") or ""
+        if t in repeating_titles:
+            if t not in repeat_groups:
+                repeat_groups[t] = {
+                    "section_title": t,
+                    "section_text": s["section_text"],
+                    "section_order": s["section_order"],
+                    "page_start": s.get("page_start"),
+                    "page_end": s.get("page_end"),
+                    "token_count": 0,
+                    "_placeholder_index": len(merged),
+                }
+                # Insert placeholder to maintain approximate position
+                merged.append(repeat_groups[t])
+            else:
+                group = repeat_groups[t]
+                group["section_text"] += "\n\n" + s["section_text"]
+                if s.get("page_end"):
+                    group["page_end"] = s["page_end"]
+        else:
+            merged.append(s)
+
+    return merged
 
 
 def _fixed_size_fallback(pdf_path: str, doc_title: str) -> list[dict]:
