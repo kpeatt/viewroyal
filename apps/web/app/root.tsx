@@ -3,6 +3,7 @@ import {
   Links,
   Meta,
   Outlet,
+  redirect,
   Scripts,
   ScrollRestoration,
   useLoaderData,
@@ -10,6 +11,7 @@ import {
 } from "react-router";
 import { createSupabaseServerClient } from "./lib/supabase.server";
 import { getMunicipality } from "./services/municipality";
+import { getUserProfile } from "./services/subscriptions";
 import { getMunicipalityFromMatches } from "./lib/municipality-helpers";
 
 import type { Route } from "./+types/root";
@@ -70,6 +72,26 @@ export async function loader({ request }: Route.LoaderArgs) {
     supabase.auth.getUser(),
     getMunicipality(supabase),
   ]);
+
+  // Redirect new users to onboarding if they haven't completed it
+  if (user) {
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+
+    // Don't redirect if already on onboarding, login, logout, signup, or API routes
+    const skipRedirectPaths = ["/onboarding", "/login", "/logout", "/signup"];
+    const isApiRoute = pathname.startsWith("/api/");
+    const shouldSkipRedirect = skipRedirectPaths.includes(pathname) || isApiRoute;
+
+    if (!shouldSkipRedirect) {
+      const profile = await getUserProfile(supabase, user.id);
+      // No profile or onboarding not completed -> redirect to onboarding
+      if (!profile || !profile.onboarding_completed) {
+        throw redirect("/onboarding", { headers });
+      }
+    }
+  }
+
   return { user, municipality };
 }
 
