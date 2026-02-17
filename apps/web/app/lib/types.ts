@@ -200,6 +200,18 @@ export interface Topic {
   created_at: string;
 }
 
+export interface DocumentSection {
+  id: number;
+  document_id: number;
+  agenda_item_id: number | null;
+  section_title: string | null;
+  section_text: string;
+  section_order: number;
+  page_start: number | null;
+  page_end: number | null;
+  token_count: number | null;
+}
+
 export interface Matter {
   id: number;
   title: string;

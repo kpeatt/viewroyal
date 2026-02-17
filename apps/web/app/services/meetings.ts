@@ -5,6 +5,7 @@ import type {
   TranscriptSegment,
   SpeakerAlias,
   Attendance,
+  DocumentSection,
 } from "../lib/types";
 
 export interface GetMeetingsOptions {
@@ -271,4 +272,33 @@ export async function getDividedDecisions(supabase: SupabaseClient) {
     );
 
   return dividedMotions;
+}
+
+export async function getDocumentSectionsForMeeting(
+  supabase: SupabaseClient,
+  meetingId: string,
+): Promise<DocumentSection[]> {
+  // First get document IDs for this meeting
+  const { data: docs } = await supabase
+    .from("documents")
+    .select("id")
+    .eq("meeting_id", meetingId);
+
+  if (!docs || docs.length === 0) return [];
+
+  const docIds = docs.map((d: any) => d.id);
+  const { data, error } = await supabase
+    .from("document_sections")
+    .select(
+      "id, document_id, agenda_item_id, section_title, section_text, section_order, page_start, page_end, token_count",
+    )
+    .in("document_id", docIds)
+    .order("document_id", { ascending: true })
+    .order("section_order", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching document sections:", error);
+    return [];
+  }
+  return (data ?? []) as DocumentSection[];
 }

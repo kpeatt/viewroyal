@@ -19,12 +19,14 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import type { AgendaItem, Motion, Vote } from "../../lib/types";
+import type { AgendaItem, Motion, Vote, DocumentSection } from "../../lib/types";
 import { Badge } from "../ui/badge";
 import { formatTimestamp } from "../../lib/timeline-utils";
+import { DocumentSections } from "./DocumentSections";
 
 interface AgendaOverviewProps {
   items: AgendaItem[];
+  documentSections?: DocumentSection[];
   expandedItemId: number | null;
   onItemClick: (id: number) => void;
   onWatchVideo: (startTime: number, itemId: number) => void;
@@ -33,6 +35,7 @@ interface AgendaOverviewProps {
 
 export function AgendaOverview({
   items,
+  documentSections,
   expandedItemId,
   onItemClick,
   onWatchVideo,
@@ -61,6 +64,7 @@ export function AgendaOverview({
               {group.parent ? (
                 <AgendaItemRow
                   item={group.parent}
+                  documentSections={documentSections}
                   displayOrder={cleanOrder(group.parent.item_order)}
                   isExpanded={expandedItemId === group.parent.id}
                   onToggle={() => onItemClick(group.parent!.id)}
@@ -106,6 +110,7 @@ export function AgendaOverview({
                     <AgendaItemRow
                       key={child.id}
                       item={child}
+                      documentSections={documentSections}
                       displayOrder={displayOrder}
                       isExpanded={expandedItemId === child.id}
                       onToggle={() => onItemClick(child.id)}
@@ -212,6 +217,7 @@ function formatDiscussionDuration(seconds: number): string {
 
 interface AgendaItemRowProps {
   item: AgendaItem;
+  documentSections?: DocumentSection[];
   displayOrder: string;
   isExpanded: boolean;
   onToggle: () => void;
@@ -224,6 +230,7 @@ interface AgendaItemRowProps {
 
 function AgendaItemRow({
   item,
+  documentSections,
   displayOrder,
   isExpanded,
   onToggle,
@@ -233,6 +240,9 @@ function AgendaItemRow({
   hasChildren,
   isLastChild,
 }: AgendaItemRowProps) {
+  const linkedSections = (documentSections || []).filter(
+    (s) => s.agenda_item_id === item.id,
+  );
   const motions = item.motions || [];
   const hasMotions = motions.length > 0;
   const motionCount = motions.length;
@@ -567,6 +577,11 @@ function AgendaItemRow({
                     ))}
                   </div>
                 </div>
+              )}
+
+              {/* Document Sections */}
+              {linkedSections.length > 0 && (
+                <DocumentSections sections={linkedSections} />
               )}
 
               {/* Keywords */}
