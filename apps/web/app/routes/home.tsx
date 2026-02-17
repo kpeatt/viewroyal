@@ -1,5 +1,5 @@
 import { useRouteLoaderData } from "react-router";
-import { getHomeData } from "../services/site";
+import { getHomeData, getPublicNotices } from "../services/site";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getMunicipality } from "../services/municipality";
 import type { Municipality } from "../lib/types";
@@ -8,12 +8,16 @@ import { UpcomingMeetingSection } from "../components/home/upcoming-meeting-sect
 import { RecentMeetingSection } from "../components/home/recent-meeting-section";
 import { ActiveMattersSection } from "../components/home/active-matters-section";
 import { DecisionsFeedSection } from "../components/home/decisions-feed-section";
+import { PublicNoticesSection } from "../components/home/public-notices-section";
 
 export async function loader({ request }: { request: Request }) {
   try {
     const { supabase } = createSupabaseServerClient(request);
     const municipality = await getMunicipality(supabase);
-    const data = await getHomeData(supabase);
+    const [data, publicNotices] = await Promise.all([
+      getHomeData(supabase),
+      getPublicNotices((municipality as Municipality)?.rss_url),
+    ]);
 
     return {
       upcomingMeeting: data.upcomingMeeting,
@@ -22,6 +26,7 @@ export async function loader({ request }: { request: Request }) {
       recentMeetingDecisions: data.recentMeetingDecisions,
       activeMatters: data.activeMatters,
       recentDecisions: data.recentDecisions,
+      publicNotices,
       municipality,
     };
   } catch (error) {
@@ -38,6 +43,7 @@ export default function Home({ loaderData }: any) {
     recentMeetingDecisions,
     activeMatters,
     recentDecisions,
+    publicNotices,
     municipality,
   } = loaderData;
 
@@ -61,6 +67,10 @@ export default function Home({ loaderData }: any) {
         />
         <ActiveMattersSection matters={activeMatters} />
         <DecisionsFeedSection decisions={recentDecisions} />
+        <PublicNoticesSection
+          notices={publicNotices}
+          websiteUrl={(municipality as Municipality)?.website_url}
+        />
       </div>
     </div>
   );

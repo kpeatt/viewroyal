@@ -3,6 +3,12 @@ import { Calendar, ArrowRight } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { formatDate } from "../../lib/utils";
 
+interface AgendaItem {
+  title: string;
+  category: string;
+  summary: string | null;
+}
+
 interface UpcomingMeetingSectionProps {
   meeting: {
     id: number;
@@ -10,9 +16,23 @@ interface UpcomingMeetingSectionProps {
     meeting_date: string;
     type?: string;
     has_agenda?: boolean;
-    agendaPreview: string[];
+    agendaPreview: AgendaItem[];
     organizations?: { name: string };
   } | null;
+}
+
+/**
+ * Strip leading item numbers/letters from agenda titles.
+ * Handles patterns like "6.a) ", "14.a) 1. ", "7.b) ", "10.c) 1. "
+ */
+function cleanAgendaTitle(title: string): string {
+  return title
+    .replace(/^[\d]+\.?[a-z]?\)\s*(\d+\.?\s*)?/i, "")
+    .replace(/^[A-Z]\)\s*/i, "")
+    .replace(/^[\d]+\.\s*/i, "")
+    .replace(/^Re:\s*/i, "")
+    .replace(/^.*?,\s*Re:\s*/i, "")
+    .trim();
 }
 
 export function UpcomingMeetingSection({
@@ -56,20 +76,28 @@ export function UpcomingMeetingSection({
 
           {meeting.agendaPreview?.length > 0 ? (
             <div className="border-t border-zinc-100 pt-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
-                Agenda Preview
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3">
+                What's Being Discussed
               </h4>
-              <ul className="space-y-1">
-                {meeting.agendaPreview.map((title, i) => (
-                  <li
-                    key={i}
-                    className="text-sm text-zinc-600 line-clamp-1 flex items-start gap-2"
-                  >
-                    <span className="text-zinc-300 mt-1.5 shrink-0 w-1 h-1 rounded-full bg-zinc-300" />
-                    {title}
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-3">
+                {meeting.agendaPreview.map((item, i) => {
+                  const cleaned = cleanAgendaTitle(item.title);
+                  const displayText = item.summary || cleaned || item.title;
+                  return (
+                    <div key={i} className="flex items-start gap-3">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] shrink-0 mt-0.5"
+                      >
+                        {item.category}
+                      </Badge>
+                      <p className="text-sm text-zinc-600 line-clamp-2">
+                        {displayText}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             !meeting.has_agenda && (
@@ -79,7 +107,7 @@ export function UpcomingMeetingSection({
             )
           )}
 
-          <div className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 font-semibold group-hover:text-blue-700 transition-colors">
+          <div className="mt-4 inline-flex items-center gap-1 text-sm text-blue-600 font-semibold group-hover:text-blue-700 transition-colors">
             View meeting
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </div>

@@ -115,14 +115,14 @@ export async function getHomeData(supabase: SupabaseClient) {
         .limit(1)
         .maybeSingle(),
 
-      // 3. Active matters (6, ordered by last_seen)
+      // 3. Active matters (4, ordered by last_seen)
       // NOTE: Do NOT select plain_english_summary from matters (always null)
       supabase
         .from("matters")
         .select("id, title, category, status, first_seen, last_seen")
         .eq("status", "Active")
         .order("last_seen", { ascending: false, nullsFirst: false })
-        .limit(6),
+        .limit(4),
 
       // 4. Recent non-procedural motions with vote data (15)
       // NOTE: Do NOT use motions.yes_votes/no_votes (always 0) — use nested votes(vote)
@@ -147,7 +147,7 @@ export async function getHomeData(supabase: SupabaseClient) {
 
   // ── Batch 2: Dependent queries ──
 
-  let agendaPreview: string[] = [];
+  let agendaPreview: Array<{ title: string; category: string; summary: string | null }> = [];
   let matterSummaryMap = new Map<number, string>();
   let recentMeetingDecisions: Array<{
     id: number;
@@ -171,10 +171,10 @@ export async function getHomeData(supabase: SupabaseClient) {
         (async () => {
           const res = await supabase
             .from("agenda_items")
-            .select("title, category")
+            .select("title, category, plain_english_summary")
             .eq("meeting_id", upcomingMeeting.id)
             .neq("category", "Procedural")
-            .limit(4);
+            .limit(5);
           return { type: "agendaPreview" as const, data: res.data };
         })(),
       );
@@ -227,7 +227,11 @@ export async function getHomeData(supabase: SupabaseClient) {
       switch (result.type) {
         case "agendaPreview":
           agendaPreview = (result.data || []).map(
-            (t: { title: string }) => t.title,
+            (t: { title: string; category: string; plain_english_summary: string | null }) => ({
+              title: t.title,
+              category: t.category,
+              summary: t.plain_english_summary,
+            }),
           );
           break;
 

@@ -62,7 +62,7 @@ export function ActiveMattersSection({ matters }: ActiveMattersSectionProps) {
                   {matter.title}
                 </h3>
                 {matter.summary && (
-                  <p className="text-xs text-zinc-500 line-clamp-1 mb-2">
+                  <p className="text-xs text-zinc-500 line-clamp-2 mb-2">
                     {matter.summary}
                   </p>
                 )}
