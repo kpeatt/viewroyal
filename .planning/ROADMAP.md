@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Subscriptions & Notifications** - Merge PR #13, land public signup, email delivery, and core subscription features (completed 2026-02-17)
 - [ ] **Phase 4: Home Page Enhancements** - Surface active matters, recent decisions, and upcoming meetings on home page
 - [ ] **Phase 5: Advanced Subscriptions** - Topic subscriptions, neighbourhood subscriptions, and weekly digest email
-- [ ] **Phase 6: Gap Closure & Cleanup** - Fix audit gaps (HOME-01/02 counts, integration fixes, dead code, UX polish)
+- [x] **Phase 6: Gap Closure & Cleanup** - Fix audit gaps (HOME-01/02 counts, integration fixes, dead code, UX polish) (completed 2026-02-17)
 
 ## Phase Details
 
@@ -111,7 +111,7 @@ Plans:
   6. Signup redirectTo defaults to `/` or `/onboarding` (no double-redirect)
   7. Settings page exposes digest frequency selector (not hardcoded to each_meeting)
   8. api.geocode.tsx uses bounded=0 matching pipeline behavior
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 06-01-PLAN.md — Close all 8 audit gaps: active matters limit, subscription check fix, dead code removal, signup redirect, digest frequency selector, geocode parameter fix
@@ -129,4 +129,4 @@ Note: Phase 4 can execute in parallel with Phase 3 (both depend on Phase 2, not 
 | 3. Subscriptions & Notifications | 0/2 | Complete    | 2026-02-17 |
 | 4. Home Page Enhancements | 0/? | Not started | - |
 | 5. Advanced Subscriptions | 0/3 | Planned | - |
-| 6. Gap Closure & Cleanup | 0/? | Not started | - |
+| 6. Gap Closure & Cleanup | 0/? | Complete    | 2026-02-17 |
