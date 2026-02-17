@@ -111,10 +111,10 @@ Plans:
   6. Signup redirectTo defaults to `/` or `/onboarding` (no double-redirect)
   7. Settings page exposes digest frequency selector (not hardcoded to each_meeting)
   8. api.geocode.tsx uses bounded=0 matching pipeline behavior
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- (to be planned)
+- [ ] 06-01-PLAN.md — Close all 8 audit gaps: active matters limit, subscription check fix, dead code removal, signup redirect, digest frequency selector, geocode parameter fix
 
 ## Progress
 
