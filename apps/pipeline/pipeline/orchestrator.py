@@ -4,7 +4,7 @@ import os
 from supabase import create_client
 
 from pipeline import config, parser, utils
-from pipeline.paths import ARCHIVE_ROOT, get_municipality_archive_root
+from pipeline.paths import ARCHIVE_ROOT, BASE_DIR, get_municipality_archive_root
 from pipeline.scrapers import get_scraper, register_scraper, MunicipalityConfig
 from pipeline.scrapers.civicweb import CivicWebScraper
 
@@ -505,7 +505,8 @@ class Archiver:
 
             archive_path = meeting_result.data["archive_path"]
             if not os.path.isabs(archive_path):
-                archive_path = os.path.join(self.archive_root, archive_path)
+                # DB stores paths relative to project root (e.g. "viewroyal_archive/...")
+                archive_path = os.path.join(BASE_DIR, archive_path)
 
             pdf_path = os.path.join(archive_path, file_path)
             if not os.path.exists(pdf_path):
