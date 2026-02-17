@@ -32,6 +32,12 @@ Last activity: 2026-02-16 — Milestone v1.1 started
 | 05-advanced-subscriptions | 3 | 25min | 8min |
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
 
+## Quick Tasks Completed
+
+| Date | Task | Result |
+|------|------|--------|
+| 2026-02-16 | Fix `main.py` redownloading agenda PDFs | Corrected `BASE_DIR` in `paths.py` and added legacy archive support for View Royal. |
+
 ## Accumulated Context
 
 ### Decisions

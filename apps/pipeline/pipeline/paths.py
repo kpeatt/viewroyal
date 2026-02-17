@@ -1,7 +1,7 @@
 import os
 
 # Root project directory
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # Data and Archive
 ARCHIVE_ROOT = os.path.join(BASE_DIR, "viewroyal_archive")
@@ -27,6 +27,12 @@ def get_archive_path(*args):
 
 def get_municipality_archive_root(slug: str) -> str:
     """Returns archive root for a municipality, e.g. /project/archive/view-royal/"""
+    if slug == "view-royal":
+        # Backward compatibility: use the legacy viewroyal_archive if it exists
+        legacy_path = os.path.join(BASE_DIR, "viewroyal_archive")
+        if os.path.exists(legacy_path):
+            return legacy_path
+
     root = os.path.join(BASE_DIR, "archive", slug)
     os.makedirs(root, exist_ok=True)
     return root
