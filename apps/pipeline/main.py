@@ -80,15 +80,23 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--extract-documents",
+        action="store_true",
+        help="Run Gemini-powered document extraction on all agenda PDFs (resumable). "
+             "Replaces existing document_sections. Use --force to delete and reprocess all. "
+             "Use --limit N to process only N meetings.",
+    )
+
+    parser.add_argument(
         "--backfill-sections",
         action="store_true",
-        help="Backfill document sections for all existing documents (two-pass: sections first, embeddings second).",
+        help="[DEPRECATED: use --extract-documents] Backfill document sections for all existing documents.",
     )
 
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Force re-processing (delete and recreate existing data). Used with --backfill-sections.",
+        help="Force re-processing (delete and recreate existing data). Used with --extract-documents or --backfill-sections.",
     )
 
     parser.add_argument(
@@ -137,8 +145,14 @@ if __name__ == "__main__":
     elif args.embed_only:
         print("\n--- Embedding Only ---")
         app._embed_new_content()
+    elif args.extract_documents:
+        print("\n--- Extract Documents (Gemini 2.5 Flash) ---")
+        app.backfill_extracted_documents(force=args.force, limit=args.limit)
+        if not args.skip_embed:
+            print("\n--- Embedding Document Sections ---")
+            app._embed_new_content()
     elif args.backfill_sections:
-        print("\n--- Backfill Document Sections ---")
+        print("\n--- Backfill Document Sections (DEPRECATED: use --extract-documents) ---")
         app.backfill_document_sections(force=args.force)
         if not args.skip_embed:
             print("\n--- Embedding Document Sections ---")
