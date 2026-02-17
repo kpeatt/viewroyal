@@ -75,11 +75,11 @@ Plans:
   2. Home page shows the last 10-15 non-procedural motions with plain English summary, result, vote breakdown, and link to the meeting
   3. Home page shows upcoming meetings with agenda topic preview (not just date/title)
   4. Divided votes are visually highlighted in the decisions feed so contentious items stand out
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — Data layer refactor (new queries for active matters, decisions feed with vote aggregation, upcoming meeting preview) + decorative map SVG component
+- [ ] 04-02-PLAN.md — Complete UI rewrite: 5 section components (Hero, Upcoming Meeting, Recent Meeting, Active Matters, Decisions Feed) + home route redesign
 
 ### Phase 5: Advanced Subscriptions
 **Goal**: Users can subscribe to topics and neighbourhoods for targeted notifications, and all subscribers receive a weekly digest summarizing council activity
