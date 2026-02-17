@@ -43,18 +43,17 @@ Plans:
 - [ ] 07-01-PLAN.md -- Schema + pipeline chunker (document_sections table, document_chunker.py, embed.py integration)
 - [ ] 07-02-PLAN.md -- Web UI + backfill CLI (accordion display on meeting pages, --backfill-sections flag)
 
-### Phase 07.1: Upgrade document extraction with Docling and Gemini (INSERTED)
+### Phase 07.1: Upgrade document extraction with Gemini 2.5 Flash (INSERTED)
 
-**Goal:** Replace PyMuPDF font-analysis document extraction with a three-tool pipeline (Gemini boundary detection + Docling content extraction + PyMuPDF image extraction) and backfill all 711+ meetings
+**Goal:** Replace PyMuPDF font-analysis document extraction with Gemini 2.5 Flash two-pass extraction (boundary detection + content extraction) and PyMuPDF image extraction, then backfill all 711+ meetings
 **Depends on:** Phase 7
 **Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05
-**Plans:** 4 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] 07.1-01-PLAN.md -- Schema migration (extracted_documents, document_images tables) + Gemini boundary detection module
-- [ ] 07.1-02-PLAN.md -- Docling content extraction module + PyMuPDF image extraction + R2 upload module
-- [ ] 07.1-03-PLAN.md -- Document extraction orchestrator + ingester.py integration
-- [ ] 07.1-04-PLAN.md -- Resumable backfill pipeline + CLI updates
+- [ ] 07.1-01-PLAN.md -- Schema migration (extracted_documents, document_images tables) + Gemini 2.5 Flash two-pass extractor module
+- [ ] 07.1-02-PLAN.md -- Image extractor + document extraction orchestrator + pipeline integration + Docling removal
+- [ ] 07.1-03-PLAN.md -- Resumable backfill pipeline + CLI updates + end-to-end verification
 
 ### Phase 8: Unified Search & Hybrid RAG
 **Goal**: Users search and ask questions from a single page that intelligently handles both keyword lookups and natural language questions, with conversation continuity
@@ -101,6 +100,6 @@ Plans:
 | 5. Advanced Subscriptions | v1.0 | 3/3 | Complete | 2026-02-16 |
 | 6. Gap Closure & Cleanup | v1.0 | 1/1 | Complete | 2026-02-17 |
 | 7. Document Intelligence | v1.1 | Complete    | 2026-02-17 | - |
-| 7.1 Upgrade Document Extraction | v1.1 | 0/4 | Planned | - |
+| 7.1 Upgrade Document Extraction | v1.1 | 0/3 | Planned | - |
 | 8. Unified Search & Hybrid RAG | v1.1 | 0/? | Not started | - |
 | 9. AI Profiling & Comparison | v1.1 | 0/? | Not started | - |
