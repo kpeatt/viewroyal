@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 4: Home Page Enhancements
+**Current focus:** Phase 5: Advanced Subscriptions
 
 ## Current Position
 
 Phase: 5 of 5 (Advanced Subscriptions)
-Plan: 1 of 2 in current phase
-Status: Ready
-Last activity: 2026-02-16 — Completed 04-02-PLAN.md (Phase 4 complete)
+Plan: 2 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-16 — Completed 05-01-PLAN.md
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 8.5min
-- Total execution time: 1.0 hours
+- Total plans completed: 8
+- Average duration: 9.4min
+- Total execution time: 1.3 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [████████░░] 80%
 | 02-multi-tenancy | 1 | 8min | 8min |
 | 03-subscriptions-notifications | 2 | 19min | 10min |
 | 04-home-page-enhancements | 2 | 30min | 15min |
+| 05-advanced-subscriptions | 1 | 17min | 17min |
 
 **Recent Trend:**
-- Last 5 plans: 8min, 4min, 15min, 5min, 25min
-- Trend: increasing (more complex UI work)
+- Last 5 plans: 4min, 15min, 5min, 25min, 17min
+- Trend: variable (mix of schema and UI work)
 
 *Updated after each plan completion*
 
@@ -71,6 +72,11 @@ Recent decisions affecting current work:
 - [04-02]: Decisions limited to 8 recent + toggle to view divided votes (improved UX)
 - [04-02]: Active matters shown as 4-6 visible cards for focus and performance
 - [04-02]: Public Notices RSS feed restored per user feedback for civic awareness
+- [05-01]: Preserved existing find_meeting_subscribers plpgsql signature when adding topic branches
+- [05-01]: Cosine similarity threshold 0.45 for keyword matching (tunable in RPC)
+- [05-01]: Digest auto-subscribe removed from signup -- now opt-in only
+- [05-01]: Onboarding route registered as placeholder (redirects to /settings until Plan 02)
+- [05-01]: Pipeline geocoding uses bounded=0 for better coverage near View Royal borders
 
 ### Pending Todos
 
@@ -87,5 +93,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 04-02-PLAN.md (Phase 4 complete)
-Resume file: .planning/phases/04-home-page-enhancements/04-02-SUMMARY.md
+Stopped at: Completed 05-01-PLAN.md
+Resume file: .planning/phases/05-advanced-subscriptions/05-01-SUMMARY.md
