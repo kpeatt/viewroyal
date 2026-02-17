@@ -33,7 +33,7 @@ export async function action({ request }: Route.ActionArgs) {
     // View Royal bounding box for biasing results
     const viewBox = "-123.55,48.42,-123.40,48.48";
     const query = `${address}, View Royal, BC, Canada`;
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&viewbox=${viewBox}&bounded=1`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&viewbox=${viewBox}&bounded=0`;
 
     const response = await fetch(url, {
       headers: {

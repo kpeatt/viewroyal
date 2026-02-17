@@ -114,41 +114,6 @@ export async function addSubscription(
   return data as Subscription;
 }
 
-/**
- * Add a keyword-based topic subscription with semantic embedding.
- * The keyword text and its 384-dim embedding are stored for cosine similarity matching.
- */
-export async function addKeywordSubscription(
-  supabase: SupabaseClient,
-  userId: string,
-  keyword: string,
-  embedding: number[],
-): Promise<Subscription> {
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .upsert(
-      {
-        user_id: userId,
-        type: "topic" as SubscriptionType,
-        matter_id: null,
-        topic_id: null,
-        person_id: null,
-        neighborhood: null,
-        keyword,
-        keyword_embedding: embedding,
-      },
-      {
-        onConflict:
-          "user_id,type,matter_id,topic_id,person_id,neighborhood,keyword",
-      },
-    )
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data as Subscription;
-}
-
 export async function removeSubscription(
   supabase: SupabaseClient,
   userId: string,
@@ -167,8 +132,27 @@ export async function checkSubscription(
   supabase: SupabaseClient,
   userId: string,
   type: SubscriptionType,
-  targetId: number,
+  targetId?: number,
+  neighborhoodName?: string,
 ): Promise<Subscription | null> {
+  // Neighborhood subscriptions use string-based lookup, not numeric ID
+  if (type === "neighborhood") {
+    let query = supabase
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", type)
+      .eq("is_active", true);
+
+    if (neighborhoodName) {
+      query = query.eq("neighborhood", neighborhoodName);
+    }
+
+    const { data, error } = await query.maybeSingle();
+    if (error) throw error;
+    return data as Subscription | null;
+  }
+
   const column =
     type === "matter"
       ? "matter_id"
@@ -178,7 +162,7 @@ export async function checkSubscription(
           ? "topic_id"
           : null;
 
-  if (!column) return null;
+  if (!column || targetId == null) return null;
 
   const { data, error } = await supabase
     .from("subscriptions")
