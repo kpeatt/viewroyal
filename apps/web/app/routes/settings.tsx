@@ -1,4 +1,5 @@
-import { Form, redirect, useActionData, useLoaderData } from "react-router";
+import { useState } from "react";
+import { Form, redirect, useActionData } from "react-router";
 import type { Route } from "./+types/settings";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import {
@@ -7,6 +8,7 @@ import {
   getSubscriptions,
   removeSubscription,
 } from "../services/subscriptions";
+import { getTopics } from "../services/topics";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -21,12 +23,15 @@ import {
   Check,
   Map,
   AlertCircle,
+  Plus,
+  X,
+  Loader2,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type {
   UserProfile,
   Subscription,
-  DigestFrequency,
+  Topic,
 } from "../lib/types";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -39,12 +44,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw redirect("/login?redirectTo=/settings", { headers });
   }
 
-  const [profile, subscriptions] = await Promise.all([
+  const [profile, subscriptions, topics] = await Promise.all([
     getUserProfile(supabase, user.id),
     getSubscriptions(supabase, user.id),
+    getTopics(supabase),
   ]);
 
-  return { user, profile, subscriptions };
+  return { user, profile, subscriptions, topics };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -66,17 +72,27 @@ export async function action({ request }: Route.ActionArgs) {
     const neighborhood = (formData.get("neighborhood") as string) || undefined;
     const notification_email =
       (formData.get("notification_email") as string) || undefined;
-    const digest_frequency = (formData.get("digest_frequency") as DigestFrequency) || "each_meeting";
     const digest_enabled = formData.get("digest_enabled") === "on";
+    const lat = formData.get("lat") ? parseFloat(formData.get("lat") as string) : null;
+    const lng = formData.get("lng") ? parseFloat(formData.get("lng") as string) : null;
 
     await upsertUserProfile(supabase, user.id, {
       display_name,
       address,
       neighborhood,
       notification_email,
-      digest_frequency,
+      digest_frequency: "each_meeting",
       digest_enabled,
     });
+
+    // If geocoded coordinates are provided, update geography via RPC
+    if (lat != null && lng != null) {
+      await supabase.rpc("update_user_location", {
+        target_user_id: user.id,
+        lng,
+        lat,
+      });
+    }
 
     return { success: true, message: "Profile updated." };
   }
@@ -108,6 +124,13 @@ const VIEW_ROYAL_NEIGHBORHOODS = [
   "View Royal Town Centre",
 ];
 
+const PROXIMITY_OPTIONS = [
+  { value: 500, label: "500m" },
+  { value: 1000, label: "1km" },
+  { value: 2000, label: "2km" },
+  { value: 3000, label: "3km" },
+];
+
 const subscriptionTypeIcon: Record<string, React.ElementType> = {
   matter: FileText,
   topic: Tag,
@@ -131,6 +154,8 @@ function SubscriptionCard({ sub }: { sub: Subscription }) {
   let title = label;
   if (sub.type === "matter" && sub.matter) {
     title = sub.matter.title;
+  } else if (sub.type === "topic" && sub.keyword) {
+    title = `"${sub.keyword}"`;
   } else if (sub.type === "topic" && sub.topic) {
     title = sub.topic.name;
   } else if (sub.type === "person" && sub.person) {
@@ -150,7 +175,9 @@ function SubscriptionCard({ sub }: { sub: Subscription }) {
             ? "bg-blue-50 text-blue-600"
             : sub.type === "neighborhood"
               ? "bg-green-50 text-green-600"
-              : "bg-zinc-100 text-zinc-500",
+              : sub.type === "topic"
+                ? "bg-purple-50 text-purple-600"
+                : "bg-zinc-100 text-zinc-500",
         )}
       >
         <Icon className="h-4 w-4" />
@@ -159,7 +186,9 @@ function SubscriptionCard({ sub }: { sub: Subscription }) {
         <div className="text-sm font-semibold text-zinc-900 truncate">
           {title}
         </div>
-        <div className="text-xs text-zinc-400">{label}</div>
+        <div className="text-xs text-zinc-400">
+          {sub.keyword ? "Keyword" : label}
+        </div>
       </div>
       {sub.type !== "digest" && (
         <Form method="post">
@@ -178,9 +207,332 @@ function SubscriptionCard({ sub }: { sub: Subscription }) {
   );
 }
 
+// ── Topic Category Toggles ──
+
+function TopicCategoryGrid({
+  topics,
+  subscriptions,
+}: {
+  topics: Topic[];
+  subscriptions: Subscription[];
+}) {
+  const [loading, setLoading] = useState<number | null>(null);
+
+  // Find which topics the user is subscribed to
+  const subscribedTopicIds = new Set(
+    subscriptions
+      .filter((s) => s.type === "topic" && s.topic_id && !s.keyword)
+      .map((s) => s.topic_id!),
+  );
+
+  // Map topic_id -> subscription_id for unsubscribing
+  const topicSubMap: Record<number, number> = {};
+  for (const s of subscriptions) {
+    if (s.type === "topic" && s.topic_id && !s.keyword) {
+      topicSubMap[s.topic_id] = s.id;
+    }
+  }
+
+  async function toggleTopic(topicId: number) {
+    setLoading(topicId);
+    try {
+      if (subscribedTopicIds.has(topicId)) {
+        const subId = topicSubMap[topicId];
+        if (subId) {
+          await fetch("/api/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subscription_id: subId }),
+          });
+        }
+      } else {
+        await fetch("/api/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "topic", topic_id: topicId }),
+        });
+      }
+      // Reload to reflect changes
+      window.location.reload();
+    } catch (err) {
+      console.error("Topic toggle error:", err);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {topics.map((topic) => {
+        const subscribed = subscribedTopicIds.has(topic.id);
+        const isLoading = loading === topic.id;
+        return (
+          <button
+            key={topic.id}
+            type="button"
+            onClick={() => toggleTopic(topic.id)}
+            disabled={isLoading}
+            className={cn(
+              "flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all text-sm",
+              subscribed
+                ? "border-blue-500 bg-blue-50"
+                : "border-zinc-200 bg-white hover:border-zinc-300",
+              isLoading && "opacity-50",
+            )}
+          >
+            <div
+              className={cn(
+                "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors",
+                subscribed
+                  ? "border-blue-500 bg-blue-500"
+                  : "border-zinc-300 bg-white",
+              )}
+            >
+              {isLoading ? (
+                <Loader2 className="h-2.5 w-2.5 text-white animate-spin" />
+              ) : (
+                subscribed && <Check className="h-2.5 w-2.5 text-white" />
+              )}
+            </div>
+            <span
+              className={cn(
+                "truncate font-medium",
+                subscribed ? "text-blue-700" : "text-zinc-700",
+              )}
+            >
+              {topic.name}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Keyword Management ──
+
+function KeywordManager({
+  subscriptions,
+}: {
+  subscriptions: Subscription[];
+}) {
+  const [keywordInput, setKeywordInput] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const keywordSubs = subscriptions.filter(
+    (s) => s.type === "topic" && s.keyword,
+  );
+
+  async function addKeyword() {
+    const kw = keywordInput.trim().toLowerCase();
+    if (!kw) return;
+    setAdding(true);
+    try {
+      await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "topic", keyword: kw }),
+      });
+      setKeywordInput("");
+      window.location.reload();
+    } catch (err) {
+      console.error("Add keyword error:", err);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function removeKeyword(subId: number) {
+    try {
+      await fetch("/api/subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: subId }),
+      });
+      window.location.reload();
+    } catch (err) {
+      console.error("Remove keyword error:", err);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <Input
+          value={keywordInput}
+          onChange={(e) => setKeywordInput(e.target.value)}
+          placeholder='e.g. "housing", "bike lanes"'
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addKeyword();
+            }
+          }}
+          disabled={adding}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addKeyword}
+          disabled={!keywordInput.trim() || adding}
+        >
+          {adding ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+
+      {keywordSubs.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {keywordSubs.map((sub) => (
+            <Badge
+              key={sub.id}
+              variant="secondary"
+              className="gap-1 pl-2.5 pr-1.5 py-1 cursor-pointer hover:bg-zinc-200"
+              onClick={() => removeKeyword(sub.id)}
+            >
+              {sub.keyword}
+              <X className="h-3 w-3" />
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Address with Geocoding ──
+
+function AddressField({
+  defaultAddress,
+  defaultNeighborhood,
+}: {
+  defaultAddress: string;
+  defaultNeighborhood: string;
+}) {
+  const [address, setAddress] = useState(defaultAddress);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeResult, setGeocodeResult] = useState<{
+    lat: number;
+    lng: number;
+    display_name: string;
+  } | null>(null);
+  const [geocodeError, setGeocodeError] = useState("");
+
+  async function handleGeocode() {
+    if (!address.trim()) return;
+    setGeocoding(true);
+    setGeocodeError("");
+    setGeocodeResult(null);
+
+    try {
+      const res = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: address.trim() }),
+      });
+      const data = (await res.json()) as {
+        lat?: number;
+        lng?: number;
+        display_name?: string;
+        error?: string;
+      };
+      if (res.ok && data.lat && data.lng) {
+        setGeocodeResult({
+          lat: data.lat,
+          lng: data.lng,
+          display_name: data.display_name || address,
+        });
+      } else {
+        setGeocodeError(
+          data.error ||
+            "Could not find that address. Try adding more detail.",
+        );
+      }
+    } catch {
+      setGeocodeError("Geocoding failed -- please try again.");
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-zinc-700 flex items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5 text-zinc-400" />
+          Street Address
+        </label>
+        <div className="flex gap-2">
+          <Input
+            name="address"
+            value={address}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setGeocodeResult(null);
+              setGeocodeError("");
+            }}
+            placeholder="e.g. 45 View Royal Ave"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGeocode}
+            disabled={geocoding || !address.trim()}
+            className="flex-shrink-0"
+          >
+            {geocoding ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Locate"
+            )}
+          </Button>
+        </div>
+
+        {geocodeResult && (
+          <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
+            <Check className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">{geocodeResult.display_name}</span>
+          </div>
+        )}
+
+        {geocodeError && (
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2">
+            {geocodeError}
+          </p>
+        )}
+
+        <p className="text-xs text-zinc-400">
+          Click "Locate" to verify your address for proximity alerts.
+        </p>
+      </div>
+
+      {/* Hidden fields for geocoded coordinates */}
+      {geocodeResult && (
+        <>
+          <input type="hidden" name="lat" value={geocodeResult.lat} />
+          <input type="hidden" name="lng" value={geocodeResult.lng} />
+        </>
+      )}
+    </>
+  );
+}
+
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, profile, subscriptions } = loaderData;
+  const { user, profile, subscriptions, topics } = loaderData;
   const actionData = useActionData<typeof action>();
+
+  // Determine the existing proximity radius from neighbourhood subscription
+  const neighborhoodSub = subscriptions.find(
+    (s) => s.type === "neighborhood",
+  );
+
+  // Non-topic/keyword/digest subscriptions for the "Active Subscriptions" section
+  const otherSubscriptions = subscriptions.filter(
+    (s) => !((s.type === "topic" && !s.keyword) || s.type === "digest"),
+  );
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -252,32 +604,22 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-zinc-700 flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-zinc-400" />
-                  Street Address
-                </label>
-                <Input
-                  name="address"
-                  defaultValue={profile?.address || ""}
-                  placeholder="e.g. 45 View Royal Ave"
-                />
-                <p className="text-xs text-zinc-400">
-                  Used for proximity alerts about nearby matters.
-                </p>
-              </div>
+              <AddressField
+                defaultAddress={profile?.address || ""}
+                defaultNeighborhood={profile?.neighborhood || ""}
+              />
 
               <div className="space-y-1">
                 <label className="text-sm font-medium text-zinc-700 flex items-center gap-1.5">
                   <Map className="h-3.5 w-3.5 text-zinc-400" />
-                  Neighborhood
+                  Neighbourhood
                 </label>
                 <select
                   name="neighborhood"
                   defaultValue={profile?.neighborhood || ""}
                   className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="">Select neighborhood</option>
+                  <option value="">Select neighbourhood</option>
                   {VIEW_ROYAL_NEIGHBORHOODS.map((n) => (
                     <option key={n} value={n}>
                       {n}
@@ -286,6 +628,45 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 </select>
               </div>
             </div>
+
+            {/* Proximity radius — only show when address or neighbourhood is set */}
+            {(profile?.address || profile?.neighborhood || neighborhoodSub) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-700">
+                  Alert radius
+                </label>
+                <div className="flex gap-2">
+                  {PROXIMITY_OPTIONS.map((opt) => {
+                    const currentRadius =
+                      neighborhoodSub?.proximity_radius_m || 1000;
+                    return (
+                      <label
+                        key={opt.value}
+                        className={cn(
+                          "flex-1 px-3 py-2 rounded-lg border text-sm font-medium text-center cursor-pointer transition-colors",
+                          currentRadius === opt.value
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="proximity_radius"
+                          value={opt.value}
+                          defaultChecked={currentRadius === opt.value}
+                          className="sr-only"
+                        />
+                        {opt.label}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-zinc-400">
+                  How far from your location should we look for relevant
+                  matters?
+                </p>
+              </div>
+            )}
 
             <div className="border-t border-zinc-100 pt-4 space-y-3">
               <h3 className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
@@ -297,44 +678,17 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 <input
                   type="checkbox"
                   name="digest_enabled"
-                  defaultChecked={profile?.digest_enabled ?? true}
+                  defaultChecked={profile?.digest_enabled ?? false}
                   className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm text-zinc-700">
-                  Send me meeting digests with key decisions and votes
+                  Receive meeting digest after each council meeting
                 </span>
               </label>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-500">
-                  Frequency
-                </label>
-                <div className="flex gap-2">
-                  {(
-                    [
-                      ["each_meeting", "After each meeting"],
-                      ["weekly", "Weekly summary"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 cursor-pointer hover:border-blue-200 transition-colors text-sm has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50"
-                    >
-                      <input
-                        type="radio"
-                        name="digest_frequency"
-                        value={value}
-                        defaultChecked={
-                          (profile?.digest_frequency || "each_meeting") ===
-                          value
-                        }
-                        className="h-3.5 w-3.5 text-blue-600 focus:ring-blue-500"
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <p className="text-xs text-zinc-400 ml-7">
+                Key decisions, vote results, and what it means for your
+                neighbourhood -- sent after each meeting with content.
+              </p>
             </div>
 
             <Button type="submit" className="w-full">
@@ -343,14 +697,48 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           </Form>
         </section>
 
-        {/* Subscriptions Section */}
+        {/* Topic Subscriptions Section */}
+        <section className="mb-8">
+          <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
+            <Tag className="h-4 w-4" />
+            Topic Subscriptions
+          </h2>
+
+          <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm space-y-5">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 mb-1">
+                Categories
+              </h3>
+              <p className="text-xs text-zinc-500 mb-3">
+                Get notified when agenda items match these categories.
+              </p>
+              <TopicCategoryGrid
+                topics={topics}
+                subscriptions={subscriptions}
+              />
+            </div>
+
+            <div className="border-t border-zinc-100 pt-4">
+              <h3 className="text-sm font-semibold text-zinc-900 mb-1">
+                Keywords
+              </h3>
+              <p className="text-xs text-zinc-500 mb-3">
+                Add custom terms for semantic matching against agenda item
+                content.
+              </p>
+              <KeywordManager subscriptions={subscriptions} />
+            </div>
+          </div>
+        </section>
+
+        {/* Active Subscriptions Section */}
         <section>
           <h2 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-4 flex items-center gap-2">
             <Bell className="h-4 w-4" />
             Active Subscriptions
           </h2>
 
-          {subscriptions.length === 0 ? (
+          {otherSubscriptions.length === 0 ? (
             <div className="bg-white p-8 rounded-2xl border border-dashed border-zinc-200 text-center space-y-3">
               <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center mx-auto">
                 <Bell className="h-6 w-6 text-zinc-300" />
@@ -374,7 +762,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             </div>
           ) : (
             <div className="space-y-2">
-              {subscriptions.map((sub) => (
+              {otherSubscriptions.map((sub) => (
                 <SubscriptionCard key={sub.id} sub={sub} />
               ))}
             </div>
@@ -394,8 +782,11 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
                 agenda.
               </li>
               <li>
+                Topic alerts use semantic matching to find related discussions.
+              </li>
+              <li>
                 Location alerts notify you about decisions affecting your
-                neighborhood.
+                neighbourhood.
               </li>
             </ul>
           </div>
