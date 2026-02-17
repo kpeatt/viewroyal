@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 5 of 5 (Advanced Subscriptions)
-Plan: 2 of 3 in current phase
-Status: In Progress
-Last activity: 2026-02-16 — Completed 05-01-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase Complete
+Last activity: 2026-02-17 — Completed 05-03-PLAN.md
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 9.4min
-- Total execution time: 1.3 hours
+- Total plans completed: 10
+- Average duration: 9.6min
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [████████░░] 83%
 | 02-multi-tenancy | 1 | 8min | 8min |
 | 03-subscriptions-notifications | 2 | 19min | 10min |
 | 04-home-page-enhancements | 2 | 30min | 15min |
-| 05-advanced-subscriptions | 1 | 17min | 17min |
+| 05-advanced-subscriptions | 3 | 25min | 8min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 15min, 5min, 25min, 17min
-- Trend: variable (mix of schema and UI work)
+- Last 5 plans: 5min, 25min, 17min, ~10min, 8min
+- Trend: variable (mix of schema, UI, and API work)
 
 *Updated after each plan completion*
 
@@ -77,6 +77,10 @@ Recent decisions affecting current work:
 - [05-01]: Digest auto-subscribe removed from signup -- now opt-in only
 - [05-01]: Onboarding route registered as placeholder (redirects to /settings until Plan 02)
 - [05-01]: Pipeline geocoding uses bounded=0 for better coverage near View Royal borders
+- [05-03]: Highlighting uses RPC results directly -- no re-matching logic in Edge Function
+- [05-03]: Keyword subscribers highlight ALL items (RPC already confirmed match at meeting level)
+- [05-03]: Pre-meeting mode skips person subscription matching (no motions pre-meeting)
+- [05-03]: View Royal attending info hardcoded (Town Hall, YouTube, clerk email)
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-16
-Stopped at: Completed 05-01-PLAN.md
-Resume file: .planning/phases/05-advanced-subscriptions/05-01-SUMMARY.md
+Last session: 2026-02-17
+Stopped at: Completed 05-03-PLAN.md (Phase 05 complete, all phases complete)
+Resume file: .planning/phases/05-advanced-subscriptions/05-03-SUMMARY.md
