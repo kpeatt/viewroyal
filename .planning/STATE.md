@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 7.1 (Upgrade document extraction with Gemini 2.5 Flash)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-02-17 -- Completed Plan 01 (schema + Gemini extractor)
+Last activity: 2026-02-17 -- Completed Plan 02 (extraction orchestrator + pipeline integration)
 
-Progress: [██████████████░░░░░░] 71% (15/~21 plans across all milestones)
+Progress: [███████████████░░░░░] 76% (16/~21 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
-- Average duration: 7.9min
-- Total execution time: 1.98 hours
+- Total plans completed: 16
+- Average duration: 7.6min
+- Total execution time: 2.05 hours
 
 **By Phase:**
 
@@ -34,7 +34,7 @@ Progress: [██████████████░░░░░░] 71% (15
 | 05-advanced-subscriptions | 3 | 25min | 8min |
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
 | 07-document-intelligence | 3 | 15min | 5min |
-| 07.1-upgrade-document-extraction | 1 | 4min | 4min |
+| 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 
 ## Accumulated Context
 
@@ -56,6 +56,8 @@ v1.1 decisions:
 - DOC-7.1 Gemini 2.5 Flash replaces PyMuPDF font-analysis for document extraction (two-pass: boundaries + content)
 - DOC-7.1 extracted_documents intermediate table between documents and document_sections for natural hierarchy
 - DOC-7.1 Three-tier PDF size handling: inline (<20MB), File API (20-50MB), PyMuPDF split (>50MB)
+- DOC-7.1 R2 image uploads gracefully degrade: skip silently if boto3 or credentials missing
+- DOC-7.1 Docling dependency removed; Gemini 2.5 Flash is the sole extraction engine with PyMuPDF chunker as fallback
 
 ### Roadmap Evolution
 
@@ -72,6 +74,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 07.1-01-PLAN.md (schema + Gemini extractor)
-Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/07.1-01-SUMMARY.md
-Next action: Execute 07.1-02-PLAN.md (extraction orchestrator + pipeline integration)
+Stopped at: Completed 07.1-02-PLAN.md (extraction orchestrator + pipeline integration)
+Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/07.1-02-SUMMARY.md
+Next action: Execute 07.1-03-PLAN.md (backfill all 722 agenda PDFs)
