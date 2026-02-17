@@ -115,14 +115,14 @@ export async function getHomeData(supabase: SupabaseClient) {
         .limit(1)
         .maybeSingle(),
 
-      // 3. Active matters (4, ordered by last_seen)
+      // 3. Active matters (5, ordered by last_seen)
       // NOTE: Do NOT select plain_english_summary from matters (always null)
       supabase
         .from("matters")
         .select("id, title, category, status, first_seen, last_seen")
         .eq("status", "Active")
         .order("last_seen", { ascending: false, nullsFirst: false })
-        .limit(4),
+        .limit(5),
 
       // 4. Recent non-procedural motions with vote data (15)
       // NOTE: Do NOT use motions.yes_votes/no_votes (always 0) — use nested votes(vote)
