@@ -11,7 +11,7 @@ export async function action({ request }: Route.ActionArgs) {
   const password = formData.get("password") as string;
   const displayName = formData.get("displayName") as string;
   const url = new URL(request.url);
-  const redirectTo = url.searchParams.get("redirectTo") || "/settings";
+  const redirectTo = url.searchParams.get("redirectTo") || "/onboarding";
 
   const { supabase, headers } = createSupabaseServerClient(request);
 
