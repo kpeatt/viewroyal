@@ -90,12 +90,22 @@ export async function addSubscription(
     keyword_embedding?: number[];
   },
 ): Promise<Subscription> {
+  const row = {
+    user_id: userId,
+    type,
+    matter_id: target.matter_id ?? null,
+    topic_id: target.topic_id ?? null,
+    person_id: target.person_id ?? null,
+    neighborhood: target.neighborhood ?? null,
+    keyword: target.keyword ?? null,
+    ...target,
+  };
+
   const { data, error } = await supabase
     .from("subscriptions")
-    .insert({
-      user_id: userId,
-      type,
-      ...target,
+    .upsert(row, {
+      onConflict:
+        "user_id,type,matter_id,topic_id,person_id,neighborhood,keyword",
     })
     .select()
     .single();
@@ -116,12 +126,22 @@ export async function addKeywordSubscription(
 ): Promise<Subscription> {
   const { data, error } = await supabase
     .from("subscriptions")
-    .insert({
-      user_id: userId,
-      type: "topic" as SubscriptionType,
-      keyword,
-      keyword_embedding: embedding,
-    })
+    .upsert(
+      {
+        user_id: userId,
+        type: "topic" as SubscriptionType,
+        matter_id: null,
+        topic_id: null,
+        person_id: null,
+        neighborhood: null,
+        keyword,
+        keyword_embedding: embedding,
+      },
+      {
+        onConflict:
+          "user_id,type,matter_id,topic_id,person_id,neighborhood,keyword",
+      },
+    )
     .select()
     .single();
 
