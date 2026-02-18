@@ -5,6 +5,7 @@ export default [
   route("meetings", "routes/meetings.tsx"),
   route("meetings/:id", "routes/meeting-detail.tsx"),
   route("meetings/:id/explorer", "routes/meeting-explorer.tsx"),
+  route("meetings/:id/documents", "routes/meeting-documents.tsx"),
   route("meetings/:id/documents/:docId", "routes/document-viewer.tsx"),
   route("people", "routes/people.tsx"),
   route("people/:id", "routes/person-profile.tsx"),
