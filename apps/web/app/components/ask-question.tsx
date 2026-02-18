@@ -34,7 +34,7 @@ export function AskQuestion({
   const buildAskUrl = (q: string) => {
     const params = new URLSearchParams({ q });
     if (personName) params.set("person", personName);
-    return `/ask?${params.toString()}`;
+    return `/search?${params.toString()}`;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
