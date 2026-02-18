@@ -275,7 +275,7 @@ async function fetchAllAttendanceSimple(
   return allData;
 }
 
-async function fetchRelevantVotesForAlignment(
+export async function fetchRelevantVotesForAlignment(
   supabase: SupabaseClient,
   personId: string | number,
 ): Promise<any[]> {
