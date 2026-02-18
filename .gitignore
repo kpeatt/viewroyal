@@ -44,6 +44,7 @@ reports/
 logs/
 embeddings_*.csv
 backfill_progress.json
+batch_extraction_state.json
 
 # MCP config (local paths/keys)
 .mcp.json
@@ -55,6 +56,7 @@ sql/migrations
 
 # Pipeline scripts (one-off / maintenance — not part of core pipeline)
 apps/pipeline/scripts/
+scripts/
 
 # Legacy src/ (being migrated)
 src/
