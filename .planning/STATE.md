@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 9 (AI Profiling & Comparison)
-Plan: 3 of 4
-Status: In Progress
-Last activity: 2026-02-18 - Completed 09-01: Database foundation (stances table, speaking time RPCs, topic utils)
+Plan: 4 of 4 (COMPLETE)
+Status: Phase Complete
+Last activity: 2026-02-18 - Completed 09-04: Councillor comparison page
 
-Progress: [███████████████████░] 92% (23/~25 plans across all milestones)
+Progress: [████████████████████] 100% (25/25 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 23
-- Average duration: 6.5min
-- Total execution time: 2.48 hours
+- Total plans completed: 24
+- Average duration: 6.3min
+- Total execution time: 2.55 hours
 
 **By Phase:**
 
@@ -36,7 +36,7 @@ Progress: [███████████████████░] 92% (23
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
-| 09-ai-profiling-comparison | 3 | 17min | 6min |
+| 09-ai-profiling-comparison | 4 | 21min | 5min |
 
 ## Accumulated Context
 
@@ -79,6 +79,9 @@ v1.1 decisions:
 - PROF Category normalization as IMMUTABLE SQL function (CASE/ILIKE) covering ~300/470 categories to 8 topics
 - PROF Speaking time by topic uses LEFT JOIN with time-overlap fallback for segments missing agenda_item_id
 - PROF Session pooler (aws-1-us-east-2) used for migration application since direct DB is IPv6-only
+- PROF Time range selector uses URL search params (?timeRange=12m|term|all) for loader re-fetch
+- PROF Focus Areas card replaced by SpeakingTimeCard topic breakdown (normalized topic data from RPCs)
+- PROF Positions tab placed between Attendance History and Roles tabs in profile page
 
 ### Roadmap Evolution
 
@@ -104,7 +107,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 09-01-PLAN.md: Database foundation for councillor profiling. Created councillor_stances table, 3 speaking time RPCs, category normalization function, profiling.ts service, topic-utils.ts, and StanceSpectrum component.
+Completed 09-03-PLAN.md: Profile page speaking time and stances. Created SpeakingTimeCard (sparkline, topic bars, time range tabs), SpeakerRanking (bar chart), StanceSummary (per-topic cards with evidence). Enhanced person-profile.tsx with new Positions tab, Compare button, and sidebar speaking data.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
