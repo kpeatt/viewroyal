@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 8 (Unified Search & Hybrid RAG)
-Plan: 4 of 5
+Plan: 5 of 5
 Status: In Progress
-Last activity: 2026-02-18 -- Completed 08-03 Unified Search Page UI
+Last activity: 2026-02-18 -- Completed 08-04 Follow-up Conversations & Navigation
 
-Progress: [█████████████████░░░] 85% (19/~21 plans across all milestones)
+Progress: [██████████████████░░] 90% (20/~21 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 6.9min
-- Total execution time: 2.19 hours
+- Total plans completed: 20
+- Average duration: 6.7min
+- Total execution time: 2.24 hours
 
 **By Phase:**
 
@@ -35,7 +35,7 @@ Progress: [█████████████████░░░] 85% (19
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
-| 08-unified-search-hybrid-rag | 3 | 9min | 3min |
+| 08-unified-search-hybrid-rag | 4 | 12min | 3min |
 
 ## Accumulated Context
 
@@ -68,6 +68,10 @@ v1.1 decisions:
 - SRCH CitationBadge extracted to standalone component for reuse across ask.tsx and search.tsx
 - SRCH Lazy tab loading: non-default tab fetched only on first user switch
 - SRCH Confidence indicator thresholds: 6+ sources = high, 3-5 = medium, 1-2 = low
+- SRCH Follow-up conversation memory via useRef capped at 5 turns, context serialized as Q/A pairs
+- SRCH Follow-up suggestions generated server-side via Gemini Flash, emitted as suggested_followups SSE event
+- SRCH Topic change detection uses word overlap heuristic (no shared 3+ char words = topic change)
+- SRCH /ask route replaced with 301 redirect to /search for backward compatibility
 
 ### Roadmap Evolution
 
@@ -91,8 +95,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 08-03-PLAN.md: Unified Search Page UI.
-Next action: Execute 08-04-PLAN.md
+Completed 08-04-PLAN.md: Follow-up Conversations & Navigation Unification.
+Next action: Execute 08-05-PLAN.md
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
