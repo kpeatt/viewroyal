@@ -865,6 +865,13 @@ const tools: Tool<any, any>[] = [
     }) => search_key_statements({ query, after_date }),
   },
   {
+    name: "search_document_sections",
+    description:
+      'search_document_sections(query: string, after_date?: string) — Searches PDF document sections by hybrid search (semantic + keyword). Returns section headings and content from council documents like staff reports, bylaws, policies. Good for finding specific details from official documents that may not appear in meeting transcripts. after_date filters to results on or after that date (YYYY-MM-DD format).',
+    call: async ({ query, after_date }: { query: string; after_date?: string }) =>
+      search_document_sections({ query, after_date }),
+  },
+  {
     name: "get_current_date",
     description:
       "get_current_date() — Returns the current date in YYYY-MM-DD format. Use this as the first step for any question involving a recent timeframe like 'recent', 'latest', 'this year', 'last month', etc.",
@@ -900,6 +907,7 @@ A separate synthesis model will write the final user-facing answer from your gat
 - \`search_agenda_items\` — Best for finding structured summaries of what was discussed at meetings. Returns plain English summaries and debate summaries. Good for "What was discussed about X?" or "What happened at the last meeting about Y?" Uses keyword matching, so use short specific terms.
 - \`search_motions\` — Best for "What decisions has council made about [topic]?" or "Has council voted on [topic]?" Use short, specific queries (e.g. "affordable housing", "tree bylaw", "speed limits").
 - \`search_key_statements\` — Best for finding specific claims, proposals, objections, and recommendations made during debate. Returns attributed statements with speaker name and type. Use when you need to know who said what about a topic.
+- \`search_document_sections\` — Best for finding specific details from official PDF documents like staff reports, bylaws, and policy documents. Returns section headings and content. Use when the user asks about specific document content, detailed background information, or when other tools don't provide enough detail about a policy or report.
 - \`search_transcript_segments\` — Full-text search for transcript segments. Use when you need verbatim quotes or context around discussions.
 - \`get_current_date\` — Call this FIRST if the question contains temporal words like "recent", "latest", "this year", "last month", "past 6 months". Then use the date as after_date on subsequent calls.
 
@@ -971,7 +979,7 @@ You will receive a citizen's question and raw evidence gathered from official co
  * Normalize raw tool results into a consistent source shape for the client.
  */
 interface NormalizedSource {
-  type: "transcript" | "motion" | "vote" | "key_statement" | "matter" | "agenda_item";
+  type: "transcript" | "motion" | "vote" | "key_statement" | "matter" | "agenda_item" | "document_section";
   id: number;
   meeting_id: number;
   meeting_date: string;
@@ -1040,6 +1048,85 @@ function normalizeMatterSources(matters: any[]): NormalizedSource[] {
     meeting_id: 0,
     meeting_date: m.last_seen || m.first_seen || "Unknown",
     title: m.title || (m.plain_english_summary || "").slice(0, 120),
+  }));
+}
+
+/**
+ * Semantic + FTS hybrid search for document sections (staff reports, bylaws, policies).
+ */
+async function search_document_sections({
+  query,
+  after_date,
+}: {
+  query: string;
+  after_date?: string;
+}): Promise<any[]> {
+  const embedding = await generateQueryEmbedding(query);
+  if (!embedding) return [];
+
+  try {
+    const { data } = await getSupabase().rpc("hybrid_search_document_sections", {
+      query_text: query,
+      query_embedding: JSON.stringify(embedding),
+      match_count: 15,
+      full_text_weight: 1,
+      semantic_weight: 1,
+      rrf_k: 50,
+    });
+
+    if (!data || data.length === 0) return [];
+
+    // Enrich with document and meeting info
+    const docIds = [...new Set(data.map((d: any) => d.document_id))];
+
+    let enrichQuery = getSupabase()
+      .from("documents")
+      .select(`
+        id,
+        title,
+        meeting_id,
+        meetings!inner(meeting_date)
+      `)
+      .in("id", docIds);
+
+    if (after_date) {
+      enrichQuery = enrichQuery.gte("meetings.meeting_date", after_date);
+    }
+
+    const { data: docs } = await enrichQuery;
+    const docMap = new Map((docs || []).map((d: any) => [d.id, d]));
+
+    return data
+      .filter((d: any) => {
+        const doc = docMap.get(d.document_id);
+        return doc !== undefined; // Filter out sections from docs excluded by date
+      })
+      .map((d: any) => {
+        const doc = docMap.get(d.document_id);
+        const meeting = Array.isArray(doc?.meetings) ? doc.meetings[0] : doc?.meetings;
+        return {
+          id: d.id,
+          document_id: d.document_id,
+          heading: d.heading,
+          content: d.content,
+          meeting_id: doc?.meeting_id || 0,
+          document_title: doc?.title || "Unknown",
+          meeting_date: meeting?.meeting_date || "Unknown",
+        };
+      });
+  } catch (error) {
+    console.error("Document section search failed:", error);
+    return [];
+  }
+}
+
+function normalizeDocumentSectionSources(sections: any[]): NormalizedSource[] {
+  return sections.map((s) => ({
+    type: "document_section" as const,
+    id: s.id,
+    meeting_id: s.meeting_id || 0,
+    meeting_date: s.meeting_date || "Unknown",
+    title: `[Doc] ${s.heading || s.document_title || "Document Section"}`,
   }));
 }
 
@@ -1186,6 +1273,8 @@ Respond with a single JSON object. No markdown fences.`;
         allSources.push(...normalizeAgendaItemSources(toolResult));
       } else if (tool_name === "search_key_statements") {
         allSources.push(...normalizeKeyStatementSources(toolResult));
+      } else if (tool_name === "search_document_sections") {
+        allSources.push(...normalizeDocumentSectionSources(toolResult));
       } else {
         const first = toolResult[0];
         if (first.text_content !== undefined) {
