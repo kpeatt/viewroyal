@@ -71,10 +71,12 @@ Guidelines:
 - type: one of agenda, minutes, staff_report, delegation, correspondence, appendix, bylaw, presentation, form, other
 - agenda_item: the agenda item number this document relates to (from the TOC/agenda pages), or null
 - Be precise about page boundaries — where does each document start and end?
+- CRITICAL: Page ranges MUST NOT overlap. Every page belongs to exactly one document. Do NOT create a parent entry spanning pages 4-22 AND separate child entries within that range. Choose the most specific/granular boundaries.
 - Each distinct document should be its own entry (don't merge separate staff reports)
 - The agenda/TOC pages at the start count as one "agenda" type document
 - Delegation request forms should be type "form"
 - key_facts: capture dollar amounts, addresses, dates, specific decisions/recommendations
+- If a staff report spans pages 4-11 and has attached appendices on pages 12-15, the staff report is pages 4-11 and each appendix is a separate entry
 
 Return ONLY a valid JSON array, no other text."""
 
@@ -399,7 +401,58 @@ def _merge_chunk_boundaries(
 
     # Sort by page_start
     merged.sort(key=lambda x: x.get("page_start", 0))
-    return merged
+    return _dedup_overlapping_boundaries(merged)
+
+
+def _dedup_overlapping_boundaries(boundaries: list[dict]) -> list[dict]:
+    """Remove boundaries that are fully contained within other boundaries.
+
+    When Gemini detects both a parent document (p4-22) and sub-documents
+    within it (p4-11, p12, p13-19), keep the more granular children and
+    drop the parent.
+    """
+    if len(boundaries) <= 1:
+        return boundaries
+
+    sorted_bounds = sorted(boundaries, key=lambda x: (x.get("page_start", 0), -x.get("page_end", 0)))
+    to_remove = set()
+
+    for i, parent in enumerate(sorted_bounds):
+        if i in to_remove:
+            continue
+        p_start = parent.get("page_start", 0)
+        p_end = parent.get("page_end", 0)
+        span = p_end - p_start
+
+        # Single-page entries can't contain children
+        if span < 1:
+            continue
+
+        # Check if this parent fully contains any other entries
+        children = []
+        for j, child in enumerate(sorted_bounds):
+            if i == j or j in to_remove:
+                continue
+            c_start = child.get("page_start", 0)
+            c_end = child.get("page_end", 0)
+            if c_start >= p_start and c_end <= p_end and (c_start, c_end) != (p_start, p_end):
+                children.append(j)
+
+        # If this parent contains any children, remove the parent
+        if len(children) >= 1:
+            to_remove.add(i)
+            logger.debug(
+                "Removing parent boundary '%s' p%d-%d (contains %d children)",
+                parent.get("title", "?")[:50], p_start, p_end, len(children),
+            )
+
+    result = [b for i, b in enumerate(sorted_bounds) if i not in to_remove]
+    if to_remove:
+        logger.info(
+            "Deduped %d overlapping parent boundaries (kept %d)",
+            len(to_remove), len(result),
+        )
+    return result
 
 
 # ── Gemini API call with retry ───────────────────────────────────────────
@@ -502,7 +555,7 @@ def detect_boundaries(pdf_path: str) -> list[dict]:
     if not text:
         return []
 
-    return _parse_json_response(text)
+    return _dedup_overlapping_boundaries(_parse_json_response(text))
 
 
 def extract_content(
