@@ -117,6 +117,7 @@ export type AgentEvent =
   | { type: "tool_observation"; name: string; result: any }
   | { type: "final_answer_chunk"; chunk: string }
   | { type: "sources"; sources: any[] }
+  | { type: "suggested_followups"; followups: string[] }
   | { type: "done" };
 
 interface Tool<T extends Record<string, any>, R> {
