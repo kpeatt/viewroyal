@@ -17,7 +17,6 @@ import {
   Activity,
   Landmark,
   LogOut,
-  Sparkles,
   Menu,
   X,
   Info,
@@ -150,10 +149,10 @@ export function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             <NavLink
-              name="Ask"
-              href="/ask"
-              icon={Sparkles}
-              isActive={isLinkActive("/ask")}
+              name="Search"
+              href="/search"
+              icon={Search}
+              isActive={isLinkActive("/search")}
             />
             <NavLink
               name="Meetings"
@@ -185,14 +184,6 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
-            <Link
-              to="/search"
-              className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors bg-zinc-50 rounded-full hover:bg-zinc-100"
-              aria-label="Search"
-            >
-              <Search className="h-5 w-5" />
-            </Link>
-
             {/* Desktop User Menu */}
             {user ? (
               <div className="hidden sm:flex items-center gap-4">
@@ -250,10 +241,10 @@ export function Navbar() {
         <div className="md:hidden border-t border-zinc-200 bg-white">
           <div className="container mx-auto px-4 py-4 space-y-1">
             <MobileNavLink
-              name="Ask"
-              href="/ask"
-              icon={Sparkles}
-              isActive={isLinkActive("/ask")}
+              name="Search"
+              href="/search"
+              icon={Search}
+              isActive={isLinkActive("/search")}
             />
             <MobileNavLink
               name="Meetings"
