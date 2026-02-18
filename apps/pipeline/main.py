@@ -94,6 +94,21 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Use Gemini Batch API for extraction (50%% cost savings, higher latency). "
+             "Use with --extract-documents.",
+    )
+
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="Number of meetings to process in parallel (default 1). "
+             "Use with --extract-documents. Recommended: 5-10.",
+    )
+
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Force re-processing (delete and recreate existing data). Used with --extract-documents or --backfill-sections.",
@@ -109,6 +124,13 @@ if __name__ == "__main__":
         "--update",
         action="store_true",
         help="Force update existing meetings during ingestion.",
+    )
+
+    parser.add_argument(
+        "--generate-stances",
+        action="store_true",
+        help="Generate AI stance summaries for all councillors using Gemini. "
+             "Use --target to generate for a specific person ID only.",
     )
 
     args = parser.parse_args()
@@ -146,8 +168,12 @@ if __name__ == "__main__":
         print("\n--- Embedding Only ---")
         app._embed_new_content()
     elif args.extract_documents:
-        print("\n--- Extract Documents (Gemini 2.5 Flash) ---")
-        app.backfill_extracted_documents(force=args.force, limit=args.limit)
+        if args.batch:
+            print("\n--- Extract Documents (Gemini Batch API) ---")
+            app.backfill_extracted_documents_batch(force=args.force, limit=args.limit)
+        else:
+            print("\n--- Extract Documents (Gemini 2.5 Flash) ---")
+            app.backfill_extracted_documents(force=args.force, limit=args.limit, concurrency=args.concurrency)
         if not args.skip_embed:
             print("\n--- Embedding Document Sections ---")
             app._embed_new_content()
@@ -157,6 +183,10 @@ if __name__ == "__main__":
         if not args.skip_embed:
             print("\n--- Embedding Document Sections ---")
             app._embed_new_content()
+    elif args.generate_stances:
+        print("\n--- Generating Councillor Stance Summaries ---")
+        person_id = int(args.target) if args.target else None
+        app.generate_stances(person_id=person_id)
     elif args.process_only or args.rediarize:
         if app.ai_enabled:
             mode = "Re-diarizing" if args.rediarize else "Processing"

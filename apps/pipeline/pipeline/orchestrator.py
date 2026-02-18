@@ -1,7 +1,9 @@
 import glob
 import json
 import os
+import threading
 import time as _time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from supabase import create_client
@@ -442,6 +444,25 @@ class Archiver:
             except Exception as e:
                 print(f"  [!] Embedding failed for {table}: {e}")
 
+    def generate_stances(self, person_id=None):
+        """Generate AI stance summaries for councillors using Gemini.
+
+        Lazy-imports the stance generator to avoid loading Gemini SDK unless needed.
+
+        Args:
+            person_id: Optional person ID to generate stances for a single councillor.
+                       If None, generates for all councillors (is_councillor=true).
+        """
+        from pipeline.profiling.stance_generator import generate_all_stances
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, skipping stance generation.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+        generate_all_stances(supabase, person_id=person_id)
+
     def backfill_document_sections(self, force=False):
         """Backfill extracted documents and sections for all existing documents.
 
@@ -561,7 +582,7 @@ class Archiver:
 
         print(f"\n  Backfill complete: {processed} documents extracted, {skipped} skipped, {errors} errors")
 
-    def backfill_extracted_documents(self, force=False, limit=None):
+    def backfill_extracted_documents(self, force=False, limit=None, concurrency=1):
         """Backfill document extraction for all meetings with agenda PDFs from the local archive.
 
         Walks the archive directory structure to find Agenda PDFs, looks up
@@ -574,6 +595,7 @@ class Archiver:
         Args:
             force: If True, delete progress file and all extraction data, start fresh.
             limit: If set, only process this many meetings (for testing).
+            concurrency: Number of meetings to process in parallel (default 1).
         """
         from pipeline.ingestion.document_extractor import extract_and_store_documents
 
@@ -647,33 +669,47 @@ class Archiver:
             meeting_folders = meeting_folders[:limit]
             print(f"  Limiting to {limit} meetings")
 
-        # Track stats
-        total = len(meeting_folders)
-        processed_count = 0
+        # Filter out already-processed meetings before dispatching
+        work_items = []
         skipped_count = 0
-        error_count = 0
-        start_time = _time.time()
-
-        for meeting_folder, pdf_paths in tqdm(meeting_folders, desc="Extracting documents", unit="meeting"):
-            # Derive relative archive_path from absolute path
+        for meeting_folder, pdf_paths in meeting_folders:
             rel_path = os.path.relpath(meeting_folder, BASE_DIR)
             meeting = meeting_by_path.get(rel_path)
-
             if not meeting:
                 tqdm.write(f"  [!] No DB meeting for: {rel_path}")
                 skipped_count += 1
                 continue
+            meeting_id = meeting["id"]
+            if meeting_id in processed_ids and not force:
+                skipped_count += 1
+                continue
+            work_items.append((meeting_folder, pdf_paths, meeting))
+
+        print(f"  Work queue: {len(work_items)} meetings to process, {skipped_count} already done")
+
+        if not work_items:
+            print("  Nothing to process.")
+            return
+
+        # Thread-safe state for concurrent access
+        progress_lock = threading.Lock()
+        stats_lock = threading.Lock()
+        processed_count = 0
+        error_count = 0
+        start_time = _time.time()
+        pbar = tqdm(total=len(work_items), desc="Extracting documents", unit="meeting")
+
+        def _process_meeting(meeting_folder, pdf_paths, meeting):
+            """Process a single meeting — designed to run in a thread."""
+            nonlocal processed_count, error_count
+
+            # Each thread gets its own Supabase client to avoid connection issues
+            thread_supabase = create_client(config.SUPABASE_URL, supabase_key)
 
             meeting_id = meeting["id"]
             meeting_title = meeting.get("title", "Unknown")
             meeting_date = meeting.get("meeting_date", "")
 
-            # Check if already processed (resumability)
-            if meeting_id in processed_ids and not force:
-                skipped_count += 1
-                continue
-
-            # Process each agenda PDF for this meeting
             meeting_had_error = False
             total_boundaries = 0
             total_sections = 0
@@ -683,47 +719,64 @@ class Archiver:
                 pdf_filename = os.path.basename(pdf_path)
                 rel_file_path = os.path.join("Agenda", pdf_filename)
 
-                # Find or create document record
                 doc_id = self._find_or_create_document(
-                    supabase, meeting_id, pdf_filename, rel_file_path, municipality_id
+                    thread_supabase, meeting_id, pdf_filename, rel_file_path, municipality_id
                 )
                 if not doc_id:
                     tqdm.write(f"  [!] Could not create document for {pdf_filename}")
                     meeting_had_error = True
                     continue
 
-                # Run extraction
                 try:
-                    stats = extract_and_store_documents(
-                        pdf_path, doc_id, meeting_id, supabase, municipality_id
+                    result_stats = extract_and_store_documents(
+                        pdf_path, doc_id, meeting_id, thread_supabase, municipality_id
                     )
-                    total_boundaries += stats.get("boundaries_found", 0)
-                    total_sections += stats.get("sections_created", 0)
-                    total_images += stats.get("images_extracted", 0)
+                    total_boundaries += result_stats.get("boundaries_found", 0)
+                    total_sections += result_stats.get("sections_created", 0)
+                    total_images += result_stats.get("images_extracted", 0)
                 except Exception as e:
                     tqdm.write(f"  [!] Error extracting {pdf_filename}: {e}")
                     meeting_had_error = True
 
-            if meeting_had_error:
-                error_log[str(meeting_id)] = f"Partial or full failure for {meeting_title}"
-                error_count += 1
-            else:
-                processed_count += 1
+            # Update shared state under locks
+            with progress_lock:
+                processed_ids.add(meeting_id)
+                if meeting_had_error:
+                    error_log[str(meeting_id)] = f"Partial or full failure for {meeting_title}"
+                self._save_backfill_progress(processed_ids, error_log)
 
-            # Mark meeting as processed regardless of errors (to avoid re-trying on resume)
-            processed_ids.add(meeting_id)
+            with stats_lock:
+                if meeting_had_error:
+                    error_count += 1
+                else:
+                    processed_count += 1
+                pbar.update(1)
 
             tqdm.write(
                 f"  [{meeting_date}] {meeting_title}: "
                 f"{total_boundaries} boundaries, {total_sections} sections, {total_images} images"
             )
 
-            # Save progress after each meeting
-            self._save_backfill_progress(processed_ids, error_log)
+        # Dispatch work — sequential or concurrent
+        if concurrency <= 1:
+            print("  Processing sequentially...")
+            for meeting_folder, pdf_paths, meeting in work_items:
+                _process_meeting(meeting_folder, pdf_paths, meeting)
+        else:
+            print(f"  Processing with {concurrency} concurrent workers...")
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = {
+                    executor.submit(_process_meeting, mf, pp, mt): mt
+                    for mf, pp, mt in work_items
+                }
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        mt = futures[future]
+                        tqdm.write(f"  [!] Unhandled error for meeting {mt.get('id', '?')}: {e}")
 
-            # Rate limit: 2-second delay between meetings for Gemini API
-            _time.sleep(2)
-
+        pbar.close()
         elapsed = _time.time() - start_time
         elapsed_min = elapsed / 60
 
@@ -739,6 +792,130 @@ class Archiver:
                 print(f"    Meeting {mid}: {msg}")
             if len(error_log) > 10:
                 print(f"    ... and {len(error_log) - 10} more")
+
+    def backfill_extracted_documents_batch(self, force=False, limit=None):
+        """Batch version of backfill_extracted_documents using Gemini Batch API.
+
+        50% cost savings, no rate limits, but higher latency (batch jobs
+        target 24h completion). Uses a state file for full resumability.
+
+        Args:
+            force: If True, delete state and all extraction data, start fresh.
+            limit: If set, only process this many meetings (for testing).
+        """
+        from pipeline.ingestion.batch_extractor import run_batch_extraction
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, skipping extraction.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+        municipality_id = self.municipality.id if self.municipality else 1
+
+        if force:
+            print("  [!] Force mode: deleting all extraction data...")
+            try:
+                supabase.table("document_sections").delete().eq(
+                    "municipality_id", municipality_id
+                ).execute()
+                supabase.table("extracted_documents").delete().eq(
+                    "municipality_id", municipality_id
+                ).execute()
+                print("  [+] Cleared existing extraction data")
+            except Exception as e:
+                print(f"  [!] Error clearing data: {e}")
+
+        # Build index of meetings by archive_path for fast lookup
+        print("  Loading meetings from database...")
+        all_meetings = []
+        offset = 0
+        page_size = 1000
+        while True:
+            result = supabase.table("meetings").select(
+                "id, archive_path, title, meeting_date"
+            ).not_.is_("archive_path", "null").range(offset, offset + page_size - 1).execute()
+            batch = result.data or []
+            all_meetings.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+
+        meeting_by_path = {}
+        for m in all_meetings:
+            ap = m.get("archive_path", "")
+            if ap:
+                meeting_by_path[ap] = m
+
+        print(f"  Loaded {len(meeting_by_path)} meetings with archive paths")
+
+        # Walk the archive to find all Agenda directories with PDFs
+        print("  Scanning archive for agenda PDFs...")
+        meeting_folders = []
+
+        for root, dirs, files in os.walk(self.archive_root):
+            if "Agenda" not in dirs:
+                continue
+
+            agenda_dir = os.path.join(root, "Agenda")
+            pdfs = sorted(glob.glob(os.path.join(agenda_dir, "*.pdf")))
+            if pdfs:
+                meeting_folders.append((root, pdfs))
+
+        print(f"  Found {len(meeting_folders)} meeting folders with agenda PDFs")
+
+        if limit:
+            meeting_folders = meeting_folders[:limit]
+            print(f"  Limiting to {limit} meetings")
+
+        # Build the meetings dict expected by batch_extractor
+        # {meeting_id_str: {pdf_path, doc_id, archive_path}}
+        meetings_dict = {}
+        skipped = 0
+
+        for meeting_folder, pdf_paths in meeting_folders:
+            rel_path = os.path.relpath(meeting_folder, BASE_DIR)
+            meeting = meeting_by_path.get(rel_path)
+
+            if not meeting:
+                print(f"  [!] No DB meeting for: {rel_path}")
+                skipped += 1
+                continue
+
+            meeting_id = meeting["id"]
+            mid = str(meeting_id)
+
+            # Use the first (usually only) agenda PDF
+            pdf_path = pdf_paths[0]
+            pdf_filename = os.path.basename(pdf_path)
+            rel_file_path = os.path.join("Agenda", pdf_filename)
+
+            # Find or create document record
+            doc_id = self._find_or_create_document(
+                supabase, meeting_id, pdf_filename, rel_file_path, municipality_id
+            )
+            if not doc_id:
+                print(f"  [!] Could not create document for {pdf_filename}")
+                skipped += 1
+                continue
+
+            meetings_dict[mid] = {
+                "pdf_path": pdf_path,
+                "doc_id": doc_id,
+                "archive_path": rel_path,
+                "title": meeting.get("title", "Unknown"),
+                "meeting_date": meeting.get("meeting_date", ""),
+            }
+
+        if skipped:
+            print(f"  Skipped {skipped} meetings (no DB record or document)")
+
+        if not meetings_dict:
+            print("  [!] No meetings to process. Run pipeline ingestion first.")
+            return
+
+        print(f"  Processing {len(meetings_dict)} meetings via Batch API...")
+        run_batch_extraction(meetings_dict, supabase, municipality_id, force=force)
 
     def _find_or_create_document(self, supabase, meeting_id, pdf_filename, rel_file_path, municipality_id):
         """Find existing document record or create one for the given PDF.
