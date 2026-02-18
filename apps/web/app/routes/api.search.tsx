@@ -8,6 +8,7 @@ import {
 import { runQuestionAgent, type AgentEvent } from "../services/rag.server";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getMunicipality } from "../services/municipality";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Simple in-memory rate limiter: max requests per IP within a window
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -159,14 +160,45 @@ export async function loader({ request }: Route.LoaderArgs) {
             allSources = event.sources;
           }
 
-          // Stream all events except "done" (we add cache_id before it)
+          // Stream all events except "done" (we add followups + cache_id before it)
           if (event.type === "done") {
-            // Cache the completed answer
+            // Generate suggested follow-up questions using Gemini
+            let followups: string[] = [];
+            try {
+              const geminiKey = process.env.GEMINI_API_KEY;
+              if (geminiKey && fullAnswer.length > 50) {
+                const followupAI = new GoogleGenerativeAI(geminiKey);
+                const followupModel = followupAI.getGenerativeModel({
+                  model: "gemini-flash-latest",
+                });
+                const followupPrompt = `Based on this civic question and answer about a municipal council, suggest 2-3 natural follow-up questions a citizen might ask. Return ONLY a JSON array of strings, nothing else.\n\nQuestion: ${query}\n\nAnswer summary: ${fullAnswer.slice(0, 500)}`;
+                const followupResult =
+                  await followupModel.generateContent([followupPrompt]);
+                const followupText = followupResult.response.text().trim();
+                const cleaned = followupText
+                  .replace(/^```(?:json)?\s*\n?/i, "")
+                  .replace(/\n?```\s*$/, "")
+                  .trim();
+                followups = JSON.parse(cleaned);
+                if (!Array.isArray(followups)) followups = [];
+                // Cap at 3 suggestions
+                followups = followups.slice(0, 3);
+              }
+            } catch (e) {
+              // Non-critical: fall back to no suggestions
+              console.error("Failed to generate follow-ups:", e);
+            }
+
+            if (followups.length > 0) {
+              enqueue({ type: "suggested_followups", followups });
+            }
+
+            // Cache the completed answer (with followups)
             const cacheId = await saveSearchResultCache({
               query,
               answer: fullAnswer,
               sources: allSources,
-              suggested_followups: [],
+              suggested_followups: followups,
               source_count: allSources.length,
             });
 
