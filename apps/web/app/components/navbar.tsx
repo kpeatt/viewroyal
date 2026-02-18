@@ -22,6 +22,7 @@ import {
   Info,
   Bell,
   Settings,
+  ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -169,11 +170,15 @@ export function Navbar() {
                 { name: "Bylaws", href: "/bylaws", icon: Book },
               ]}
             />
-            <NavLink
-              name="Council"
-              href="/people"
+            <NavDropdown
+              label="Council"
               icon={Users}
-              isActive={isLinkActive("/people")}
+              isActive={isLinkActive("/people") || isLinkActive("/alignment") || isLinkActive("/compare")}
+              items={[
+                { name: "Members", href: "/people", icon: Users },
+                { name: "Alignment", href: "/alignment", icon: Scale },
+                { name: "Compare", href: "/compare", icon: ArrowLeftRight },
+              ]}
             />
             <NavLink
               name="About"
@@ -269,6 +274,18 @@ export function Navbar() {
               href="/people"
               icon={Users}
               isActive={isLinkActive("/people")}
+            />
+            <MobileNavLink
+              name="Alignment"
+              href="/alignment"
+              icon={Scale}
+              isActive={isLinkActive("/alignment")}
+            />
+            <MobileNavLink
+              name="Compare"
+              href="/compare"
+              icon={ArrowLeftRight}
+              isActive={isLinkActive("/compare")}
             />
             <MobileNavLink
               name="About"
