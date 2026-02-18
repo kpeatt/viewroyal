@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 8 (Unified Search & Hybrid RAG)
-Plan: 3 of 5
+Plan: 4 of 5
 Status: In Progress
-Last activity: 2026-02-18 -- Completed 08-02 Unified Search API & RAG Document Sections
+Last activity: 2026-02-18 -- Completed 08-03 Unified Search Page UI
 
-Progress: [████████████████░░░░] 80% (18/~21 plans across all milestones)
+Progress: [█████████████████░░░] 85% (19/~21 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
-- Average duration: 7.1min
-- Total execution time: 2.12 hours
+- Total plans completed: 19
+- Average duration: 6.9min
+- Total execution time: 2.19 hours
 
 **By Phase:**
 
@@ -35,7 +35,7 @@ Progress: [████████████████░░░░] 80% (18
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
-| 08-unified-search-hybrid-rag | 2 | 5min | 3min |
+| 08-unified-search-hybrid-rag | 3 | 9min | 3min |
 
 ## Accumulated Context
 
@@ -65,6 +65,9 @@ v1.1 decisions:
 - SRCH Unified search API: single endpoint for keyword (JSON) and AI (streaming SSE) via mode param
 - SRCH Cache ID emitted as SSE event before done for client URL updating
 - SRCH Document sections enriched via two-step query (documents -> meetings) for date filtering
+- SRCH CitationBadge extracted to standalone component for reuse across ask.tsx and search.tsx
+- SRCH Lazy tab loading: non-default tab fetched only on first user switch
+- SRCH Confidence indicator thresholds: 6+ sources = high, 3-5 = medium, 1-2 = low
 
 ### Roadmap Evolution
 
@@ -88,8 +91,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 08-02-PLAN.md: Unified Search API & RAG Document Sections.
-Next action: Execute 08-03-PLAN.md (search page frontend)
+Completed 08-03-PLAN.md: Unified Search Page UI.
+Next action: Execute 08-04-PLAN.md
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
