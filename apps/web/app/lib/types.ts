@@ -200,10 +200,25 @@ export interface Topic {
   created_at: string;
 }
 
+export interface ExtractedDocument {
+  id: number;
+  document_id: number;
+  agenda_item_id: number | null;
+  title: string;
+  document_type: string;
+  page_start: number | null;
+  page_end: number | null;
+  summary: string | null;
+  key_facts: string[] | null;
+  created_at: string;
+  sections?: DocumentSection[];
+}
+
 export interface DocumentSection {
   id: number;
   document_id: number;
   agenda_item_id: number | null;
+  extracted_document_id: number | null;
   section_title: string | null;
   section_text: string;
   section_order: number;

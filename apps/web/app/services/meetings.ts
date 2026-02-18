@@ -6,6 +6,7 @@ import type {
   SpeakerAlias,
   Attendance,
   DocumentSection,
+  ExtractedDocument,
 } from "../lib/types";
 
 export interface GetMeetingsOptions {
@@ -290,7 +291,7 @@ export async function getDocumentSectionsForMeeting(
   const { data, error } = await supabase
     .from("document_sections")
     .select(
-      "id, document_id, agenda_item_id, section_title, section_text, section_order, page_start, page_end, token_count",
+      "id, document_id, agenda_item_id, extracted_document_id, section_title, section_text, section_order, page_start, page_end, token_count",
     )
     .in("document_id", docIds)
     .order("document_id", { ascending: true })
@@ -301,4 +302,54 @@ export async function getDocumentSectionsForMeeting(
     return [];
   }
   return (data ?? []) as DocumentSection[];
+}
+
+export async function getExtractedDocumentsForDocument(
+  supabase: SupabaseClient,
+  documentId: string,
+): Promise<ExtractedDocument[]> {
+  const { data, error } = await supabase
+    .from("extracted_documents")
+    .select(
+      "id, document_id, agenda_item_id, title, document_type, page_start, page_end, summary, key_facts, created_at",
+    )
+    .eq("document_id", documentId)
+    .order("page_start", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching extracted documents:", error);
+    return [];
+  }
+  return (data ?? []) as ExtractedDocument[];
+}
+
+export async function getExtractedDocumentsForMeeting(
+  supabase: SupabaseClient,
+  meetingId: string,
+): Promise<ExtractedDocument[]> {
+  // First get document IDs for this meeting
+  const { data: docs } = await supabase
+    .from("documents")
+    .select("id")
+    .eq("meeting_id", meetingId);
+
+  if (!docs || docs.length === 0) return [];
+
+  const docIds = docs.map((d: any) => d.id);
+  const { data, error } = await supabase
+    .from("extracted_documents")
+    .select(
+      "id, document_id, agenda_item_id, title, document_type, page_start, page_end, summary, key_facts, created_at",
+    )
+    .in("document_id", docIds)
+    .order("document_id", { ascending: true })
+    .order("page_start", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching extracted documents for meeting:", error);
+    return [];
+  }
+  return (data ?? []) as ExtractedDocument[];
 }
