@@ -22,6 +22,7 @@
 ### v1.1 Deep Intelligence
 
 - [x] **Phase 7: Document Intelligence** - Pipeline chunks PDFs into sections with embeddings and full-text search, backfills existing documents (completed 2026-02-17)
+- [ ] ~~**Phase 7.1: Upgrade Document Extraction**~~ - Gemini 2.5 Flash extraction (2/3 plans done, backfill paused — waiting on Batch API)
 - [ ] **Phase 8: Unified Search & Hybrid RAG** - Single search page with intent detection, hybrid search across all content types, conversation memory
 - [ ] **Phase 9: AI Profiling & Comparison** - Speaking time metrics, AI stance summaries with evidence, side-by-side councillor comparison
 
@@ -65,12 +66,14 @@ Plans:
   3. Search results include matches from document sections, key statements, transcript segments, and motions
   4. User can ask a follow-up question (e.g. "who voted against it?") and the AI answer references context from the previous exchange
   5. Conversation history persists within a browser session but resets on new session, capped at 5 turns
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
-- [ ] 08-03: TBD
+- [ ] 08-01-PLAN.md -- Database migrations (hybrid search RPCs, key_statements tsvector, cache table) + hybrid-search.server.ts + intent classifier
+- [ ] 08-02-PLAN.md -- Streaming search API route (api.search.tsx) + RAG agent document_sections tool
+- [ ] 08-03-PLAN.md -- Unified search page UI with Perplexity-style tabs, AI answer, search results, citation badges
+- [ ] 08-04-PLAN.md -- Follow-up conversation support, navigation updates, /ask redirect
+- [ ] 08-05-PLAN.md -- End-to-end verification checkpoint
 
 ### Phase 9: AI Profiling & Comparison
 **Goal**: Citizens can understand each councillor's speaking engagement, positions on key topics through AI-generated summaries backed by evidence, and compare any two councillors side by side
@@ -89,7 +92,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 7 -> 8 -> 9
+**Execution Order:** 7 -> 7.1 (paused) -> 8 -> 9
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -100,6 +103,6 @@ Plans:
 | 5. Advanced Subscriptions | v1.0 | 3/3 | Complete | 2026-02-16 |
 | 6. Gap Closure & Cleanup | v1.0 | 1/1 | Complete | 2026-02-17 |
 | 7. Document Intelligence | v1.1 | Complete    | 2026-02-17 | - |
-| 7.1 Upgrade Document Extraction | v1.1 | 0/3 | Planned | - |
-| 8. Unified Search & Hybrid RAG | v1.1 | 0/? | Not started | - |
+| 7.1 Upgrade Document Extraction | v1.1 | 2/3 | Paused | - |
+| 8. Unified Search & Hybrid RAG | v1.1 | 0/5 | Planned | - |
 | 9. AI Profiling & Comparison | v1.1 | 0/? | Not started | - |
