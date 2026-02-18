@@ -24,7 +24,7 @@
 - [x] **Phase 7: Document Intelligence** - Pipeline chunks PDFs into sections with embeddings and full-text search, backfills existing documents (completed 2026-02-17)
 - [ ] ~~**Phase 7.1: Upgrade Document Extraction**~~ - Gemini 2.5 Flash extraction (2/3 plans done, backfill paused — waiting on Batch API)
 - [x] **Phase 8: Unified Search & Hybrid RAG** - Single search page with intent detection, hybrid search across all content types, conversation memory (completed 2026-02-18)
-- [ ] **Phase 9: AI Profiling & Comparison** - Speaking time metrics, AI stance summaries with evidence, side-by-side councillor comparison
+- [x] **Phase 9: AI Profiling & Comparison** - Speaking time metrics, AI stance summaries with evidence, side-by-side councillor comparison (completed 2026-02-18)
 
 ## Phase Details
 
@@ -107,4 +107,4 @@ Plans:
 | 7. Document Intelligence | v1.1 | Complete    | 2026-02-17 | - |
 | 7.1 Upgrade Document Extraction | v1.1 | 2/3 | Paused | - |
 | 8. Unified Search & Hybrid RAG | v1.1 | 5/5 | Complete | 2026-02-18 |
-| 9. AI Profiling & Comparison | v1.1 | 0/4 | Planned | - |
+| 9. AI Profiling & Comparison | v1.1 | Complete    | 2026-02-18 | - |
