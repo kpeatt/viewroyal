@@ -25,12 +25,15 @@ logger = logging.getLogger(__name__)
 
 # ── Push Notifications ──────────────────────────────────────────────────
 
-MOSHI_TOKEN = "y4ralDJ6RzhwOMbdNyQAVYoN6VKPtrnJ"
+MOSHI_TOKEN = os.environ.get("MOSHI_TOKEN", "")
 MOSHI_URL = "https://api.getmoshi.app/api/webhook"
 
 
 def _notify(title: str, message: str) -> None:
     """Send a push notification via Moshi webhook. Best-effort, never raises."""
+    if not MOSHI_TOKEN:
+        logger.debug("MOSHI_TOKEN not set, skipping push notification")
+        return
     try:
         payload = json.dumps({"token": MOSHI_TOKEN, "title": title, "message": message})
         req = urllib.request.Request(
