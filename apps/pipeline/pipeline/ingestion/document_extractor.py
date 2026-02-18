@@ -29,7 +29,7 @@ def extract_and_store_documents(
     3. PyMuPDF image extraction + R2 upload
     4. Section splitting and database insertion
 
-    Falls back to the old PyMuPDF font-analysis chunker if Gemini fails.
+    Raises on Gemini failure — no fallback. Caller handles the error.
 
     Returns stats dict: {boundaries_found, documents_extracted, sections_created, images_extracted}
     """
@@ -48,17 +48,13 @@ def extract_and_store_documents(
         boundaries = detect_boundaries(pdf_path)
     except Exception as e:
         logger.error("Gemini boundary detection failed for document %d: %s", document_id, e)
-        boundaries = []
+        raise
 
     stats["boundaries_found"] = len(boundaries)
 
-    # Fallback: if Gemini fails, use old chunker
     if not boundaries:
-        logger.warning(
-            "No boundaries detected for document %d — falling back to PyMuPDF chunker",
-            document_id,
-        )
-        return _fallback_to_chunker(pdf_path, document_id, meeting_id, supabase, municipality_id)
+        logger.warning("No boundaries detected for document %d — skipping", document_id)
+        return stats
 
     # Step 2: Process each boundary document
     for boundary in boundaries:
@@ -365,80 +361,3 @@ def _normalize_item_number(s: str) -> str:
     return s
 
 
-def _fallback_to_chunker(
-    pdf_path: str,
-    document_id: int,
-    meeting_id: int,
-    supabase,
-    municipality_id: int,
-) -> dict:
-    """Fall back to the old PyMuPDF font-analysis chunker.
-
-    Used when Gemini boundary detection fails or returns no results.
-    """
-    from pipeline.ingestion.document_chunker import chunk_document, link_sections_to_agenda_items
-
-    stats = {
-        "boundaries_found": 0,
-        "documents_extracted": 0,
-        "sections_created": 0,
-        "images_extracted": 0,
-    }
-
-    # Get document title
-    try:
-        doc_result = (
-            supabase.table("documents")
-            .select("title")
-            .eq("id", document_id)
-            .single()
-            .execute()
-        )
-        doc_title = doc_result.data.get("title", "Untitled") if doc_result.data else "Untitled"
-    except Exception:
-        doc_title = "Untitled"
-
-    try:
-        sections = chunk_document(pdf_path, doc_title)
-    except Exception as e:
-        logger.error("Fallback chunker also failed for document %d: %s", document_id, e)
-        return stats
-
-    if not sections:
-        return stats
-
-    # Link sections to agenda items
-    try:
-        sections = link_sections_to_agenda_items(sections, meeting_id, supabase)
-    except Exception as e:
-        logger.warning("Failed to link sections for fallback: %s", e)
-
-    # Insert sections
-    rows = []
-    for section in sections:
-        rows.append({
-            "document_id": document_id,
-            "agenda_item_id": section.get("agenda_item_id"),
-            "section_title": section.get("section_title"),
-            "section_text": section["section_text"],
-            "section_order": section["section_order"],
-            "page_start": section.get("page_start"),
-            "page_end": section.get("page_end"),
-            "token_count": section.get("token_count"),
-            "municipality_id": municipality_id,
-        })
-
-    try:
-        batch_size = 50
-        for i in range(0, len(rows), batch_size):
-            batch = rows[i : i + batch_size]
-            supabase.table("document_sections").insert(batch).execute()
-        stats["sections_created"] = len(rows)
-        logger.info(
-            "Fallback chunker: %d sections created for document %d",
-            len(rows), document_id,
-        )
-    except Exception as e:
-        logger.error("Failed to insert fallback sections: %s", e)
-
-    return stats

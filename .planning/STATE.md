@@ -95,10 +95,11 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 08-04-PLAN.md: Follow-up Conversations & Navigation Unification.
-Next action: Execute 08-05-PLAN.md
+Backfill completed 711 meetings but 309 fell back to PyMuPDF due to Gemini rate limits.
+Ran data quality audit, cleaned up DB (removed dupes, noise, oversized sections, all legacy sections).
+Removed fallback codepath from document_extractor.py. Prepped 309 meetings for re-extraction.
+Blocked on Gemini API quota reset (429 RESOURCE_EXHAUSTED, limit: 0).
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
-Status: All code complete, quality bugs fixed. User running full 711-meeting backfill outside Claude.
-To resume after backfill: approve Plan 03 checkpoint, phase verification
+Status: 309 meetings queued for re-extraction. 40,805 sections need embeddings. Waiting on Gemini quota.
