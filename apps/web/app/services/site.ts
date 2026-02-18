@@ -53,6 +53,9 @@ export async function getAboutStats(supabase: SupabaseClient) {
       supabase
         .from("transcript_segments")
         .select("*", { count: "exact", head: true }),
+      // video_duration_seconds is backfilled from MAX(transcript_segments.end_time) per meeting.
+      // The pipeline also sets this after transcript ingestion. If this returns 0,
+      // run the backfill SQL in .planning/quick/3-fix-about-page-video-hours-showing-0/
       supabase
         .from("meetings")
         .select("video_duration_seconds")

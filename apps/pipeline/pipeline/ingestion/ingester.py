@@ -1658,6 +1658,19 @@ class MeetingIngester:
                             if total_batches > 5:
                                 print(f"    Inserted batch {batch_num}/{total_batches}")
 
+                        # Set video_duration_seconds from max segment end_time
+                        max_end = max(
+                            (r.get("end_time", 0) for r in rows), default=0
+                        )
+                        if max_end > 0:
+                            self.supabase.table("meetings").update(
+                                {"video_duration_seconds": int(max_end)}
+                            ).eq("id", meeting_id).execute()
+                            print(
+                                f"  Set video_duration_seconds = {int(max_end)}s "
+                                f"({int(max_end) // 60}m)"
+                            )
+
         # 6. Items, Motions, Votes
         # SAFEGUARD: Don't process motions/votes for Planned meetings (prevent hallucinations)
         if is_planned_meeting:
