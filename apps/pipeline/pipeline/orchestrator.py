@@ -463,6 +463,22 @@ class Archiver:
         supabase = create_client(config.SUPABASE_URL, supabase_key)
         generate_all_stances(supabase, person_id=person_id)
 
+    def generate_highlights(self, person_id=None):
+        """Generate AI overview + notable policy positions for councillors.
+
+        Args:
+            person_id: Optional person ID. If None, generates for all councillors.
+        """
+        from pipeline.profiling.stance_generator import generate_councillor_highlights
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, skipping highlights generation.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+        generate_councillor_highlights(supabase, person_id=person_id)
+
     def backfill_document_sections(self, force=False):
         """Backfill extracted documents and sections for all existing documents.
 

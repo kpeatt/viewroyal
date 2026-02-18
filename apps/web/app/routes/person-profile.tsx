@@ -12,10 +12,49 @@ import {
   getSpeakingTimeByMeeting,
   getSpeakingTimeByTopic,
   getCouncillorStances,
+  getCouncillorHighlights,
 } from "../services/profiling";
+import type { CouncillorHighlight } from "../services/profiling";
 import { SpeakingTimeCard } from "../components/profile/speaking-time-card";
 import { SpeakerRanking } from "../components/profile/speaker-ranking";
 import { StanceSummary } from "../components/profile/stance-summary";
+import {
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Briefcase,
+  History,
+  Vote as VoteIcon,
+  Gavel,
+  ArrowRight,
+  ThumbsUp,
+  ThumbsDown,
+  Minus,
+  Scale,
+  Users,
+  Target,
+  Sparkles,
+  Mic,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+} from "lucide-react";
+import { Badge } from "../components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
+import { cn, formatDate } from "../lib/utils";
+import { AskQuestion } from "../components/ask-question";
 
 export const meta: Route.MetaFunction = ({ data, matches }) => {
   if (!data?.person) return [{ title: "Person | ViewRoyal.ai" }];
@@ -39,42 +78,6 @@ export const meta: Route.MetaFunction = ({ data, matches }) => {
   ];
   return tags;
 };
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  Activity,
-  User,
-  Briefcase,
-  History,
-  Vote as VoteIcon,
-  Gavel,
-  ArrowRight,
-  ExternalLink,
-  ThumbsUp,
-  ThumbsDown,
-  Minus,
-  Scale,
-  Users,
-  Target,
-} from "lucide-react";
-import { Separator } from "../components/ui/separator";
-import { Badge } from "../components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "../components/ui/tabs";
-import { cn, formatDate } from "../lib/utils";
-import { AskQuestion } from "../components/ask-question";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const { id } = params;
@@ -103,13 +106,14 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     const personId = parseInt(id, 10);
 
     // Profile data is critical; profiling data is optional (graceful degradation)
-    const [data, speakingTimeRanking, speakingTimeTrend, speakingTimeByTopic, stances] =
+    const [data, speakingTimeRanking, speakingTimeTrend, speakingTimeByTopic, stances, highlights] =
       await Promise.all([
         getPersonProfile(supabase, id, page, municipality.id),
         getSpeakingTimeStats(supabase, startDate, endDate).catch((e) => { console.error("Speaking time stats failed:", e); return [] as Awaited<ReturnType<typeof getSpeakingTimeStats>>; }),
         getSpeakingTimeByMeeting(supabase, personId, startDate, endDate).catch((e) => { console.error("Speaking time by meeting failed:", e); return [] as Awaited<ReturnType<typeof getSpeakingTimeByMeeting>>; }),
         getSpeakingTimeByTopic(supabase, personId, startDate, endDate).catch((e) => { console.error("Speaking time by topic failed:", e); return [] as Awaited<ReturnType<typeof getSpeakingTimeByTopic>>; }),
         getCouncillorStances(supabase, personId).catch((e) => { console.error("Councillor stances failed:", e); return [] as Awaited<ReturnType<typeof getCouncillorStances>>; }),
+        getCouncillorHighlights(supabase, personId).catch((e) => { console.error("Councillor highlights failed:", e); return null as Awaited<ReturnType<typeof getCouncillorHighlights>>; }),
       ]);
 
     // Find current person's speaking time from the ranking
@@ -133,6 +137,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       speakingTimeTrend,
       speakingTimeByTopic,
       stances,
+      highlights,
       timeRange,
       currentPersonSpeaking,
       speakingRank: rank,
@@ -146,6 +151,52 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     throw new Response("Error loading person profile", { status: 500 });
   }
 }
+
+// ── Highlight Card ──
+
+const POSITION_STYLES = {
+  for: { icon: CheckCircle, color: "text-green-600", bg: "bg-green-50", border: "border-green-200", label: "Supports" },
+  against: { icon: XCircle, color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: "Opposes" },
+  nuanced: { icon: HelpCircle, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", label: "Nuanced" },
+} as const;
+
+function HighlightCard({ highlight }: { highlight: CouncillorHighlight }) {
+  const style = POSITION_STYLES[highlight.position] || POSITION_STYLES.nuanced;
+  const Icon = style.icon;
+
+  return (
+    <div className={cn("rounded-xl border p-4 space-y-2", style.bg, style.border)}>
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="text-sm font-bold text-zinc-800 leading-snug">{highlight.title}</h4>
+        <Badge variant="outline" className={cn("text-[9px] font-bold px-2 py-0.5 shrink-0", style.color, style.border)}>
+          <Icon className="h-3 w-3 mr-1" />
+          {style.label}
+        </Badge>
+      </div>
+      <p className="text-sm text-zinc-600 leading-relaxed">{highlight.summary}</p>
+      {highlight.evidence && highlight.evidence.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          {highlight.evidence.map((e, i) => (
+            <div key={i} className="bg-white/60 rounded-lg p-2.5 border border-zinc-100/60 text-xs">
+              <p className="text-zinc-600 italic leading-relaxed">&ldquo;{e.text}&rdquo;</p>
+              <div className="mt-1 text-[10px] text-zinc-400">
+                {e.meeting_id ? (
+                  <Link to={`/meetings/${e.meeting_id}`} className="font-bold text-blue-600 hover:underline">
+                    {formatDate(e.date)}
+                  </Link>
+                ) : (
+                  <span>{formatDate(e.date)}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ──
 
 export default function PersonProfile({ loaderData }: Route.ComponentProps) {
   const {
@@ -163,6 +214,7 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
     speakingTimeTrend,
     speakingTimeByTopic,
     stances,
+    highlights,
     currentPersonSpeaking,
     speakingRank,
     totalCouncillorsWithData,
@@ -183,46 +235,30 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
   }, [alignmentResults, selectedAlignId]);
 
   const topTopics = useMemo(() => {
-    // ... same logic ...
-
     const counts: Record<string, number> = {};
-
     let total = 0;
-
     segments.forEach((seg) => {
       const cat = seg.agenda_items?.category;
-
       if (cat && cat !== "Other") {
         counts[cat] = (counts[cat] || 0) + 1;
-
         total++;
       }
     });
-
     if (total === 0) return [];
-
     return Object.entries(counts)
-
       .sort(([, a], [, b]) => b - a)
-
       .slice(0, 5)
-
       .map(([name, count]) => ({
         name,
-
         percent: Math.round((count / total) * 100),
       }));
   }, [segments]);
 
-  // ... activeMemberships, pastMemberships ...
-
   const activeMemberships = useMemo(() => {
     const now = new Date().toISOString().split("T")[0];
-
     return (
       person.memberships?.filter((m) => {
         if (!m.end_date) return true;
-
         return m.end_date >= now;
       }) || []
     );
@@ -230,11 +266,9 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
 
   const pastMemberships = useMemo(() => {
     const now = new Date().toISOString().split("T")[0];
-
     return (
       person.memberships?.filter((m) => {
         if (!m.end_date) return false;
-
         return m.end_date < now;
       }) || []
     );
@@ -242,33 +276,17 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
 
   const { attendanceStats } = useMemo(() => {
     const now = new Date().toISOString().split("T")[0];
-
-    // 1. Identify all meetings the person WAS EXPECTED to attend (up to today)
-
     const expectedMeetings = allMeetings.filter((meeting) => {
-      // Exclude future meetings
-
       if (meeting.meeting_date > now) return false;
-
       return person.memberships?.some((m) => {
         if (m.organization_id !== meeting.organization_id) return false;
-
         if (m.start_date && meeting.meeting_date < m.start_date) return false;
-
         if (m.end_date && meeting.meeting_date > m.end_date) return false;
-
         return true;
       });
     });
-
     const totalExpected = expectedMeetings.length;
-
     if (totalExpected === 0) return { attendanceStats: { rate: 0, total: 0 } };
-
-    // 2. Count how many of those expected meetings they actually attended
-
-    // Use attendanceAll for accurate stats
-
     const attendedRecords = attendanceAll.filter((record) => {
       return (
         expectedMeetings.some((m) => m.id === record.meeting_id) &&
@@ -276,24 +294,27 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
         record.attendance_mode !== "Regrets"
       );
     });
-
     return {
       attendanceStats: {
         rate: Math.round((attendedRecords.length / totalExpected) * 100),
-
         total: totalExpected,
       },
     };
   }, [attendanceAll, allMeetings, person.memberships]);
 
-  // Paginated list doesn't need complex merging/sorting logic as DB handles it
-
   const relevantAttendance = attendance;
+
+  // Filter out procedural topics from stances (belt & suspenders with RPC filter)
+  const filteredStances = useMemo(() => {
+    return (stances ?? []).filter(
+      (s) => s.topic !== "Administration" && s.topic !== "General",
+    );
+  }, [stances]);
+
+  const hasSpeakingData = currentPersonSpeaking && currentPersonSpeaking.total_seconds > 0;
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      {/* ... header ... */}
-
       <div className="h-32 bg-blue-600 w-full" />
 
       <div className="container mx-auto px-4 max-w-6xl -mt-16">
@@ -306,12 +327,10 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
         </Link>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-16">
-          {/* Sidebar / Bio */}
-
+          {/* ═══ Sidebar ═══ */}
           <div className="lg:col-span-4 space-y-6">
+            {/* Profile Bio Card */}
             <Card className="overflow-hidden border-none shadow-xl ring-1 ring-zinc-200/50 bg-white">
-              {/* ... same avatar/header/bio ... */}
-
               <div className="aspect-square bg-zinc-100 flex items-center justify-center relative overflow-hidden group">
                 {person.image_url ? (
                   <img
@@ -352,7 +371,6 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                       <Badge className="bg-blue-600 text-white shadow-sm border-none text-[10px] h-5 px-2">
                         {m.role}
                       </Badge>
-
                       {m.start_date && (
                         <span className="text-[10px] text-zinc-400 uppercase tracking-widest">
                           Since {new Date(m.start_date).getFullYear()}
@@ -360,7 +378,6 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
                   ))}
-
                   {activeMemberships.length === 0 && (
                     <CardDescription className="text-zinc-500 font-medium">
                       Former {shortName} Council Member
@@ -372,16 +389,14 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
               <CardContent className="space-y-4">
                 {person.bio && (
                   <p className="text-sm text-zinc-600 leading-relaxed italic border-l-2 border-zinc-100 pl-4">
-                    "{person.bio}"
+                    &ldquo;{person.bio}&rdquo;
                   </p>
                 )}
-
                 {person.email && (
                   <div className="flex items-center gap-2 text-sm pt-2">
                     <span className="font-black text-zinc-400 uppercase text-[10px] tracking-widest">
                       Email
                     </span>
-
                     <a
                       href={`mailto:${person.email}`}
                       className="text-blue-600 font-bold hover:underline"
@@ -393,169 +408,34 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
               </CardContent>
             </Card>
 
+            {/* Quick Stats Card */}
             <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white">
               <CardHeader className="pb-3">
                 <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
-                  Attendance Strength
+                  Quick Stats
                 </CardTitle>
               </CardHeader>
-
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-end">
-                  <span className="text-4xl font-black text-zinc-900">
-                    {attendanceStats.rate}%
-                  </span>
-
-                  <span className="text-xs font-bold text-zinc-500 mb-1">
-                    {attendanceStats.total} Meetings
-                  </span>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center">
+                    <div className="text-2xl font-black text-zinc-900">{attendanceStats.rate}%</div>
+                    <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Attendance</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-black text-zinc-900">{stats.totalVotes.toLocaleString()}</div>
+                    <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Votes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-black text-zinc-900">
+                      {hasSpeakingData ? `${(currentPersonSpeaking!.total_seconds / 3600).toFixed(1)}` : "—"}
+                    </div>
+                    <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Hours Spoken</div>
+                  </div>
                 </div>
-
-                <div className="w-full bg-zinc-100 rounded-full h-3 overflow-hidden shadow-inner">
-                  <div
-                    className={cn(
-                      "h-full transition-all duration-1000",
-
-                      attendanceStats.rate > 90
-                        ? "bg-green-500"
-                        : attendanceStats.rate > 80
-                          ? "bg-blue-500"
-                          : "bg-amber-500",
-                    )}
-                    style={{ width: `${attendanceStats.rate}%` }}
-                  />
-                </div>
-
-                <p className="text-xs text-zinc-400 font-medium leading-relaxed">
-                  Based on sessions between his election/appointment and today.
-                </p>
               </CardContent>
             </Card>
 
-            {/* Speaking Time Card - only shown if person has speaking data */}
-            {currentPersonSpeaking && currentPersonSpeaking.total_seconds > 0 && (
-              <SpeakingTimeCard
-                totalSeconds={currentPersonSpeaking.total_seconds}
-                meetingCount={currentPersonSpeaking.meeting_count}
-                segmentCount={currentPersonSpeaking.segment_count}
-                trendData={speakingTimeTrend}
-                topicBreakdown={speakingTimeByTopic}
-                rank={speakingRank}
-                totalCouncillors={totalCouncillorsWithData}
-              />
-            )}
-
-            {/* Speaker Ranking */}
-            {speakingTimeRanking && speakingTimeRanking.some((r: any) => r.total_seconds > 0) && (
-              <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white">
-                <CardContent className="pt-4">
-                  <SpeakerRanking
-                    rankings={speakingTimeRanking}
-                    currentPersonId={person.id}
-                  />
-                </CardContent>
-              </Card>
-            )}
-
-            <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white transition-all overflow-hidden">
-              <CardHeader className="pb-3 border-b border-zinc-100">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                    <Scale className="h-3 w-3 text-indigo-600" />
-                    Voting Alignment
-                  </CardTitle>
-
-                  <Link
-                    to={`/people/${person.id}/alignment`}
-                    className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5"
-                  >
-                    Full Analysis <ChevronRight className="h-2 w-2" />
-                  </Link>
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-0">
-                {alignmentResults && alignmentResults.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-zinc-50 border-b border-zinc-100">
-                        <tr>
-                          <th className="px-4 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest">
-                            Member
-                          </th>
-
-                          <th className="px-4 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">
-                            Shared
-                          </th>
-
-                          <th className="px-4 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">
-                            Match
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-zinc-50">
-                        {alignmentResults.map((result: any) => (
-                          <tr
-                            key={result.personId}
-                            className="hover:bg-zinc-50 transition-colors"
-                          >
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden shrink-0">
-                                  {result.imageUrl ? (
-                                    <img
-                                      src={result.imageUrl}
-                                      alt={result.personName}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <User className="h-3 w-3 m-1.5 text-zinc-300" />
-                                  )}
-                                </div>
-
-                                <span className="text-xs font-bold text-zinc-700 truncate max-w-[100px]">
-                                  {result.personName.split(" ").pop()}
-                                </span>
-                              </div>
-                            </td>
-
-                            <td className="px-4 py-3 text-center text-[10px] font-bold text-zinc-500 tabular-nums">
-                              {result.totalMotions}
-                            </td>
-
-                            <td className="px-4 py-3 text-right">
-                              <span
-                                className={cn(
-                                  "text-xs font-black tabular-nums",
-
-                                  result.alignmentRate > 90
-                                    ? "text-green-600"
-                                    : result.alignmentRate > 75
-                                      ? "text-indigo-600"
-                                      : "text-amber-600",
-                                )}
-                              >
-                                {result.alignmentRate.toFixed(0)}%
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Users className="h-8 w-8 text-zinc-200 mx-auto mb-2" />
-
-                    <p className="text-xs text-zinc-400 italic font-medium px-6">
-                      No shared voting records found for overlapping tenures.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
+            {/* Ask Question Widget */}
             <AskQuestion
               personId={person.id}
               personName={person.name}
@@ -563,201 +443,280 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
             />
           </div>
 
-          {/* Main Content */}
+          {/* ═══ Main Content ═══ */}
+          <div className="lg:col-span-8 space-y-8">
 
-          <div className="lg:col-span-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              {/* Voting Stats Card - KEEP EXISTING */}
+            {/* ── 1. Overview + Highlights ── */}
+            {highlights && (highlights.overview || (highlights.highlights && highlights.highlights.length > 0)) && (
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <h2 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Overview</h2>
+                </div>
 
-              <Link to={`/people/${person.id}/votes`} className="group">
-                <Card className="h-full border-none shadow-sm ring-1 ring-zinc-200 hover:ring-blue-500 transition-all">
-                  <CardHeader className="pb-2">
+                {highlights.overview && (
+                  <p className="text-sm text-zinc-700 leading-relaxed bg-white rounded-xl border border-zinc-200 p-5 shadow-sm">
+                    {highlights.overview}
+                  </p>
+                )}
+
+                {highlights.highlights && highlights.highlights.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 mt-2">Notable Positions</h3>
+                    {highlights.highlights.map((h, i) => (
+                      <HighlightCard key={i} highlight={h} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── 2. Topic Stances ── */}
+            {filteredStances.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-indigo-500" />
+                  <h2 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Topic Stances</h2>
+                </div>
+                <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden p-6">
+                  <StanceSummary stances={filteredStances} />
+                </div>
+              </section>
+            )}
+
+            {/* ── 3. Voting Section ── */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <VoteIcon className="h-4 w-4 text-blue-500" />
+                <h2 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">Voting</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Voting Record Card */}
+                <Link to={`/people/${person.id}/votes`} className="group">
+                  <Card className="h-full border-none shadow-sm ring-1 ring-zinc-200 hover:ring-blue-500 transition-all">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                        <VoteIcon className="h-4 w-4 text-blue-600" />
+                        Voting Record
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-3xl font-black text-zinc-900">
+                          {stats.totalVotes.toLocaleString()}
+                        </div>
+                        <div className="p-2 bg-blue-50 rounded-full group-hover:bg-blue-600 transition-colors">
+                          <ArrowRight className="h-5 w-5 text-blue-600 group-hover:text-white" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {stats.votesBreakdown && (
+                          <>
+                            <div className="flex items-center gap-2 text-xs">
+                              <ThumbsUp className="h-3 w-3 text-green-600" />
+                              <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500" style={{ width: `${(stats.votesBreakdown.yes / stats.totalVotes) * 100}%` }} />
+                              </div>
+                              <span className="font-bold text-zinc-700 w-8 text-right">{stats.votesBreakdown.yes}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <ThumbsDown className="h-3 w-3 text-red-600" />
+                              <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-red-500" style={{ width: `${(stats.votesBreakdown.no / stats.totalVotes) * 100}%` }} />
+                              </div>
+                              <span className="font-bold text-zinc-700 w-8 text-right">{stats.votesBreakdown.no}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <Minus className="h-3 w-3 text-zinc-400" />
+                              <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-zinc-400" style={{ width: `${(stats.votesBreakdown.abstain / stats.totalVotes) * 100}%` }} />
+                              </div>
+                              <span className="font-bold text-zinc-700 w-8 text-right">{stats.votesBreakdown.abstain}</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+
+                {/* Legislative Proposals Card */}
+                <Link to={`/people/${person.id}/proposals`} className="group">
+                  <Card className="h-full border-none shadow-sm ring-1 ring-zinc-200 hover:ring-indigo-500 transition-all">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                        <Gavel className="h-4 w-4 text-indigo-600" />
+                        Legislative Proposals
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-3xl font-black text-zinc-900">
+                          {(stats.totalMoved + stats.totalSeconded).toLocaleString()}
+                        </div>
+                        <div className="p-2 bg-indigo-50 rounded-full group-hover:bg-indigo-600 transition-colors">
+                          <ArrowRight className="h-5 w-5 text-indigo-600 group-hover:text-white" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-zinc-50 p-3 rounded-lg border border-zinc-100">
+                          <div className="text-[10px] font-black uppercase text-zinc-400 mb-1">Moved</div>
+                          <div className="text-xl font-bold text-zinc-900">{stats.totalMoved}</div>
+                        </div>
+                        <div className="bg-zinc-50 p-3 rounded-lg border border-zinc-100">
+                          <div className="text-[10px] font-black uppercase text-zinc-400 mb-1">Seconded</div>
+                          <div className="text-xl font-bold text-zinc-900">{stats.totalSeconded}</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </div>
+
+              {/* Voting Alignment */}
+              <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white transition-all overflow-hidden">
+                <CardHeader className="pb-3 border-b border-zinc-100">
+                  <div className="flex items-center justify-between">
                     <CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                      <VoteIcon className="h-4 w-4 text-blue-600" />
-                      Voting Record
+                      <Scale className="h-3 w-3 text-indigo-600" />
+                      Voting Alignment
                     </CardTitle>
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="text-3xl font-black text-zinc-900">
-                        {stats.totalVotes.toLocaleString()}
-                      </div>
-
-                      <div className="p-2 bg-blue-50 rounded-full group-hover:bg-blue-600 transition-colors">
-                        <ArrowRight className="h-5 w-5 text-blue-600 group-hover:text-white" />
-                      </div>
+                    <Link
+                      to={`/people/${person.id}/alignment`}
+                      className="text-[10px] font-bold text-indigo-600 hover:underline flex items-center gap-0.5"
+                    >
+                      Full Analysis <ChevronRight className="h-2 w-2" />
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {alignmentResults && alignmentResults.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-zinc-50 border-b border-zinc-100">
+                          <tr>
+                            <th className="px-4 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Member</th>
+                            <th className="px-4 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Shared</th>
+                            <th className="px-4 py-2 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">Match</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-50">
+                          {alignmentResults.map((result: any) => (
+                            <tr key={result.personId} className="hover:bg-zinc-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-6 w-6 rounded-full bg-zinc-100 border border-zinc-200 overflow-hidden shrink-0">
+                                    {result.imageUrl ? (
+                                      <img src={result.imageUrl} alt={result.personName} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <User className="h-3 w-3 m-1.5 text-zinc-300" />
+                                    )}
+                                  </div>
+                                  <span className="text-xs font-bold text-zinc-700 truncate max-w-[100px]">
+                                    {result.personName.split(" ").pop()}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center text-[10px] font-bold text-zinc-500 tabular-nums">{result.totalMotions}</td>
+                              <td className="px-4 py-3 text-right">
+                                <span className={cn(
+                                  "text-xs font-black tabular-nums",
+                                  result.alignmentRate > 90 ? "text-green-600" : result.alignmentRate > 75 ? "text-indigo-600" : "text-amber-600",
+                                )}>
+                                  {result.alignmentRate.toFixed(0)}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-
-                    <div className="space-y-2">
-                      {stats.votesBreakdown && (
-                        <>
-                          <div className="flex items-center gap-2 text-xs">
-                            <ThumbsUp className="h-3 w-3 text-green-600" />
-
-                            <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-green-500"
-                                style={{
-                                  width: `${(stats.votesBreakdown.yes / stats.totalVotes) * 100}%`,
-                                }}
-                              />
-                            </div>
-
-                            <span className="font-bold text-zinc-700 w-8 text-right">
-                              {stats.votesBreakdown.yes}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 text-xs">
-                            <ThumbsDown className="h-3 w-3 text-red-600" />
-
-                            <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-red-500"
-                                style={{
-                                  width: `${(stats.votesBreakdown.no / stats.totalVotes) * 100}%`,
-                                }}
-                              />
-                            </div>
-
-                            <span className="font-bold text-zinc-700 w-8 text-right">
-                              {stats.votesBreakdown.no}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 text-xs">
-                            <Minus className="h-3 w-3 text-zinc-400" />
-
-                            <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-zinc-400"
-                                style={{
-                                  width: `${(stats.votesBreakdown.abstain / stats.totalVotes) * 100}%`,
-                                }}
-                              />
-                            </div>
-
-                            <span className="font-bold text-zinc-700 w-8 text-right">
-                              {stats.votesBreakdown.abstain}
-                            </span>
-                          </div>
-                        </>
-                      )}
+                  ) : (
+                    <div className="text-center py-8">
+                      <Users className="h-8 w-8 text-zinc-200 mx-auto mb-2" />
+                      <p className="text-xs text-zinc-400 italic font-medium px-6">
+                        No shared voting records found for overlapping tenures.
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
 
-              {/* Proposal Stats Card - KEEP EXISTING */}
-
-              <Link to={`/people/${person.id}/proposals`} className="group">
-                <Card className="h-full border-none shadow-sm ring-1 ring-zinc-200 hover:ring-indigo-500 transition-all">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xs font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                      <Gavel className="h-4 w-4 text-indigo-600" />
-                      Legislative Proposals
-                    </CardTitle>
-                  </CardHeader>
-
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="text-3xl font-black text-zinc-900">
-                        {(
-                          stats.totalMoved + stats.totalSeconded
-                        ).toLocaleString()}
-                      </div>
-
-                      <div className="p-2 bg-indigo-50 rounded-full group-hover:bg-indigo-600 transition-colors">
-                        <ArrowRight className="h-5 w-5 text-indigo-600 group-hover:text-white" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-zinc-50 p-3 rounded-lg border border-zinc-100">
-                        <div className="text-[10px] font-black uppercase text-zinc-400 mb-1">
-                          Moved
-                        </div>
-
-                        <div className="text-xl font-bold text-zinc-900">
-                          {stats.totalMoved}
-                        </div>
-                      </div>
-
-                      <div className="bg-zinc-50 p-3 rounded-lg border border-zinc-100">
-                        <div className="text-[10px] font-black uppercase text-zinc-400 mb-1">
-                          Seconded
-                        </div>
-
-                        <div className="text-xl font-bold text-zinc-900">
-                          {stats.totalSeconded}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            </div>
-
-            <Tabs defaultValue="activity" className="space-y-6">
+            {/* ── 4. Tabs for lower priority sections ── */}
+            <Tabs defaultValue={hasSpeakingData ? "speaking" : "attendance"} className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between bg-white p-2 rounded-xl border border-zinc-200 shadow-sm sticky top-20 z-10 gap-2 overflow-x-auto">
                 <TabsList className="bg-transparent border-none">
+                  {hasSpeakingData && (
+                    <TabsTrigger
+                      value="speaking"
+                      className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                    >
+                      <Mic className="h-4 w-4 mr-2" />
+                      Speaking
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger
-                    value="activity"
+                    value="attendance"
                     className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <History className="h-4 w-4 mr-2" />
-                    Attendance History
+                    Attendance
                   </TabsTrigger>
-
                   <TabsTrigger
-                    value="positions"
-                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
-                  >
-                    <Target className="h-4 w-4 mr-2" />
-                    Positions
-                  </TabsTrigger>
-
-                  <TabsTrigger
-                    value="memberships"
+                    value="roles"
                     className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <Briefcase className="h-4 w-4 mr-2" />
-                    Roles & Organizations
+                    Roles
                   </TabsTrigger>
                 </TabsList>
               </div>
 
-              <TabsContent value="activity" className="space-y-4">
+              {/* Speaking Tab */}
+              {hasSpeakingData && (
+                <TabsContent value="speaking" className="space-y-6">
+                  <SpeakingTimeCard
+                    totalSeconds={currentPersonSpeaking!.total_seconds}
+                    meetingCount={currentPersonSpeaking!.meeting_count}
+                    segmentCount={currentPersonSpeaking!.segment_count}
+                    trendData={speakingTimeTrend}
+                    topicBreakdown={speakingTimeByTopic}
+                    rank={speakingRank}
+                    totalCouncillors={totalCouncillorsWithData}
+                  />
+                  {speakingTimeRanking && speakingTimeRanking.some((r: any) => r.total_seconds > 0) && (
+                    <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white">
+                      <CardContent className="pt-4">
+                        <SpeakerRanking
+                          rankings={speakingTimeRanking}
+                          currentPersonId={person.id}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+              )}
+
+              {/* Attendance Tab */}
+              <TabsContent value="attendance" className="space-y-4">
                 <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                       <thead className="bg-zinc-50 border-b border-zinc-200 sticky top-0 z-10">
                         <tr>
-                          <th className="px-6 py-4 font-black uppercase text-[10px] tracking-widest text-zinc-400">
-                            Meeting Date
-                          </th>
-
-                          <th className="px-6 py-4 font-black uppercase text-[10px] tracking-widest text-zinc-400">
-                            Title
-                          </th>
-
-                          <th className="px-6 py-4 font-black uppercase text-[10px] tracking-widest text-zinc-400 w-32">
-                            Status
-                          </th>
+                          <th className="px-6 py-4 font-black uppercase text-[10px] tracking-widest text-zinc-400">Meeting Date</th>
+                          <th className="px-6 py-4 font-black uppercase text-[10px] tracking-widest text-zinc-400">Title</th>
+                          <th className="px-6 py-4 font-black uppercase text-[10px] tracking-widest text-zinc-400 w-32">Status</th>
                         </tr>
                       </thead>
-
                       <tbody className="divide-y divide-zinc-100">
                         {relevantAttendance.map((record) => (
-                          <tr
-                            key={record.id}
-                            className="hover:bg-zinc-50 transition-colors group"
-                          >
+                          <tr key={record.id} className="hover:bg-zinc-50 transition-colors group">
                             <td className="px-6 py-4 whitespace-nowrap text-zinc-500 font-medium">
                               {formatDate(record.meetings?.meeting_date)}
                             </td>
-
                             <td className="px-6 py-4">
                               <Link
                                 to={`/meetings/${record.meeting_id}`}
@@ -766,15 +725,13 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                                 {record.meetings?.title}
                               </Link>
                             </td>
-
                             <td className="px-6 py-4 text-right">
                               <Badge
                                 variant="outline"
                                 className={`text-[9px] font-black uppercase px-2 py-0.5 ${
                                   record.attendance_mode === "No Record"
                                     ? "border-amber-200 text-amber-700 bg-amber-50"
-                                    : record.attendance_mode === "Absent" ||
-                                        record.attendance_mode === "Regrets"
+                                    : record.attendance_mode === "Absent" || record.attendance_mode === "Regrets"
                                       ? "border-red-200 text-red-700 bg-red-50"
                                       : "border-green-200 text-green-700 bg-green-50"
                                 }`}
@@ -787,36 +744,28 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                       </tbody>
                     </table>
                   </div>
-
                   {attendanceTotal > 20 && (
                     <div className="p-4 border-t border-zinc-200 flex justify-between items-center bg-zinc-50">
                       <div className="text-xs text-zinc-500 font-bold">
-                        Showing {page * 20 + 1}-
-                        {Math.min((page + 1) * 20, attendanceTotal)} of{" "}
-                        {attendanceTotal}
+                        Showing {page * 20 + 1}-{Math.min((page + 1) * 20, attendanceTotal)} of {attendanceTotal}
                       </div>
-
                       <div className="flex gap-2">
                         <Link
                           to={`?page=${Math.max(0, page - 1)}`}
                           preventScrollReset={true}
                           className={cn(
                             "px-3 py-1.5 rounded-lg border border-zinc-300 text-xs font-bold bg-white hover:bg-zinc-100 transition-colors",
-
                             page === 0 && "pointer-events-none opacity-50",
                           )}
                         >
                           Previous
                         </Link>
-
                         <Link
                           to={`?page=${page + 1}`}
                           preventScrollReset={true}
                           className={cn(
                             "px-3 py-1.5 rounded-lg border border-zinc-300 text-xs font-bold bg-white hover:bg-zinc-100 transition-colors",
-
-                            (page + 1) * 20 >= attendanceTotal &&
-                              "pointer-events-none opacity-50",
+                            (page + 1) * 20 >= attendanceTotal && "pointer-events-none opacity-50",
                           )}
                         >
                           Next
@@ -827,32 +776,14 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                 </div>
               </TabsContent>
 
-              <TabsContent value="positions" className="space-y-4">
-                <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl overflow-hidden p-6">
-                  {stances && stances.length > 0 ? (
-                    <StanceSummary stances={stances} />
-                  ) : (
-                    <div className="text-center py-12">
-                      <Target className="h-10 w-10 text-zinc-200 mx-auto mb-3" />
-                      <p className="text-sm text-zinc-500 font-medium">
-                        No stance analysis available
-                      </p>
-                      <p className="text-xs text-zinc-400 mt-1">
-                        Positions will appear after data processing.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="memberships" className="space-y-6">
+              {/* Roles Tab */}
+              <TabsContent value="roles" className="space-y-6">
                 <div className="space-y-8">
                   {activeMemberships.length > 0 && (
                     <section>
                       <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 mb-4 px-1">
                         Current Roles
                       </h3>
-
                       <div className="grid gap-4">
                         {activeMemberships.map((m) => (
                           <div
@@ -860,15 +791,9 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                             className="p-6 bg-white rounded-2xl border border-zinc-200 shadow-sm flex justify-between items-center group hover:border-blue-400 transition-all"
                           >
                             <div>
-                              <div className="font-black text-zinc-900 text-lg">
-                                {m.role}
-                              </div>
-
-                              <div className="text-sm text-zinc-500 font-medium">
-                                {m.organization?.name}
-                              </div>
+                              <div className="font-black text-zinc-900 text-lg">{m.role}</div>
+                              <div className="text-sm text-zinc-500 font-medium">{m.organization?.name}</div>
                             </div>
-
                             <div className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-3 py-1 rounded-full border border-blue-100 shadow-sm">
                               Since {new Date(m.start_date || "").getFullYear()}
                             </div>
@@ -883,7 +808,6 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                       <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 mb-4 px-1">
                         Historical Roles
                       </h3>
-
                       <div className="grid gap-4 opacity-70">
                         {pastMemberships.map((m) => (
                           <div
@@ -891,18 +815,11 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                             className="p-6 bg-zinc-50/50 rounded-2xl border border-dashed border-zinc-200 flex justify-between items-center group grayscale hover:grayscale-0 transition-all"
                           >
                             <div>
-                              <div className="font-bold text-zinc-700">
-                                {m.role}
-                              </div>
-
-                              <div className="text-sm text-zinc-400 font-medium">
-                                {m.organization?.name}
-                              </div>
+                              <div className="font-bold text-zinc-700">{m.role}</div>
+                              <div className="text-sm text-zinc-400 font-medium">{m.organization?.name}</div>
                             </div>
-
                             <div className="text-[10px] font-black text-zinc-400 uppercase bg-white px-3 py-1 rounded-full border border-zinc-200 tabular-nums">
-                              {new Date(m.start_date || "").getFullYear()} -{" "}
-                              {new Date(m.end_date || "").getFullYear()}
+                              {new Date(m.start_date || "").getFullYear()} - {new Date(m.end_date || "").getFullYear()}
                             </div>
                           </div>
                         ))}
@@ -910,74 +827,58 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                     </section>
                   )}
                 </div>
-              </TabsContent>
 
-              {candidacies.length > 0 && (
-                <section className="mt-8">
-                  <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 mb-4 px-1">
-                    Electoral History
-                  </h3>
-
-                  <div className="grid gap-4">
-                    {candidacies.map((can: any) => (
-                      <div
-                        key={can.id}
-                        className="bg-white p-8 rounded-2xl border border-zinc-200 shadow-sm hover:border-blue-400 transition-all"
-                      >
-                        <div className="flex justify-between items-start mb-6">
-                          <div>
-                            <h3 className="text-xl font-black text-zinc-900">
-                              {can.election_offices?.elections?.name}
-                            </h3>
-
-                            <div className="text-sm text-zinc-500 font-medium">
-                              Candidate for {can.election_offices?.office}
-                            </div>
-                          </div>
-
-                          <Badge
-                            className={cn(
-                              "font-black text-[10px] uppercase px-3",
-
-                              can.is_elected
-                                ? "bg-green-600 shadow-lg shadow-green-200"
-                                : "bg-zinc-400",
-                            )}
-                          >
-                            {can.is_elected ? "Elected" : "Not Elected"}
-                          </Badge>
-                        </div>
-
-                        <div className="flex gap-12">
-                          <div>
-                            <div className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">
-                              Votes Received
-                            </div>
-
-                            <div className="text-3xl font-black text-zinc-900 tabular-nums">
-                              {can.votes_received?.toLocaleString() || "N/A"}
-                            </div>
-                          </div>
-
-                          {can.election_offices?.elections?.election_date && (
+                {candidacies.length > 0 && (
+                  <section>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 mb-4 px-1">
+                      Electoral History
+                    </h3>
+                    <div className="grid gap-4">
+                      {candidacies.map((can: any) => (
+                        <div
+                          key={can.id}
+                          className="bg-white p-8 rounded-2xl border border-zinc-200 shadow-sm hover:border-blue-400 transition-all"
+                        >
+                          <div className="flex justify-between items-start mb-6">
                             <div>
-                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">
-                                Election Date
-                              </div>
-
-                              <div className="text-3xl font-black text-zinc-900">
-                                {new Date(
-                                  can.election_offices.elections.election_date,
-                                ).getFullYear()}
+                              <h3 className="text-xl font-black text-zinc-900">
+                                {can.election_offices?.elections?.name}
+                              </h3>
+                              <div className="text-sm text-zinc-500 font-medium">
+                                Candidate for {can.election_offices?.office}
                               </div>
                             </div>
-                          )}
+                            <Badge
+                              className={cn(
+                                "font-black text-[10px] uppercase px-3",
+                                can.is_elected ? "bg-green-600 shadow-lg shadow-green-200" : "bg-zinc-400",
+                              )}
+                            >
+                              {can.is_elected ? "Elected" : "Not Elected"}
+                            </Badge>
+                          </div>
+                          <div className="flex gap-12">
+                            <div>
+                              <div className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">Votes Received</div>
+                              <div className="text-3xl font-black text-zinc-900 tabular-nums">
+                                {can.votes_received?.toLocaleString() || "N/A"}
+                              </div>
+                            </div>
+                            {can.election_offices?.elections?.election_date && (
+                              <div>
+                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-1">Election Date</div>
+                                <div className="text-3xl font-black text-zinc-900">
+                                  {new Date(can.election_offices.elections.election_date).getFullYear()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </TabsContent>
             </Tabs>
           </div>
         </div>

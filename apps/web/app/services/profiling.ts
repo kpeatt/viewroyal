@@ -24,6 +24,25 @@ export interface SpeakingTimeByTopic {
   segment_count: number;
 }
 
+export interface CouncillorHighlight {
+  title: string;
+  summary: string;
+  position: "for" | "against" | "nuanced";
+  evidence: {
+    text: string;
+    meeting_id: number | null;
+    date: string;
+  }[];
+}
+
+export interface CouncillorHighlights {
+  id: number;
+  person_id: number;
+  highlights: CouncillorHighlight[];
+  overview: string;
+  generated_at: string;
+}
+
 export interface CouncillorStance {
   id: number;
   person_id: number;
@@ -138,4 +157,26 @@ export async function getCouncillorStances(
   }
 
   return (data ?? []) as CouncillorStance[];
+}
+
+/**
+ * Get pre-computed councillor highlights (overview + notable positions).
+ * Returns null if no highlights exist for this person.
+ */
+export async function getCouncillorHighlights(
+  supabase: SupabaseClient,
+  personId: number,
+): Promise<CouncillorHighlights | null> {
+  const { data, error } = await supabase
+    .from("councillor_highlights")
+    .select("*")
+    .eq("person_id", personId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching councillor highlights:", error);
+    throw new Error(error.message);
+  }
+
+  return data as CouncillorHighlights | null;
 }
