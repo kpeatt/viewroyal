@@ -58,6 +58,9 @@ v1.1 decisions:
 - DOC-7.1 Three-tier PDF size handling: inline (<20MB), File API (20-50MB), PyMuPDF split (>50MB)
 - DOC-7.1 R2 image uploads gracefully degrade: skip silently if boto3 or credentials missing
 - DOC-7.1 Docling dependency removed; Gemini 2.5 Flash is the sole extraction engine with PyMuPDF chunker as fallback
+- DOC-7.1 Batch API for full backfill (3-phase: boundary batch → content batch → DB insertion)
+- DOC-7.1 Boundary prompt requires non-overlapping page ranges; dedup removes parent boundaries containing children
+- DOC-7.1 insert_meeting_results() cleans up existing data before inserting to prevent duplicates
 
 ### Roadmap Evolution
 
@@ -75,11 +78,10 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Phase 8 context gathered (Perplexity-style UI, streaming AI, typed citations, conversation memory)
-Next action: Plan Phase 8 (/gsd:plan-phase 8)
+Resumed Phase 7.1 — batch test completed, quality review found overlapping boundaries + double insertion bugs, both fixed and committed.
+Next action: Run full 711-meeting backfill via Gemini Batch API
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
-Batch job: batches/469wtgkmhk04ikitt1ryijz1lpx4l93altmy (5-meeting test)
-Status: Boundary detection complete (164 boundaries), content extraction batch running
-To resume: collect content results, DB insertion, fix chunk dedup, then full 711-meeting backfill
+Status: 5-meeting batch test complete, quality bugs fixed (6fdcbfb7), DB wiped clean, ready for full backfill
+To resume: `cd apps/pipeline && uv run python main.py --extract-documents --batch`
