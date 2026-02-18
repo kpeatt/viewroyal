@@ -102,13 +102,14 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     const municipality = await getMunicipality(supabase);
     const personId = parseInt(id, 10);
 
+    // Profile data is critical; profiling data is optional (graceful degradation)
     const [data, speakingTimeRanking, speakingTimeTrend, speakingTimeByTopic, stances] =
       await Promise.all([
         getPersonProfile(supabase, id, page, municipality.id),
-        getSpeakingTimeStats(supabase, startDate, endDate),
-        getSpeakingTimeByMeeting(supabase, personId, startDate, endDate),
-        getSpeakingTimeByTopic(supabase, personId, startDate, endDate),
-        getCouncillorStances(supabase, personId),
+        getSpeakingTimeStats(supabase, startDate, endDate).catch((e) => { console.error("Speaking time stats failed:", e); return [] as Awaited<ReturnType<typeof getSpeakingTimeStats>>; }),
+        getSpeakingTimeByMeeting(supabase, personId, startDate, endDate).catch((e) => { console.error("Speaking time by meeting failed:", e); return [] as Awaited<ReturnType<typeof getSpeakingTimeByMeeting>>; }),
+        getSpeakingTimeByTopic(supabase, personId, startDate, endDate).catch((e) => { console.error("Speaking time by topic failed:", e); return [] as Awaited<ReturnType<typeof getSpeakingTimeByTopic>>; }),
+        getCouncillorStances(supabase, personId).catch((e) => { console.error("Councillor stances failed:", e); return [] as Awaited<ReturnType<typeof getCouncillorStances>>; }),
       ]);
 
     // Find current person's speaking time from the ranking
@@ -141,6 +142,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     if (error.message === "Person Not Found") {
       throw new Response("Person Not Found", { status: 404 });
     }
+    console.error("Error loading person profile:", error);
     throw new Response("Error loading person profile", { status: 500 });
   }
 }
