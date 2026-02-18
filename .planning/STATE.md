@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 Phase: 8 (Unified Search & Hybrid RAG)
 Plan: 5 of 5
 Status: In Progress
-Last activity: 2026-02-18 -- Completed 08-04 Follow-up Conversations & Navigation
+Last activity: 2026-02-18 - Completed quick task 2: Add beta banner to homepage header
 
 Progress: [██████████████████░░] 90% (20/~21 plans across all milestones)
 
