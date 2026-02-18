@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 Phase: 8 (Unified Search & Hybrid RAG)
 Plan: Not yet planned
 Status: Starting
-Last activity: 2026-02-17 -- Phase 7.1 paused (2/3 plans done, backfill waiting on Gemini Batch API), advancing to Phase 8
+Last activity: 2026-02-18 -- Completed quick task 1: hero map background with Ken Burns effect
 
 Progress: [███████████████░░░░░] 76% (16/~21 plans across all milestones)
 
@@ -75,10 +75,16 @@ None.
 
 - bootstrap.sql is out of date with 23+ applied migrations -- technical debt to track
 - Email delivery requires external Resend configuration (documented in Phase 3 Plan 02)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Change hero background to faded map view of View Royal with Ken Burns effect | 2026-02-18 | fb1d7909 | [1-change-the-hero-background-to-be-a-faded](./quick/1-change-the-hero-background-to-be-a-faded/) |
 ## Session Continuity
 
-Last session: 2026-02-17
-Completed quick task 01: hero map background (GeoJSON-to-SVG with Ken Burns animation).
+Last session: 2026-02-18
+Completed quick task 1: hero map background with Ken Burns effect.
 Next action: Plan Phase 8 (/gsd:plan-phase 8)
 
 ### Paused Work: Phase 7.1
