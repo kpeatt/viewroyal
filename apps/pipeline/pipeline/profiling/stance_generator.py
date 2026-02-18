@@ -111,7 +111,7 @@ def _gather_evidence(supabase, person_id: int, topic: str) -> dict:
     try:
         votes_result = supabase.table("votes").select(
             "id, vote, "
-            "motions!inner(id, motion_text, result, "
+            "motions!inner(id, text_content, result, "
             "agenda_items!inner(id, category), "
             "meetings!inner(meeting_date))"
         ).eq("person_id", person_id).execute()
@@ -130,7 +130,7 @@ def _gather_evidence(supabase, person_id: int, topic: str) -> dict:
                     meeting_info = motion.get("meetings", {})
                     votes.append({
                         "vote": row["vote"],
-                        "motion_text": motion.get("motion_text", ""),
+                        "motion_text": motion.get("text_content", ""),
                         "result": motion.get("result", ""),
                         "meeting_date": meeting_info.get("meeting_date", ""),
                     })
@@ -383,7 +383,6 @@ def _upsert_stance(
         "evidence_quotes": key_quotes,
         "statement_count": statement_count,
         "confidence": confidence,
-        "confidence_note": result.get("confidence_note", ""),
     }
 
     try:
