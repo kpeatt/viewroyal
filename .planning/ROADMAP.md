@@ -23,7 +23,7 @@
 
 - [x] **Phase 7: Document Intelligence** - Pipeline chunks PDFs into sections with embeddings and full-text search, backfills existing documents (completed 2026-02-17)
 - [ ] ~~**Phase 7.1: Upgrade Document Extraction**~~ - Gemini 2.5 Flash extraction (2/3 plans done, backfill paused — waiting on Batch API)
-- [ ] **Phase 8: Unified Search & Hybrid RAG** - Single search page with intent detection, hybrid search across all content types, conversation memory
+- [x] **Phase 8: Unified Search & Hybrid RAG** - Single search page with intent detection, hybrid search across all content types, conversation memory (completed 2026-02-18)
 - [ ] **Phase 9: AI Profiling & Comparison** - Speaking time metrics, AI stance summaries with evidence, side-by-side councillor comparison
 
 ## Phase Details
@@ -84,11 +84,13 @@ Plans:
   2. Councillor page shows AI-generated stance summaries grouped by topic (e.g. "Housing", "Environment"), each grounded in specific meeting references
   3. Each stance summary displays a confidence score and links to the source evidence (transcript segments, motions, or document sections)
   4. User can select two councillors and see a side-by-side comparison of their voting records, activity metrics, and stance summaries
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 09-01-PLAN.md -- Database foundation (councillor_stances table, speaking time RPCs, category normalization, topic utilities, profiling service)
+- [ ] 09-02-PLAN.md -- Stance generation pipeline (Gemini-powered AI stance summaries, --generate-stances CLI flag)
+- [ ] 09-03-PLAN.md -- Profile page UI (speaking time card, speaker ranking, stance summaries, position spectrum)
+- [ ] 09-04-PLAN.md -- Comparison page (/compare route, dual councillor selection, side-by-side stance/activity comparison)
 
 ## Progress
 
@@ -104,5 +106,5 @@ Plans:
 | 6. Gap Closure & Cleanup | v1.0 | 1/1 | Complete | 2026-02-17 |
 | 7. Document Intelligence | v1.1 | Complete    | 2026-02-17 | - |
 | 7.1 Upgrade Document Extraction | v1.1 | 2/3 | Paused | - |
-| 8. Unified Search & Hybrid RAG | v1.1 | 0/5 | Planned | - |
-| 9. AI Profiling & Comparison | v1.1 | 0/? | Not started | - |
+| 8. Unified Search & Hybrid RAG | v1.1 | 5/5 | Complete | 2026-02-18 |
+| 9. AI Profiling & Comparison | v1.1 | 0/4 | Planned | - |
