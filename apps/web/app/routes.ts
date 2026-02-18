@@ -22,6 +22,7 @@ export default [
   route("ask", "routes/ask.tsx"),
   route("about", "routes/about.tsx"),
   route("alignment", "routes/alignment.tsx"),
+  route("compare", "routes/compare.tsx"),
   route("login", "routes/login.tsx"),
   route("signup", "routes/signup.tsx"),
   route("logout", "routes/logout.tsx"),
