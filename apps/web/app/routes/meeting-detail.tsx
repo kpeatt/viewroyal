@@ -605,12 +605,9 @@ export default function MeetingDetail({ loaderData }: any) {
                         return (
                           <div key={doc.id}>
                             <div className="flex items-center justify-between">
-                              <Link
-                                to={`/meetings/${meeting.id}/documents/${doc.id}`}
-                                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
-                              >
+                              <span className="text-sm text-zinc-900 font-medium">
                                 {doc.title}
-                              </Link>
+                              </span>
                               <div className="flex items-center gap-3 text-xs text-zinc-400">
                                 {doc.page_count && <span>{doc.page_count} pages</span>}
                                 {doc.source_url && (
@@ -638,7 +635,7 @@ export default function MeetingDetail({ loaderData }: any) {
                                       {getDocumentTypeLabel(ed.document_type).slice(0, 6)}
                                     </span>
                                     <Link
-                                      to={`/meetings/${meeting.id}/documents/${doc.id}#extracted-${ed.id}`}
+                                      to={`/meetings/${meeting.id}/documents/${ed.id}`}
                                       className="text-xs text-zinc-600 hover:text-zinc-900 truncate transition-colors"
                                     >
                                       {ed.title}
@@ -647,7 +644,12 @@ export default function MeetingDetail({ loaderData }: any) {
                                 ))}
                                 {docExtracted.length > 8 && (
                                   <li className="text-xs text-zinc-400 ml-1">
-                                    +{docExtracted.length - 8} more
+                                    <Link
+                                      to={`/meetings/${meeting.id}/documents`}
+                                      className="hover:text-zinc-600 transition-colors"
+                                    >
+                                      +{docExtracted.length - 8} more
+                                    </Link>
                                   </li>
                                 )}
                               </ul>
