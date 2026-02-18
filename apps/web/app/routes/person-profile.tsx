@@ -7,6 +7,15 @@ import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
 import type { Person, Municipality, Membership, Attendance, Vote } from "../lib/types";
 import { Link, useRouteLoaderData } from "react-router";
 import { SubscribeButton } from "../components/subscribe-button";
+import {
+  getSpeakingTimeStats,
+  getSpeakingTimeByMeeting,
+  getSpeakingTimeByTopic,
+  getCouncillorStances,
+} from "../services/profiling";
+import { SpeakingTimeCard } from "../components/profile/speaking-time-card";
+import { SpeakerRanking } from "../components/profile/speaker-ranking";
+import { StanceSummary } from "../components/profile/stance-summary";
 
 export const meta: Route.MetaFunction = ({ data, matches }) => {
   if (!data?.person) return [{ title: "Person | ViewRoyal.ai" }];
@@ -47,6 +56,7 @@ import {
   Minus,
   Scale,
   Users,
+  Target,
 } from "lucide-react";
 import { Separator } from "../components/ui/separator";
 import { Badge } from "../components/ui/badge";
@@ -70,12 +80,63 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const { id } = params;
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get("page") || "0", 10);
+  const timeRange = url.searchParams.get("timeRange") || "12m";
+
+  // Compute date range for speaking time queries
+  const now = new Date();
+  let startDate: string | undefined;
+  let endDate: string | undefined;
+  if (timeRange === "12m") {
+    const d = new Date(now);
+    d.setFullYear(d.getFullYear() - 1);
+    startDate = d.toISOString().slice(0, 10);
+    endDate = now.toISOString().slice(0, 10);
+  } else if (timeRange === "term") {
+    startDate = "2022-11-01";
+    endDate = now.toISOString().slice(0, 10);
+  }
+  // "all" -> startDate/endDate remain undefined
 
   try {
     const supabase = getSupabaseAdminClient();
     const municipality = await getMunicipality(supabase);
-    const data = await getPersonProfile(supabase, id, page, municipality.id);
-    return { ...data, page };
+    const personId = parseInt(id, 10);
+
+    const [data, speakingTimeRanking, speakingTimeTrend, speakingTimeByTopic, stances] =
+      await Promise.all([
+        getPersonProfile(supabase, id, page, municipality.id),
+        getSpeakingTimeStats(supabase, startDate, endDate),
+        getSpeakingTimeByMeeting(supabase, personId, startDate, endDate),
+        getSpeakingTimeByTopic(supabase, personId, startDate, endDate),
+        getCouncillorStances(supabase, personId),
+      ]);
+
+    // Find current person's speaking time from the ranking
+    const currentPersonSpeaking = speakingTimeRanking.find(
+      (r) => r.person_id === personId,
+    );
+    const rank = currentPersonSpeaking
+      ? speakingTimeRanking
+          .filter((r) => r.total_seconds > 0)
+          .sort((a, b) => b.total_seconds - a.total_seconds)
+          .findIndex((r) => r.person_id === personId) + 1
+      : undefined;
+    const totalCouncillorsWithData = speakingTimeRanking.filter(
+      (r) => r.total_seconds > 0,
+    ).length;
+
+    return {
+      ...data,
+      page,
+      speakingTimeRanking,
+      speakingTimeTrend,
+      speakingTimeByTopic,
+      stances,
+      timeRange,
+      currentPersonSpeaking,
+      speakingRank: rank,
+      totalCouncillorsWithData,
+    };
   } catch (error: any) {
     if (error.message === "Person Not Found") {
       throw new Response("Person Not Found", { status: 404 });
@@ -96,6 +157,13 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
     stats,
     alignmentResults,
     page,
+    speakingTimeRanking,
+    speakingTimeTrend,
+    speakingTimeByTopic,
+    stances,
+    currentPersonSpeaking,
+    speakingRank,
+    totalCouncillorsWithData,
   } = loaderData;
 
   const rootData = useRouteLoaderData("root") as { municipality?: Municipality } | undefined;
@@ -259,7 +327,18 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                   <CardTitle className="text-3xl font-black tracking-tight text-zinc-900">
                     {person.name}
                   </CardTitle>
-                  {person.is_councillor && <SubscribeButton type="person" targetId={person.id} label="Follow" />}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {person.is_councillor && (
+                      <Link
+                        to={`/compare?a=${person.id}`}
+                        className="inline-flex items-center px-2.5 py-1 text-[10px] font-bold border border-zinc-200 rounded-lg text-zinc-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                      >
+                        <Users className="h-3 w-3 mr-1" />
+                        Compare
+                      </Link>
+                    )}
+                    {person.is_councillor && <SubscribeButton type="person" targetId={person.id} label="Follow" />}
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-1 mt-1">
@@ -350,6 +429,31 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                 </p>
               </CardContent>
             </Card>
+
+            {/* Speaking Time Card - only shown if person has speaking data */}
+            {currentPersonSpeaking && currentPersonSpeaking.total_seconds > 0 && (
+              <SpeakingTimeCard
+                totalSeconds={currentPersonSpeaking.total_seconds}
+                meetingCount={currentPersonSpeaking.meeting_count}
+                segmentCount={currentPersonSpeaking.segment_count}
+                trendData={speakingTimeTrend}
+                topicBreakdown={speakingTimeByTopic}
+                rank={speakingRank}
+                totalCouncillors={totalCouncillorsWithData}
+              />
+            )}
+
+            {/* Speaker Ranking */}
+            {speakingTimeRanking && speakingTimeRanking.some((r: any) => r.total_seconds > 0) && (
+              <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white">
+                <CardContent className="pt-4">
+                  <SpeakerRanking
+                    rankings={speakingTimeRanking}
+                    currentPersonId={person.id}
+                  />
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white transition-all overflow-hidden">
               <CardHeader className="pb-3 border-b border-zinc-100">
@@ -449,35 +553,6 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                 )}
               </CardContent>
             </Card>
-
-            {topTopics.length > 0 && (
-              <Card className="border-none shadow-md ring-1 ring-zinc-200/50 bg-white">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400 flex items-center gap-2">
-                    Focus Areas
-                  </CardTitle>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {topTopics.map((topic) => (
-                    <div key={topic.name} className="space-y-1.5">
-                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                        <span className="text-zinc-500">{topic.name}</span>
-
-                        <span className="text-zinc-900">{topic.percent}%</span>
-                      </div>
-
-                      <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="bg-blue-600 h-full rounded-full opacity-80"
-                          style={{ width: `${topic.percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
 
             <AskQuestion
               personId={person.id}
@@ -634,6 +709,14 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                   </TabsTrigger>
 
                   <TabsTrigger
+                    value="positions"
+                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                  >
+                    <Target className="h-4 w-4 mr-2" />
+                    Positions
+                  </TabsTrigger>
+
+                  <TabsTrigger
                     value="memberships"
                     className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
@@ -737,6 +820,24 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                           Next
                         </Link>
                       </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="positions" className="space-y-4">
+                <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl overflow-hidden p-6">
+                  {stances && stances.length > 0 ? (
+                    <StanceSummary stances={stances} />
+                  ) : (
+                    <div className="text-center py-12">
+                      <Target className="h-10 w-10 text-zinc-200 mx-auto mb-3" />
+                      <p className="text-sm text-zinc-500 font-medium">
+                        No stance analysis available
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Positions will appear after data processing.
+                      </p>
                     </div>
                   )}
                 </div>
