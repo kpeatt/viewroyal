@@ -78,10 +78,10 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Resumed Phase 7.1 — batch test completed, quality review found overlapping boundaries + double insertion bugs, both fixed and committed.
-Next action: Run full 711-meeting backfill via Gemini Batch API
+Completed quick task 01: hero map background (GeoJSON-to-SVG with Ken Burns animation).
+Next action: Plan Phase 8 (/gsd:plan-phase 8)
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
-Status: 5-meeting batch test complete, quality bugs fixed (6fdcbfb7), DB wiped clean, ready for full backfill
-To resume: `cd apps/pipeline && uv run python main.py --extract-documents --batch`
+Status: All code complete, quality bugs fixed. User running full 711-meeting backfill outside Claude.
+To resume after backfill: approve Plan 03 checkpoint, phase verification
