@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.1 Deep Intelligence -- Phase 7.1 Upgrade Document Extraction
+**Current focus:** v1.1 Deep Intelligence -- Phase 8 Unified Search & Hybrid RAG
 
 ## Current Position
 
-Phase: 7.1 (Upgrade document extraction with Gemini 2.5 Flash)
-Plan: 3 of 3 in current phase (task 2/2 — human-verify checkpoint)
-Status: Paused
-Last activity: 2026-02-17 -- Paused at Plan 03 checkpoint; user wants Gemini Batch API for full backfill
+Phase: 8 (Unified Search & Hybrid RAG)
+Plan: Not yet planned
+Status: Starting
+Last activity: 2026-02-17 -- Phase 7.1 paused (2/3 plans done, backfill waiting on Gemini Batch API), advancing to Phase 8
 
 Progress: [███████████████░░░░░] 76% (16/~21 plans across all milestones)
 
@@ -62,6 +62,7 @@ v1.1 decisions:
 ### Roadmap Evolution
 
 - Phase 07.1 inserted after Phase 07: Upgrade document extraction with Docling and Gemini (URGENT)
+- Phase 07.1 paused at Plan 03 (2/3 done) — backfill needs Gemini Batch API, advancing to Phase 8
 
 ### Pending Todos
 
@@ -74,6 +75,11 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Plan 03 task 2/2 (human-verify checkpoint) — user decided full backfill needs Gemini Batch API
+Phase 8 context gathered (Perplexity-style UI, streaming AI, typed citations, conversation memory)
+Next action: Plan Phase 8 (/gsd:plan-phase 8)
+
+### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
-Next action: Research Gemini Batch API, plan batch architecture, then complete backfill
+Batch job: batches/469wtgkmhk04ikitt1ryijz1lpx4l93altmy (5-meeting test)
+Status: Boundary detection complete (164 boundaries), content extraction batch running
+To resume: collect content results, DB insertion, fix chunk dedup, then full 711-meeting backfill
