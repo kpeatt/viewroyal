@@ -41,4 +41,5 @@ export default [
   route("api/bylaws/:id/download", "routes/api.bylaws.$id.download.tsx"),
   route("api/intel/:id", "routes/api.intel.tsx"),
   route("api/vimeo-url", "routes/api.vimeo-url.ts"),
+  route("api/search", "routes/api.search.tsx"),
 ] satisfies RouteConfig;
