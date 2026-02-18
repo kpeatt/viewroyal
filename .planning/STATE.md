@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 8 (Unified Search & Hybrid RAG)
-Plan: Not yet planned
-Status: Starting
-Last activity: 2026-02-18 -- Completed quick task 1: hero map background with Ken Burns effect
+Plan: 3 of 5
+Status: In Progress
+Last activity: 2026-02-18 -- Completed 08-02 Unified Search API & RAG Document Sections
 
-Progress: [███████████████░░░░░] 76% (16/~21 plans across all milestones)
+Progress: [████████████████░░░░] 80% (18/~21 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
-- Average duration: 7.6min
-- Total execution time: 2.05 hours
+- Total plans completed: 18
+- Average duration: 7.1min
+- Total execution time: 2.12 hours
 
 **By Phase:**
 
@@ -35,6 +35,7 @@ Progress: [███████████████░░░░░] 76% (16
 | 06-gap-closure-cleanup | 1 | 3min | 3min |
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
+| 08-unified-search-hybrid-rag | 2 | 5min | 3min |
 
 ## Accumulated Context
 
@@ -61,6 +62,9 @@ v1.1 decisions:
 - DOC-7.1 Batch API for full backfill (3-phase: boundary batch → content batch → DB insertion)
 - DOC-7.1 Boundary prompt requires non-overlapping page ranges; dedup removes parent boundaries containing children
 - DOC-7.1 insert_meeting_results() cleans up existing data before inserting to prevent duplicates
+- SRCH Unified search API: single endpoint for keyword (JSON) and AI (streaming SSE) via mode param
+- SRCH Cache ID emitted as SSE event before done for client URL updating
+- SRCH Document sections enriched via two-step query (documents -> meetings) for date filtering
 
 ### Roadmap Evolution
 
@@ -84,8 +88,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed quick task 1: hero map background with Ken Burns effect.
-Next action: Plan Phase 8 (/gsd:plan-phase 8)
+Completed 08-02-PLAN.md: Unified Search API & RAG Document Sections.
+Next action: Execute 08-03-PLAN.md (search page frontend)
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
