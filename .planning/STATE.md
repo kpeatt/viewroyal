@@ -105,11 +105,12 @@ None.
 |---|-------------|------|--------|-----------|
 | 1 | Change hero background to faded map view of View Royal with Ken Burns effect | 2026-02-18 | fb1d7909 | [1-change-the-hero-background-to-be-a-faded](./quick/1-change-the-hero-background-to-be-a-faded/) |
 | 2 | Add beta banner to homepage header | 2026-02-18 | 77b17c18 | [2-add-beta-banner-to-homepage-header](./quick/2-add-beta-banner-to-homepage-header/) |
+| 3 | Fix about page video hours showing 0 | 2026-02-18 | f8e1097d | [3-fix-about-page-video-hours-showing-0](./quick/3-fix-about-page-video-hours-showing-0/) |
 
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 09-04-PLAN.md: Councillor comparison page. Created /compare route with selection mode (councillor pickers) and comparison mode (voting alignment, per-topic stance comparison, activity stats, speaking time by topic). Updated navigation with Council dropdown containing Members, Alignment, Compare. Phase 09 complete.
+Completed quick task 3: Fix about page video hours showing 0. Backfilled video_duration_seconds for 201 meetings (432 hours) from transcript segment end_time data. Pipeline now auto-populates duration on future ingestion.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
