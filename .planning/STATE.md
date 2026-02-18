@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 9 (AI Profiling & Comparison)
-Plan: 2 of 4
+Plan: 3 of 4
 Status: In Progress
-Last activity: 2026-02-18 - Completed 09-02: Stance generator pipeline module
+Last activity: 2026-02-18 - Completed 09-01: Database foundation (stances table, speaking time RPCs, topic utils)
 
-Progress: [██████████████████░░] 92% (22/~25 plans across all milestones)
+Progress: [███████████████████░] 92% (23/~25 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22
-- Average duration: 6.4min
-- Total execution time: 2.30 hours
+- Total plans completed: 23
+- Average duration: 6.5min
+- Total execution time: 2.48 hours
 
 **By Phase:**
 
@@ -36,7 +36,7 @@ Progress: [██████████████████░░] 92% (22
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
-| 09-ai-profiling-comparison | 2 | 6min | 3min |
+| 09-ai-profiling-comparison | 3 | 17min | 6min |
 
 ## Accumulated Context
 
@@ -76,6 +76,9 @@ v1.1 decisions:
 - PROF Python mirror of normalize_category_to_topic SQL function for evidence gathering (avoids RPC dependency)
 - PROF Lazy singleton Gemini client pattern for stance generation matching gemini_extractor.py
 - PROF Confidence thresholds: <3 statements = low (hedged language), 3-7 = medium, 8+ = high
+- PROF Category normalization as IMMUTABLE SQL function (CASE/ILIKE) covering ~300/470 categories to 8 topics
+- PROF Speaking time by topic uses LEFT JOIN with time-overlap fallback for segments missing agenda_item_id
+- PROF Session pooler (aws-1-us-east-2) used for migration application since direct DB is IPv6-only
 
 ### Roadmap Evolution
 
@@ -101,7 +104,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 09-02-PLAN.md: Stance generator pipeline module. Created pipeline/profiling/stance_generator.py with Gemini-powered stance generation and wired --generate-stances CLI flag.
+Completed 09-01-PLAN.md: Database foundation for councillor profiling. Created councillor_stances table, 3 speaking time RPCs, category normalization function, profiling.ts service, topic-utils.ts, and StanceSpectrum component.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
