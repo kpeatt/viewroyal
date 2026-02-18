@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.1 Deep Intelligence -- Phase 8 Unified Search & Hybrid RAG
+**Current focus:** v1.1 Deep Intelligence -- Phase 9 AI Profiling & Comparison
 
 ## Current Position
 
-Phase: 8 (Unified Search & Hybrid RAG)
-Plan: 5 of 5
+Phase: 9 (AI Profiling & Comparison)
+Plan: 2 of 4
 Status: In Progress
-Last activity: 2026-02-18 - Completed quick task 2: Add beta banner to homepage header
+Last activity: 2026-02-18 - Completed 09-02: Stance generator pipeline module
 
-Progress: [██████████████████░░] 90% (20/~21 plans across all milestones)
+Progress: [██████████████████░░] 92% (22/~25 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20
-- Average duration: 6.7min
-- Total execution time: 2.24 hours
+- Total plans completed: 22
+- Average duration: 6.4min
+- Total execution time: 2.30 hours
 
 **By Phase:**
 
@@ -36,6 +36,7 @@ Progress: [██████████████████░░] 90% (20
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
+| 09-ai-profiling-comparison | 2 | 6min | 3min |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ v1.1 decisions:
 - SRCH Follow-up suggestions generated server-side via Gemini Flash, emitted as suggested_followups SSE event
 - SRCH Topic change detection uses word overlap heuristic (no shared 3+ char words = topic change)
 - SRCH /ask route replaced with 301 redirect to /search for backward compatibility
+- PROF Python mirror of normalize_category_to_topic SQL function for evidence gathering (avoids RPC dependency)
+- PROF Lazy singleton Gemini client pattern for stance generation matching gemini_extractor.py
+- PROF Confidence thresholds: <3 statements = low (hedged language), 3-7 = medium, 8+ = high
 
 ### Roadmap Evolution
 
@@ -97,10 +101,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Backfill completed 711 meetings but 309 fell back to PyMuPDF due to Gemini rate limits.
-Ran data quality audit, cleaned up DB (removed dupes, noise, oversized sections, all legacy sections).
-Removed fallback codepath from document_extractor.py. Prepped 309 meetings for re-extraction.
-Blocked on Gemini API quota reset (429 RESOURCE_EXHAUSTED, limit: 0).
+Completed 09-02-PLAN.md: Stance generator pipeline module. Created pipeline/profiling/stance_generator.py with Gemini-powered stance generation and wired --generate-stances CLI flag.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
