@@ -235,7 +235,7 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     let fullAnswer = "";
 
     const eventSource = new EventSource(
-      `/api/search?q=${encodeURIComponent(query)}${contextParam}`,
+      `/api/search?q=${encodeURIComponent(query)}&mode=ai${contextParam}`,
     );
     eventSourceRef.current = eventSource;
 
