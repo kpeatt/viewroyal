@@ -9,19 +9,18 @@ interface HeroSectionProps {
 export function HeroSection({ shortName, user }: HeroSectionProps) {
   return (
     <div className="relative bg-gradient-to-b from-blue-600 to-blue-700 text-white overflow-hidden">
-      {/* Map background with Ken Burns animation */}
+      {/* Map background with Ken Burns animation — subtle texture hint */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute inset-[-10%] bg-cover bg-center"
+          className="absolute inset-[-10%] bg-cover bg-center opacity-40"
           style={{
             backgroundImage: 'url(/view-royal-map.svg)',
             animation: 'ken-burns 35s ease-in-out infinite',
           }}
         />
-        {/* Gradient overlays for stylized/faded look */}
-        <div className="absolute inset-0 bg-blue-700/70" />
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-600/80 via-blue-700/60 to-blue-800/90" />
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-700/40 via-transparent to-blue-700/40" />
+        {/* Gradient overlays to blend map into blue theme */}
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-600/90 via-blue-700/80 to-blue-800/95" />
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-700/60 via-transparent to-blue-700/60" />
       </div>
 
       <div className="relative container mx-auto px-4 py-12 md:py-16 max-w-5xl">
