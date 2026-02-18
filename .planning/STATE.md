@@ -19,9 +19,9 @@ Progress: [████████████████████] 100% (2
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
-- Average duration: 6.3min
-- Total execution time: 2.55 hours
+- Total plans completed: 25
+- Average duration: 6.2min
+- Total execution time: 2.62 hours
 
 **By Phase:**
 
@@ -36,7 +36,7 @@ Progress: [████████████████████] 100% (2
 | 07-document-intelligence | 3 | 15min | 5min |
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
-| 09-ai-profiling-comparison | 4 | 21min | 5min |
+| 09-ai-profiling-comparison | 4 | 25min | 6min |
 
 ## Accumulated Context
 
@@ -82,6 +82,8 @@ v1.1 decisions:
 - PROF Time range selector uses URL search params (?timeRange=12m|term|all) for loader re-fetch
 - PROF Focus Areas card replaced by SpeakingTimeCard topic breakdown (normalized topic data from RPCs)
 - PROF Positions tab placed between Attendance History and Roles tabs in profile page
+- PROF Council NavLink converted to NavDropdown with Members, Alignment, Compare sub-items
+- PROF Agreement thresholds: position_score distance <=0.5 agree, >1.0 disagree, between partial
 
 ### Roadmap Evolution
 
@@ -107,7 +109,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed 09-03-PLAN.md: Profile page speaking time and stances. Created SpeakingTimeCard (sparkline, topic bars, time range tabs), SpeakerRanking (bar chart), StanceSummary (per-topic cards with evidence). Enhanced person-profile.tsx with new Positions tab, Compare button, and sidebar speaking data.
+Completed 09-04-PLAN.md: Councillor comparison page. Created /compare route with selection mode (councillor pickers) and comparison mode (voting alignment, per-topic stance comparison, activity stats, speaking time by topic). Updated navigation with Council dropdown containing Members, Alignment, Compare. Phase 09 complete.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
