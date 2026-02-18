@@ -17,7 +17,7 @@ Requirements for v1.1 Deep Intelligence milestone. Each maps to roadmap phases.
 
 ### Search & Intelligence
 
-- [ ] **SRCH-01**: Unified search page replaces separate Search and Ask pages with a single input
+- [x] **SRCH-01**: Unified search page replaces separate Search and Ask pages with a single input
 - [x] **SRCH-02**: System detects query intent -- keyword queries show results list, questions trigger AI answer with citations
 - [ ] **SRCH-03**: Hybrid search RPC combines vector similarity and full-text search using Reciprocal Rank Fusion
 - [x] **SRCH-04**: Search covers document sections, key statements, transcript segments, and motions
@@ -84,7 +84,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DOC-03 | Phase 7 | Pending |
 | DOC-04 | Phase 7 | Pending |
 | DOC-05 | Phase 7 | Pending |
-| SRCH-01 | Phase 8 | Pending |
+| SRCH-01 | Phase 8 | Complete |
 | SRCH-02 | Phase 8 | Complete |
 | SRCH-03 | Phase 8 | Pending |
 | SRCH-04 | Phase 8 | Complete |
