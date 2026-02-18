@@ -7,9 +7,10 @@ An open-source civic intelligence platform for the Town of View Royal, BC. Brows
 ## Features
 
 - **Meeting Explorer** — Watch council meeting video with a synced sidebar showing agenda items, motions, and speaker-attributed transcripts
-- **Semantic & Full-Text Search** — Vector similarity search (halfvec embeddings) and PostgreSQL full-text search across transcripts, motions, agenda items, bylaws, and key statements
+- **Unified Search** — Perplexity-style single search page with auto-intent detection: keyword queries show hybrid-ranked results across all content types; natural language questions trigger streaming AI answers with inline citations
+- **Hybrid Search** — Reciprocal Rank Fusion combining vector similarity and full-text search across motions, key statements, document sections, and transcript segments
 - **Voting Records** — See how each council member voted on every motion, with alignment analysis
-- **AI Q&A** — Ask natural language questions about council decisions via a multi-tool RAG agent with citations from official records
+- **AI Q&A** — Multi-tool RAG agent with streaming answers, confidence indicators, conversation follow-ups (5-turn memory), and shareable cached answer URLs
 - **Key Statement Extraction** — AI-extracted typed statements (claims, proposals, objections, recommendations, financial impacts, public input) attributed to speakers
 - **Council Profiles** — Attendance stats, voting history, and speaking time for each member
 - **Bylaw & Matter Tracking** — Follow issues as they move through council across multiple meetings
@@ -77,8 +78,10 @@ sql/
 
 **Search infrastructure:**
 - `halfvec(384)` HNSW indexes on agenda_items, motions, matters, bylaws, bylaw_chunks, key_statements, meetings, documents
-- `tsvector` GIN indexes for full-text search on transcript_segments, motions, agenda_items, matters
+- `tsvector` GIN indexes for full-text search on transcript_segments, motions, agenda_items, matters, key_statements
+- 3 `hybrid_search_*` RPC functions using Reciprocal Rank Fusion (vector + FTS)
 - 7 `match_*` RPC functions for vector similarity search
+- `search_results_cache` table for shareable AI answer URLs (30-day TTL)
 
 ## Getting Started
 
@@ -191,6 +194,9 @@ uv run python main.py --municipality esquimalt
 | `--embed-only` | Only run Phase 5 |
 | `--target <id\|path>` | Target a single meeting (force re-processes) |
 | `--update` | Force update existing meetings (with `--ingest-only`) |
+| `--extract-documents` | Run Gemini-powered document extraction on agenda PDFs (resumable) |
+| `--batch` | Use Gemini Batch API for extraction (50% cost savings, use with `--extract-documents`) |
+| `--force` | Delete and reprocess all extraction data (use with `--extract-documents`) |
 | `--municipality <slug>` | Target a specific municipality (loads config from DB) |
 | `--limit N` | Limit number of items to process (testing) |
 | `--input-dir DIR` | Override archive directory |
@@ -234,20 +240,24 @@ Scrapers are registered via `SCRAPER_REGISTRY` and selected based on the municip
 
 ## RAG Q&A System
 
-The AI Q&A (`/ask` route) uses a two-phase RAG architecture:
+The unified search page (`/search`) combines keyword search and AI Q&A in a single interface:
 
-**Phase 1 — Evidence Gathering** (Gemini Flash orchestrator with 8 tools):
-- `search_motions` — Vector similarity search on motions
+**Keyword Mode** — Hybrid search using Reciprocal Rank Fusion across motions, key statements, document sections, and transcript segments. Results ranked by combined vector similarity + full-text relevance.
+
+**AI Answer Mode** — Streaming RAG agent with 9 tools:
+- `search_motions` — Hybrid search on motions (vector + FTS)
 - `search_agenda_items` — Full-text search on agenda items
-- `search_key_statements` — Vector similarity search on extracted statements
+- `search_key_statements` — Hybrid search on extracted statements
+- `search_document_sections` — Hybrid search on PDF document sections
 - `search_matters` — Vector search on longitudinal topics
 - `search_transcript_segments` — Full-text search on transcripts
 - `get_statements_by_person` — Find what a specific person said
 - `get_voting_history` — Look up voting records
 - `get_current_date` — Date context
 
-**Phase 2 — Synthesis** (Gemini Flash):
-Takes gathered evidence and produces a cited answer with source references.
+**Conversation Continuity** — Follow-up questions carry context from previous answers (capped at 5 turns). Topic changes auto-clear context. Gemini generates suggested follow-up chips after each answer.
+
+**Shareable URLs** — Completed AI answers are cached with short IDs (`/search?id=abc123`) for sharing without re-generation.
 
 Embeddings are generated via OpenAI `text-embedding-3-small` at 384 dimensions (Matryoshka truncation), stored as `halfvec(384)` for 4x storage savings over full float32 vector(768).
 
