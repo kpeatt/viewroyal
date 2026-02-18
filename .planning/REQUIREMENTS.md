@@ -29,7 +29,7 @@ Requirements for v1.1 Deep Intelligence milestone. Each maps to roadmap phases.
 - [x] **PROF-02**: Councillor page shows speaking time metrics calculated from transcript segment durations
 - [x] **PROF-04**: AI-generated stance summaries per councillor per topic, grounded in meeting evidence
 - [x] **PROF-05**: Stance summaries include confidence scoring and links to source evidence
-- [ ] **PROF-06**: User can compare two councillors side-by-side (voting record, stances, activity)
+- [x] **PROF-06**: User can compare two councillors side-by-side (voting record, stances, activity)
 
 ### Already Validated (shipped in v1.0)
 
@@ -93,7 +93,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-02 | Phase 9 | Complete |
 | PROF-04 | Phase 9 | Complete |
 | PROF-05 | Phase 9 | Complete |
-| PROF-06 | Phase 9 | Pending |
+| PROF-06 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 15 total (+ 2 already validated)
