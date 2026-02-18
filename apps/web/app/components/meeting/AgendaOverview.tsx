@@ -19,7 +19,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import type { AgendaItem, Motion, Vote, DocumentSection } from "../../lib/types";
+import type { AgendaItem, Motion, Vote, DocumentSection, ExtractedDocument } from "../../lib/types";
 import { Badge } from "../ui/badge";
 import { formatTimestamp } from "../../lib/timeline-utils";
 import { DocumentSections } from "./DocumentSections";
@@ -27,6 +27,7 @@ import { DocumentSections } from "./DocumentSections";
 interface AgendaOverviewProps {
   items: AgendaItem[];
   documentSections?: DocumentSection[];
+  extractedDocuments?: ExtractedDocument[];
   expandedItemId: number | null;
   onItemClick: (id: number) => void;
   onWatchVideo: (startTime: number, itemId: number) => void;
@@ -36,6 +37,7 @@ interface AgendaOverviewProps {
 export function AgendaOverview({
   items,
   documentSections,
+  extractedDocuments,
   expandedItemId,
   onItemClick,
   onWatchVideo,
@@ -65,6 +67,7 @@ export function AgendaOverview({
                 <AgendaItemRow
                   item={group.parent}
                   documentSections={documentSections}
+                  extractedDocuments={extractedDocuments}
                   displayOrder={cleanOrder(group.parent.item_order)}
                   isExpanded={expandedItemId === group.parent.id}
                   onToggle={() => onItemClick(group.parent!.id)}
@@ -111,6 +114,7 @@ export function AgendaOverview({
                       key={child.id}
                       item={child}
                       documentSections={documentSections}
+                      extractedDocuments={extractedDocuments}
                       displayOrder={displayOrder}
                       isExpanded={expandedItemId === child.id}
                       onToggle={() => onItemClick(child.id)}
@@ -218,6 +222,7 @@ function formatDiscussionDuration(seconds: number): string {
 interface AgendaItemRowProps {
   item: AgendaItem;
   documentSections?: DocumentSection[];
+  extractedDocuments?: ExtractedDocument[];
   displayOrder: string;
   isExpanded: boolean;
   onToggle: () => void;
@@ -231,6 +236,7 @@ interface AgendaItemRowProps {
 function AgendaItemRow({
   item,
   documentSections,
+  extractedDocuments,
   displayOrder,
   isExpanded,
   onToggle,
@@ -242,6 +248,9 @@ function AgendaItemRow({
 }: AgendaItemRowProps) {
   const linkedSections = (documentSections || []).filter(
     (s) => s.agenda_item_id === item.id,
+  );
+  const linkedExtractedDocs = (extractedDocuments || []).filter(
+    (ed) => ed.agenda_item_id === item.id,
   );
   const motions = item.motions || [];
   const hasMotions = motions.length > 0;
@@ -581,7 +590,10 @@ function AgendaItemRow({
 
               {/* Document Sections */}
               {linkedSections.length > 0 && (
-                <DocumentSections sections={linkedSections} />
+                <DocumentSections
+                  sections={linkedSections}
+                  extractedDocuments={linkedExtractedDocs}
+                />
               )}
 
               {/* Keywords */}

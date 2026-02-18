@@ -2,6 +2,7 @@ import type { Route } from "./+types/meeting-detail";
 import {
   getMeetingById,
   getDocumentSectionsForMeeting,
+  getExtractedDocumentsForMeeting,
 } from "../services/meetings";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import type {
@@ -44,6 +45,10 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { cn, formatDate } from "../lib/utils";
+import {
+  getDocumentTypeLabel,
+  getDocumentTypeColor,
+} from "../lib/document-types";
 import {
   getSpeakerColorIndex,
   SPEAKER_COLORS,
@@ -135,9 +140,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const [data, documentSections, docsRes] = await Promise.all([
+    const [data, documentSections, extractedDocuments, docsRes] = await Promise.all([
       getMeetingById(supabase, id),
       getDocumentSectionsForMeeting(supabase, id),
+      getExtractedDocumentsForMeeting(supabase, id),
       supabase
         .from("documents")
         .select("id, title, category, source_url, page_count")
@@ -145,7 +151,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
         .order("title"),
     ]);
 
-    return { ...data, documentSections, documents: docsRes.data || [] };
+    return { ...data, documentSections, extractedDocuments, documents: docsRes.data || [] };
   } catch (error: any) {
     console.error("[meeting-detail loader]", error?.message || error);
     if (error.message === "Meeting Not Found") {
@@ -170,6 +176,7 @@ export default function MeetingDetail({ loaderData }: any) {
     people,
     activeCouncilMemberIds,
     documentSections,
+    extractedDocuments,
     documents: rawDocuments,
   } = loaderData;
 
@@ -590,31 +597,65 @@ export default function MeetingDetail({ loaderData }: any) {
                       <FileText className="w-3.5 h-3.5" />
                       Documents
                     </h3>
-                    <ul className="space-y-2">
-                      {rawDocuments.map((doc: any) => (
-                        <li key={doc.id} className="flex items-center justify-between">
-                          <Link
-                            to={`/meetings/${meeting.id}/documents/${doc.id}`}
-                            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
-                          >
-                            {doc.title}
-                          </Link>
-                          <div className="flex items-center gap-3 text-xs text-zinc-400">
-                            {doc.page_count && <span>{doc.page_count} pages</span>}
-                            {doc.source_url && (
-                              <a
-                                href={doc.source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:text-zinc-600"
+                    <div className="space-y-4">
+                      {rawDocuments.map((doc: any) => {
+                        const docExtracted = (extractedDocuments || []).filter(
+                          (ed: any) => ed.document_id === doc.id,
+                        );
+                        return (
+                          <div key={doc.id}>
+                            <div className="flex items-center justify-between">
+                              <Link
+                                to={`/meetings/${meeting.id}/documents/${doc.id}`}
+                                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
                               >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
+                                {doc.title}
+                              </Link>
+                              <div className="flex items-center gap-3 text-xs text-zinc-400">
+                                {doc.page_count && <span>{doc.page_count} pages</span>}
+                                {doc.source_url && (
+                                  <a
+                                    href={doc.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:text-zinc-600"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                            {docExtracted.length > 0 && (
+                              <ul className="mt-1.5 ml-4 space-y-1">
+                                {docExtracted.slice(0, 8).map((ed: any) => (
+                                  <li key={ed.id} className="flex items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        "inline-block px-1.5 py-0.5 text-[8px] font-bold uppercase rounded border shrink-0",
+                                        getDocumentTypeColor(ed.document_type),
+                                      )}
+                                    >
+                                      {getDocumentTypeLabel(ed.document_type).slice(0, 6)}
+                                    </span>
+                                    <Link
+                                      to={`/meetings/${meeting.id}/documents/${doc.id}#extracted-${ed.id}`}
+                                      className="text-xs text-zinc-600 hover:text-zinc-900 truncate transition-colors"
+                                    >
+                                      {ed.title}
+                                    </Link>
+                                  </li>
+                                ))}
+                                {docExtracted.length > 8 && (
+                                  <li className="text-xs text-zinc-400 ml-1">
+                                    +{docExtracted.length - 8} more
+                                  </li>
+                                )}
+                              </ul>
                             )}
                           </div>
-                        </li>
-                      ))}
-                    </ul>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -634,6 +675,7 @@ export default function MeetingDetail({ loaderData }: any) {
               <AgendaOverview
                 items={agendaItems}
                 documentSections={documentSections}
+                extractedDocuments={extractedDocuments}
                 expandedItemId={expandedAgendaItemId}
                 onItemClick={handleAgendaItemClick}
                 onWatchVideo={(startTime, itemId) => {
