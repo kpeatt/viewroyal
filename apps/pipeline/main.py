@@ -132,6 +132,12 @@ if __name__ == "__main__":
         help="Generate AI stance summaries for all councillors using Gemini. "
              "Use --target to generate for a specific person ID only.",
     )
+    parser.add_argument(
+        "--generate-highlights",
+        action="store_true",
+        help="Generate councillor overview + notable policy positions using Gemini. "
+             "Use --target to generate for a specific person ID only.",
+    )
 
     args = parser.parse_args()
 
@@ -146,7 +152,15 @@ if __name__ == "__main__":
 
     app = Archiver(municipality=municipality)
 
-    if args.target:
+    if args.generate_stances:
+        print("\n--- Generating Councillor Stance Summaries ---")
+        person_id = int(args.target) if args.target else None
+        app.generate_stances(person_id=person_id)
+    elif args.generate_highlights:
+        print("\n--- Generating Councillor Highlights ---")
+        person_id = int(args.target) if args.target else None
+        app.generate_highlights(person_id=person_id)
+    elif args.target:
         # Targeted mode: diarize → ingest → embed for a single meeting
         folder = app._resolve_target(args.target)
         diarized = set()
@@ -183,10 +197,6 @@ if __name__ == "__main__":
         if not args.skip_embed:
             print("\n--- Embedding Document Sections ---")
             app._embed_new_content()
-    elif args.generate_stances:
-        print("\n--- Generating Councillor Stance Summaries ---")
-        person_id = int(args.target) if args.target else None
-        app.generate_stances(person_id=person_id)
     elif args.process_only or args.rediarize:
         if app.ai_enabled:
             mode = "Re-diarizing" if args.rediarize else "Processing"
