@@ -87,22 +87,34 @@ DEFAULT_MIN_WORDS = {
 
 
 def get_openai_client():
-    """Get an OpenAI client."""
+    """Get an OpenAI client with retry support for rate limits."""
     from openai import OpenAI
 
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY not set in .env")
-    return OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(api_key=OPENAI_API_KEY, max_retries=5)
 
 
 def generate_embeddings(client, texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for a batch of texts via OpenAI API."""
-    response = client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=texts,
-        dimensions=EMBEDDING_DIMENSIONS,
-    )
-    return [item.embedding for item in response.data]
+    """Generate embeddings for a batch of texts via OpenAI API with rate limit handling."""
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            response = client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=texts,
+                dimensions=EMBEDDING_DIMENSIONS,
+            )
+            return [item.embedding for item in response.data]
+        except Exception as e:
+            if "429" in str(e) or "rate_limit" in str(e).lower():
+                wait = 2 ** attempt  # 1, 2, 4, 8, 16 seconds
+                print(f"\n  Rate limited, waiting {wait}s (attempt {attempt + 1}/{max_attempts})...")
+                time.sleep(wait)
+                if attempt == max_attempts - 1:
+                    raise
+            else:
+                raise
 
 
 POOLER_REGION = os.environ.get("SUPABASE_POOLER_REGION", "us-east-2")
@@ -377,6 +389,9 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
             processed += len(batch_texts)
             batch_ids = []
             batch_texts = []
+
+            # Throttle to stay under OpenAI TPM rate limit
+            time.sleep(0.5)
 
             # Write to DB when buffer is large enough
             if len(db_buffer) >= DB_BATCH_SIZE:
