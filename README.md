@@ -12,7 +12,8 @@ An open-source civic intelligence platform for the Town of View Royal, BC. Brows
 - **Voting Records** — See how each council member voted on every motion, with alignment analysis
 - **AI Q&A** — Multi-tool RAG agent with streaming answers, confidence indicators, conversation follow-ups (5-turn memory), and shareable cached answer URLs
 - **Key Statement Extraction** — AI-extracted typed statements (claims, proposals, objections, recommendations, financial impacts, public input) attributed to speakers
-- **Council Profiles** — Attendance stats, voting history, and speaking time for each member
+- **Council Profiles** — Attendance stats, voting history, speaking time metrics (trend sparkline, topic breakdown, peer ranking), and AI-generated stance summaries per topic with confidence scoring and evidence quotes
+- **Councillor Comparison** — Side-by-side comparison of any two councillors: voting alignment percentage, per-topic stance agreement indicators, activity stats, and speaking time by topic
 - **Bylaw & Matter Tracking** — Follow issues as they move through council across multiple meetings
 - **Election History** — Past election results with candidate details
 - **Speaker Identification** — Diarized transcripts with speaker aliases resolved to real names via AI matching
@@ -55,7 +56,7 @@ sql/
 
 ## Database Schema
 
-19 tables powered by Supabase (PostgreSQL + pgvector):
+20 tables powered by Supabase (PostgreSQL + pgvector):
 
 | Table | Purpose |
 |-------|---------|
@@ -75,6 +76,7 @@ sql/
 | `attendance` + `meeting_events` | Meeting participation tracking |
 | `municipalities` | Municipality config: name, slug, website URL, RSS feed, map center, contact email |
 | `topics` | Controlled taxonomy for agenda item classification |
+| `councillor_stances` | AI-generated stance summaries per councillor per topic with position scores, confidence, and evidence |
 
 **Search infrastructure:**
 - `halfvec(384)` HNSW indexes on agenda_items, motions, matters, bylaws, bylaw_chunks, key_statements, meetings, documents
@@ -197,6 +199,7 @@ uv run python main.py --municipality esquimalt
 | `--extract-documents` | Run Gemini-powered document extraction on agenda PDFs (resumable) |
 | `--batch` | Use Gemini Batch API for extraction (50% cost savings, use with `--extract-documents`) |
 | `--force` | Delete and reprocess all extraction data (use with `--extract-documents`) |
+| `--generate-stances` | Generate AI stance summaries for all councillors using Gemini (use `--target` for single person) |
 | `--municipality <slug>` | Target a specific municipality (loads config from DB) |
 | `--limit N` | Limit number of items to process (testing) |
 | `--input-dir DIR` | Override archive directory |
