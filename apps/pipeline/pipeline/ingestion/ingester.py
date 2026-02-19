@@ -261,35 +261,39 @@ class MeetingIngester:
                         ).execute()
             return matter_id
 
-        if not identifier:
+        if not identifier and not title:
             return None
 
         # No match found. Create new matter.
         final_identifier = identifier
-        # Use first valid identifier part if compound for the stored identifier field
-        if ";" in identifier:
+        if identifier and ";" in identifier:
+            # Use first valid identifier part if compound
             final_identifier = identifier.split(";")[0].strip()
 
-        print(f"  [+] New Matter Identified: {final_identifier} - {title}")
+        display_id = final_identifier or "(title-only)"
+        print(f"  [+] New Matter Identified: {display_id} - {title}")
         if dry_run:
             return 777
 
-        # Guess category from identifier
+        # Guess category from identifier or title
+        source_text = identifier or title or ""
         category = "General"
-        if "Bylaw" in identifier:
+        if "Bylaw" in source_text:
             category = "Bylaw"
-        elif "Permit" in identifier or "DVP" in identifier or "DP" in identifier:
+        elif any(kw in source_text for kw in ("Permit", "DVP", "DP", "Rezoning", "REZ")):
             category = "Development"
 
         data = {
             "title": title,
-            "identifier": identifier,
             "category": category,
             "status": "Active",
             "first_seen": date,
             "last_seen": date,
             "municipality_id": self.municipality_id,
         }
+        if identifier:
+            data["identifier"] = identifier
+
         res = self.supabase.table("matters").insert(data).execute()
         new_record = res.data[0]
         # Update matcher cache to avoid duplicates in the same run
@@ -1727,10 +1731,17 @@ class MeetingIngester:
                             "id", iid
                         ).execute()
 
+        # Categories that should not create matters
+        PROCEDURAL_CATEGORIES = {
+            "procedural", "call to order", "adjournment", "termination",
+        }
+
         for item in refined["items"]:
             # Matter Linking Strategy:
             # 1. AI extracted identifier (e.g. "Bylaw 45")
             # 2. Regex from title
+            # 3. Title similarity matching (new)
+            # 4. Create new matter if non-procedural (even without identifier)
             matter_identifier = item.get("matter_identifier")
             if not matter_identifier:
                 matter_identifier = self.extract_identifier_from_text(item.get("title"))
@@ -1738,13 +1749,24 @@ class MeetingIngester:
             matter_title = item.get("matter_title") or item.get("title")
             related_address = self.normalize_address_list(item.get("related_address"))
 
-            matter_id = self.get_or_create_matter(
-                matter_identifier,
-                matter_title,
-                meta["meeting_date"],
-                dry_run,
-                related_addresses=related_address,
+            # Skip matter linking for procedural items (unless they have an explicit identifier)
+            item_category = (item.get("category") or "").lower()
+            item_title_lower = (item.get("title") or "").lower()
+            is_procedural = (
+                item_category in PROCEDURAL_CATEGORIES
+                or item_title_lower in PROCEDURAL_CATEGORIES
             )
+
+            if is_procedural and not matter_identifier:
+                matter_id = None
+            else:
+                matter_id = self.get_or_create_matter(
+                    matter_identifier,
+                    matter_title,
+                    meta["meeting_date"],
+                    dry_run,
+                    related_addresses=related_address,
+                )
 
             tags = self.normalize_address_list(item.get("tags"))
 
