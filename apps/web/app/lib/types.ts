@@ -227,6 +227,20 @@ export interface DocumentSection {
   token_count: number | null;
 }
 
+export interface DocumentImage {
+  id: number;
+  extracted_document_id: number;
+  document_section_id: number | null;
+  r2_key: string;
+  page: number;
+  description: string | null;
+  image_type: string | null;
+  width: number | null;
+  height: number | null;
+  format: string | null;
+  file_size: number | null;
+}
+
 export interface Matter {
   id: number;
   title: string;
