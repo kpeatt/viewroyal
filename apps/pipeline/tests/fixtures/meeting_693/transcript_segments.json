@@ -1,0 +1,222 @@
+[
+  {
+    "id": 70001,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_01",
+    "speaker_name": "David Screech",
+    "text": "Good evening, I'd like to call this regular council meeting to order. It is Tuesday, November 18th, 2025. The time is 7:00 PM.",
+    "start_time": 0.0,
+    "end_time": 8.5,
+    "agenda_item_id": 5001,
+    "confidence": 0.95
+  },
+  {
+    "id": 70002,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_01",
+    "speaker_name": "David Screech",
+    "text": "Could I have a motion to approve the agenda as presented?",
+    "start_time": 15.0,
+    "end_time": 18.0,
+    "agenda_item_id": 5002,
+    "confidence": 0.93
+  },
+  {
+    "id": 70003,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_02",
+    "speaker_name": "Ron Mattson",
+    "text": "So moved.",
+    "start_time": 18.5,
+    "end_time": 19.5,
+    "agenda_item_id": 5002,
+    "confidence": 0.91
+  },
+  {
+    "id": 70004,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_03",
+    "speaker_name": "Damian Kowalewich",
+    "text": "Seconded.",
+    "start_time": 20.0,
+    "end_time": 20.8,
+    "agenda_item_id": 5002,
+    "confidence": 0.89
+  },
+  {
+    "id": 70005,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_01",
+    "speaker_name": "David Screech",
+    "text": "All those in favour? Carried unanimously. Moving on to public participation.",
+    "start_time": 21.0,
+    "end_time": 26.0,
+    "agenda_item_id": 5002,
+    "confidence": 0.94
+  },
+  {
+    "id": 70006,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_01",
+    "speaker_name": "David Screech",
+    "text": "We have three delegations this evening regarding traffic concerns on Helmcken Road. I'd like to invite our first speaker to the podium.",
+    "start_time": 120.5,
+    "end_time": 130.0,
+    "agenda_item_id": 5003,
+    "confidence": 0.92
+  },
+  {
+    "id": 70007,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_07",
+    "speaker_name": "Resident A",
+    "text": "Thank you, Mayor Screech and members of council. I live on Helmcken Road near View Royal Elementary and I'm here to talk about the dangerous speeding situation we've been dealing with for years.",
+    "start_time": 135.0,
+    "end_time": 148.0,
+    "agenda_item_id": 5003,
+    "confidence": 0.87
+  },
+  {
+    "id": 70008,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_07",
+    "speaker_name": "Resident A",
+    "text": "During school drop-off and pick-up times, vehicles regularly exceed the 30 kilometer per hour speed limit. We've clocked cars going 60 to 70 kilometers per hour right past the school.",
+    "start_time": 148.5,
+    "end_time": 162.0,
+    "agenda_item_id": 5003,
+    "confidence": 0.88
+  },
+  {
+    "id": 70009,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_06",
+    "speaker_name": "Heidi Rast",
+    "text": "I'd like to move that staff be directed to conduct a traffic study on Helmcken Road between View Royal Avenue and Beaumont Avenue.",
+    "start_time": 800.0,
+    "end_time": 810.0,
+    "agenda_item_id": 5003,
+    "confidence": 0.93
+  },
+  {
+    "id": 70010,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_04",
+    "speaker_name": "Sid Tobias",
+    "text": "I'll second that motion.",
+    "start_time": 811.0,
+    "end_time": 812.5,
+    "agenda_item_id": 5003,
+    "confidence": 0.90
+  },
+  {
+    "id": 70011,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_01",
+    "speaker_name": "David Screech",
+    "text": "We now move to item 8.1, Tree Protection Bylaw Number 1160. This bylaw is before council for second and third readings following the public hearing held on October 21st.",
+    "start_time": 2150.0,
+    "end_time": 2165.0,
+    "agenda_item_id": 5004,
+    "confidence": 0.95
+  },
+  {
+    "id": 70012,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_03",
+    "speaker_name": "Damian Kowalewich",
+    "text": "I have concerns about the 20 centimeter diameter threshold. That captures a lot of relatively young trees that homeowners should be able to manage on their own property without a permit process.",
+    "start_time": 2200.0,
+    "end_time": 2215.0,
+    "agenda_item_id": 5004,
+    "confidence": 0.92
+  },
+  {
+    "id": 70013,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_05",
+    "speaker_name": "John Rogers",
+    "text": "I agree with Councillor Kowalewich. This bylaw as written is too restrictive. We need to balance environmental protection with property rights. I'd suggest we increase the threshold to at least 30 centimeters.",
+    "start_time": 2250.0,
+    "end_time": 2268.0,
+    "agenda_item_id": 5004,
+    "confidence": 0.91
+  },
+  {
+    "id": 70014,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_04",
+    "speaker_name": "Sid Tobias",
+    "text": "I understand the concerns but we've heard from many residents who support strong tree protection. The arborist report recommended the 20 centimeter threshold. However, I could support a compromise at 30 centimeters.",
+    "start_time": 2300.0,
+    "end_time": 2320.0,
+    "agenda_item_id": 5004,
+    "confidence": 0.93
+  },
+  {
+    "id": 70015,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_01",
+    "speaker_name": "David Screech",
+    "text": "Moving on to item 9.1, the annual financial report. I'll ask our Director of Finance to present.",
+    "start_time": 3500.0,
+    "end_time": 3510.0,
+    "agenda_item_id": 5005,
+    "confidence": 0.94
+  },
+  {
+    "id": 70016,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_08",
+    "speaker_name": "Director of Finance",
+    "text": "Thank you, Mayor. I'm pleased to report that the Town ended the 2024-2025 fiscal year with a surplus of approximately $142,000. This was primarily due to lower than anticipated spending on road maintenance contracts.",
+    "start_time": 3515.0,
+    "end_time": 3535.0,
+    "agenda_item_id": 5005,
+    "confidence": 0.90
+  },
+  {
+    "id": 70017,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_03",
+    "speaker_name": "Damian Kowalewich",
+    "text": "What is the current balance in our infrastructure reserve fund?",
+    "start_time": 3800.0,
+    "end_time": 3805.0,
+    "agenda_item_id": 5005,
+    "confidence": 0.91
+  },
+  {
+    "id": 70018,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_08",
+    "speaker_name": "Director of Finance",
+    "text": "The infrastructure reserve currently stands at $3.2 million, which is approximately 85% of our target level.",
+    "start_time": 3810.0,
+    "end_time": 3820.0,
+    "agenda_item_id": 5005,
+    "confidence": 0.89
+  },
+  {
+    "id": 70019,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_03",
+    "speaker_name": "Damian Kowalewich",
+    "text": "I'd like to move that the Annual Financial Report for fiscal year 2024-2025 be received for information.",
+    "start_time": 4150.0,
+    "end_time": 4158.0,
+    "agenda_item_id": 5005,
+    "confidence": 0.92
+  },
+  {
+    "id": 70020,
+    "meeting_id": 693,
+    "speaker_label": "Speaker_02",
+    "speaker_name": "Ron Mattson",
+    "text": "Seconded.",
+    "start_time": 4160.0,
+    "end_time": 4161.0,
+    "agenda_item_id": 5005,
+    "confidence": 0.88
+  }
+]

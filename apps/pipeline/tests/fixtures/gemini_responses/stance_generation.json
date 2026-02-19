@@ -1,0 +1,28 @@
+{
+  "description": "Sample Gemini response structure for stance generation. Used for snapshot/golden-file testing.",
+  "councillor_name": "David Screech",
+  "topic": "Environment",
+  "stances": [
+    {
+      "position": "Supports tree protection with reasonable thresholds",
+      "position_score": 0.7,
+      "confidence": "high",
+      "summary": "Mayor Screech consistently voted in favour of environmental protection measures including the Tree Protection Bylaw, while supporting amendments to balance homeowner concerns.",
+      "evidence": [
+        {
+          "meeting_id": 693,
+          "meeting_date": "2025-11-18",
+          "agenda_item_title": "Tree Protection Bylaw No. 1160 - Second and Third Readings",
+          "statement_text": "Voted in favour of second and third readings of Tree Protection Bylaw with amended threshold",
+          "vote": "Yes",
+          "context": "Bylaw debate on tree diameter threshold"
+        }
+      ]
+    }
+  ],
+  "overall_position": "Generally supportive of environmental regulation with pragmatic compromises",
+  "overall_score": 0.65,
+  "overall_confidence": "medium",
+  "statement_count": 5,
+  "meeting_count": 3
+}
