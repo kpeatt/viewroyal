@@ -5,3 +5,6 @@
 # React Router
 /.react-router/
 /build/
+
+# Test coverage
+/coverage/

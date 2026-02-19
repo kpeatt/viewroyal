@@ -27,5 +27,13 @@ dependencies = [
 
 [tool.uv.sources]
 senko = { git = "https://github.com/narcotic-sh/senko" }
+
+[dependency-groups]
+dev = [
+    "freezegun>=1.5.5",
+    "pytest-cov>=7.0.0",
+    "responses>=0.25.8",
+    "syrupy>=5.1.0",
+]
 # Note: Local transcription/diarization uses scribe via uvx (not a Python dependency)
 # Run: uvx --from git+https://github.com/trailofbits/scribe --python 3.13 scribe
