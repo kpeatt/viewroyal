@@ -37,8 +37,9 @@ Progress: [████████████████████] 100% (2
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
 | 09-ai-profiling-comparison | 4 | 25min | 6min |
-| 10-add-better-test-suite | 4 | 12min | 3min |
+| 10-add-better-test-suite | 4 | 19min | 5min |
 | Phase 10 P01 | 5min | 2 tasks | 12 files |
+| Phase 10 P03 | 7min | 2 tasks | 9 files |
 | Phase 10 P04 | 6min | 2 tasks | 9 files |
 
 ## Accumulated Context
@@ -91,6 +92,7 @@ v1.1 decisions:
 - TEST Reusable chainable mock Supabase query builder with thenable pattern for service layer testing
 - [Phase 10]: Meeting 693 fixture data created as representative samples (no live DB access); double-brace bug fixed in _merge_refinements
 - [Phase 10]: VimeoClient tests use __new__ + manual attrs to avoid __init__ config side effects; per-table Supabase mock for _gather_evidence multi-table queries
+- [Phase 10]: MeetingIngester instantiated with dummy URLs for pure function testing; lazy-imported functions patched at source module path
 
 ### Roadmap Evolution
 
@@ -118,7 +120,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Completed 10-04: Outer pipeline tests. 108 new tests covering scrapers (CivicWeb, base, registry), Vimeo client, stance generator (category normalization, Gemini mocking, syrupy snapshots), and Archiver orchestrator (phase coordination, CLI flags, progress tracking). All tests passing in 1.8s.
+Completed 10-03: Core utilities and ingestion module tests. 227 new tests covering alignment, matter matching, paths, ingester pure functions (to_seconds, extract_identifier, normalize_address_list), AI refiner (Gemini mock, retry, agenda-only), document extractor, embed (OpenAI mock), and audit. Total suite: 351 passing in 6.5s.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
