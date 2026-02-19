@@ -1,7 +1,11 @@
 import type { Route } from "./+types/document-viewer";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link } from "react-router";
-import type { DocumentSection, ExtractedDocument } from "../lib/types";
+import type {
+  DocumentSection,
+  DocumentImage,
+  ExtractedDocument,
+} from "../lib/types";
 import {
   ChevronLeft,
   ExternalLink,
@@ -9,6 +13,7 @@ import {
   Lightbulb,
   BookOpen,
   FileText,
+  Images,
 } from "lucide-react";
 import { cn, formatDate } from "../lib/utils";
 import { MarkdownContent } from "../components/markdown-content";
@@ -59,27 +64,36 @@ export async function loader({ params }: Route.LoaderArgs) {
   const extractedDoc = edRes.data as ExtractedDocument;
 
   // Fetch sections and parent document info in parallel
-  const [sectionsRes, parentDocRes, agendaItemRes] = await Promise.all([
-    supabase
-      .from("document_sections")
-      .select(
-        "id, document_id, agenda_item_id, extracted_document_id, section_title, section_text, section_order, page_start, page_end, token_count",
-      )
-      .eq("extracted_document_id", docId)
-      .order("section_order", { ascending: true }),
-    supabase
-      .from("documents")
-      .select("id, title, source_url, page_count")
-      .eq("id", extractedDoc.document_id)
-      .single(),
-    extractedDoc.agenda_item_id
-      ? supabase
-          .from("agenda_items")
-          .select("id, title, item_order")
-          .eq("id", extractedDoc.agenda_item_id)
-          .single()
-      : Promise.resolve({ data: null }),
-  ]);
+  const [sectionsRes, parentDocRes, agendaItemRes, imagesRes] =
+    await Promise.all([
+      supabase
+        .from("document_sections")
+        .select(
+          "id, document_id, agenda_item_id, extracted_document_id, section_title, section_text, section_order, page_start, page_end, token_count",
+        )
+        .eq("extracted_document_id", docId)
+        .order("section_order", { ascending: true }),
+      supabase
+        .from("documents")
+        .select("id, title, source_url, page_count")
+        .eq("id", extractedDoc.document_id)
+        .single(),
+      extractedDoc.agenda_item_id
+        ? supabase
+            .from("agenda_items")
+            .select("id, title, item_order")
+            .eq("id", extractedDoc.agenda_item_id)
+            .single()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("document_images")
+        .select(
+          "id, extracted_document_id, document_section_id, r2_key, page, description, image_type, width, height, format, file_size",
+        )
+        .eq("extracted_document_id", docId)
+        .order("page", { ascending: true })
+        .order("id", { ascending: true }),
+    ]);
 
   return {
     extractedDoc,
@@ -87,16 +101,65 @@ export async function loader({ params }: Route.LoaderArgs) {
     sections: sectionsRes.data || [],
     parentDocument: parentDocRes.data,
     linkedAgendaItem: agendaItemRes.data,
+    documentImages: (imagesRes.data || []) as DocumentImage[],
   };
 }
 
 export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
-  const { extractedDoc, meeting, sections, parentDocument, linkedAgendaItem } =
-    loaderData;
+  const {
+    extractedDoc,
+    meeting,
+    sections,
+    parentDocument,
+    linkedAgendaItem,
+    documentImages,
+  } = loaderData;
 
   const ed = extractedDoc as ExtractedDocument;
   const allSections = sections as DocumentSection[];
   const keyFacts = ed.key_facts || [];
+
+  // Group images by section ID for inline placement
+  const imagesBySection = new Map<number, DocumentImage[]>();
+  const unlinkedImages: DocumentImage[] = [];
+  for (const img of documentImages) {
+    if (img.document_section_id != null) {
+      const existing = imagesBySection.get(img.document_section_id) || [];
+      existing.push(img);
+      imagesBySection.set(img.document_section_id, existing);
+    } else {
+      unlinkedImages.push(img);
+    }
+  }
+
+  /**
+   * Replace [Image: ...] tags in markdown with actual <img> HTML,
+   * consuming linked images in order. Unmatched tags are stripped.
+   */
+  function inlineImages(markdown: string, images: DocumentImage[]): string {
+    let imgIdx = 0;
+    return markdown.replace(/\[Image:\s*[^\]]+\]/g, (match) => {
+      if (imgIdx >= images.length) return ""; // strip unmatched tags
+      const img = images[imgIdx++];
+      const src = `https://images.viewroyal.ai/${img.r2_key}`;
+      const alt = img.description
+        ? img.description.replace(/"/g, "&quot;")
+        : "Document image";
+      const widthAttr = img.width ? ` width="${img.width}"` : "";
+      const heightAttr = img.height ? ` height="${img.height}"` : "";
+      return (
+        `<figure class="my-4 max-w-2xl">` +
+        `<a href="${src}" target="_blank" rel="noopener noreferrer">` +
+        `<img src="${src}" alt="${alt}"${widthAttr}${heightAttr} loading="lazy" ` +
+        `class="rounded-lg border border-zinc-200 bg-zinc-50 w-full h-auto object-contain hover:shadow-md transition-shadow" />` +
+        `</a>` +
+        (img.description
+          ? `<figcaption class="mt-1 text-xs text-zinc-500">${img.description}</figcaption>`
+          : "") +
+        `</figure>`
+      );
+    });
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -210,43 +273,92 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
           </div>
         )}
 
-        {/* Section content */}
+        {/* Section content with inline images */}
         {allSections.length > 0 ? (
           <div>
-            {allSections.map((section, idx) => (
-              <div
-                key={section.id}
-                id={`section-${section.section_order}`}
-                className={cn("relative", idx > 0 && "mt-6")}
-              >
-                {section.section_title && (
-                  <h2 className="text-base font-semibold text-zinc-900 mb-2 font-serif">
-                    {section.section_title}
-                  </h2>
-                )}
+            {allSections.map((section, idx) => {
+              const sectionImages = imagesBySection.get(section.id) || [];
+              const content =
+                sectionImages.length > 0
+                  ? inlineImages(section.section_text, sectionImages)
+                  : section.section_text;
+              return (
+                <div
+                  key={section.id}
+                  id={`section-${section.section_order}`}
+                  className={cn("relative", idx > 0 && "mt-6")}
+                >
+                  {section.section_title && (
+                    <h2 className="text-base font-semibold text-zinc-900 mb-2 font-serif">
+                      {section.section_title}
+                    </h2>
+                  )}
 
-                <MarkdownContent content={section.section_text} />
+                  <MarkdownContent content={content} />
 
-                {section.page_start != null && (
-                  <div className="mt-1 text-[10px] text-zinc-400">
-                    Page {section.page_start}
-                    {section.page_end &&
-                    section.page_end !== section.page_start
-                      ? `\u2013${section.page_end}`
-                      : ""}
-                  </div>
-                )}
+                  {section.page_start != null && (
+                    <div className="mt-1 text-[10px] text-zinc-400">
+                      Page {section.page_start}
+                      {section.page_end &&
+                      section.page_end !== section.page_start
+                        ? `\u2013${section.page_end}`
+                        : ""}
+                    </div>
+                  )}
 
-                {idx < allSections.length - 1 && (
-                  <hr className="mt-6 border-zinc-100" />
-                )}
-              </div>
-            ))}
+                  {idx < allSections.length - 1 && (
+                    <hr className="mt-6 border-zinc-100" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-zinc-500 py-12 text-center">
             No sections available for this document.
           </p>
+        )}
+
+        {/* Unlinked images gallery (images without section FK) */}
+        {unlinkedImages.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center gap-2 mb-4">
+              <Images className="w-4 h-4 text-zinc-400" />
+              <h2 className="text-sm font-semibold text-zinc-700">
+                Document Images
+              </h2>
+              <span className="text-xs text-zinc-400">
+                ({unlinkedImages.length})
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {unlinkedImages.map((img) => (
+                <a
+                  key={img.id}
+                  href={`https://images.viewroyal.ai/${img.r2_key}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block"
+                >
+                  <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-shadow group-hover:shadow-md">
+                    <img
+                      src={`https://images.viewroyal.ai/${img.r2_key}`}
+                      alt={img.description || "Document image"}
+                      loading="lazy"
+                      width={img.width ?? undefined}
+                      height={img.height ?? undefined}
+                      className="w-full h-auto object-contain"
+                    />
+                  </div>
+                  {img.description && (
+                    <p className="mt-1 text-xs text-zinc-500 leading-snug line-clamp-2">
+                      {img.description}
+                    </p>
+                  )}
+                </a>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Source document footer */}

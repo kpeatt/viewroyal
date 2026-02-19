@@ -606,7 +606,11 @@ def insert_meeting_results(
         _resolve_agenda_item,
         _split_markdown_into_sections,
     )
-    from pipeline.ingestion.image_extractor import extract_images, upload_images_to_r2
+    from pipeline.ingestion.image_extractor import (
+        extract_images,
+        match_images_to_sections,
+        upload_images_to_r2,
+    )
 
     stats = {
         "boundaries_found": len(boundaries),
@@ -700,6 +704,8 @@ def insert_meeting_results(
                     "token_count": int(len(summary.split()) * 1.3),
                 }]
 
+        # Track inserted sections with their IDs for image matching
+        inserted_sections = []
         for section in sections:
             try:
                 section_data = {
@@ -714,7 +720,12 @@ def insert_meeting_results(
                     "token_count": section["token_count"],
                     "municipality_id": municipality_id,
                 }
-                supabase.table("document_sections").insert(section_data).execute()
+                sec_result = supabase.table("document_sections").insert(section_data).execute()
+                section_id = sec_result.data[0]["id"]
+                inserted_sections.append({
+                    "section_id": section_id,
+                    "section_text": section["section_text"],
+                })
                 stats["sections_created"] += 1
             except Exception as e:
                 logger.error(
@@ -722,13 +733,16 @@ def insert_meeting_results(
                     section.get("section_title", "?"), title, e,
                 )
 
-        # Image extraction (synchronous, local PyMuPDF)
+        # Image extraction (synchronous, local PyMuPDF) with section-aware matching
         if page_start and page_end and pdf_path:
             try:
                 images = extract_images(pdf_path, page_start, page_end)
             except Exception as e:
                 logger.warning("Image extraction failed for '%s': %s", title, e)
                 images = []
+
+            if images and inserted_sections:
+                images = match_images_to_sections(inserted_sections, images)
 
             if images:
                 uploaded_imgs = upload_images_to_r2(images, meeting_id, extracted_doc_id)
@@ -742,6 +756,8 @@ def insert_meeting_results(
                             "height": img_meta["height"],
                             "format": img_meta["format"],
                             "file_size": img_meta["file_size"],
+                            "description": img_meta.get("description"),
+                            "document_section_id": img_meta.get("section_id"),
                             "municipality_id": municipality_id,
                         }
                         supabase.table("document_images").insert(img_data).execute()

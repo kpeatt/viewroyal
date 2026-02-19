@@ -34,7 +34,11 @@ def extract_and_store_documents(
     Returns stats dict: {boundaries_found, documents_extracted, sections_created, images_extracted}
     """
     from pipeline.ingestion.gemini_extractor import detect_boundaries, extract_content
-    from pipeline.ingestion.image_extractor import extract_images, upload_images_to_r2
+    from pipeline.ingestion.image_extractor import (
+        extract_images,
+        match_images_to_sections,
+        upload_images_to_r2,
+    )
 
     stats = {
         "boundaries_found": 0,
@@ -114,6 +118,8 @@ def extract_and_store_documents(
                     "token_count": int(len(summary.split()) * 1.3),
                 }]
 
+        # Track inserted sections with their IDs for image matching
+        inserted_sections = []
         for section in sections:
             try:
                 section_data = {
@@ -128,7 +134,12 @@ def extract_and_store_documents(
                     "token_count": section["token_count"],
                     "municipality_id": municipality_id,
                 }
-                supabase.table("document_sections").insert(section_data).execute()
+                sec_result = supabase.table("document_sections").insert(section_data).execute()
+                section_id = sec_result.data[0]["id"]
+                inserted_sections.append({
+                    "section_id": section_id,
+                    "section_text": section["section_text"],
+                })
                 stats["sections_created"] += 1
             except Exception as e:
                 logger.error(
@@ -136,13 +147,16 @@ def extract_and_store_documents(
                     section.get("section_title", "?"), title, e,
                 )
 
-        # Step 5: Extract and upload images
+        # Step 5: Extract and upload images (section-aware matching)
         if page_start and page_end:
             try:
                 images = extract_images(pdf_path, page_start, page_end)
             except Exception as e:
                 logger.warning("Image extraction failed for '%s': %s", title, e)
                 images = []
+
+            if images and inserted_sections:
+                images = match_images_to_sections(inserted_sections, images)
 
             if images:
                 uploaded = upload_images_to_r2(images, meeting_id, extracted_doc_id)
@@ -158,6 +172,8 @@ def extract_and_store_documents(
                             "height": img_meta["height"],
                             "format": img_meta["format"],
                             "file_size": img_meta["file_size"],
+                            "description": img_meta.get("description"),
+                            "document_section_id": img_meta.get("section_id"),
                             "municipality_id": municipality_id,
                         }
                         supabase.table("document_images").insert(img_data).execute()
