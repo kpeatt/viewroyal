@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.1 Deep Intelligence -- Phase 9 AI Profiling & Comparison
+**Current focus:** v1.1 Deep Intelligence -- Phase 10 Add Better Test Suite
 
 ## Current Position
 
-Phase: 9 (AI Profiling & Comparison)
-Plan: 4 of 4 (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-18 - Completed quick task 3: Fix about page video hours showing 0
+Phase: 10 (Add Better Test Suite)
+Plan: 2 of 5
+Status: In Progress
+Last activity: 2026-02-18 - Completed 10-02 web app server-layer tests
 
-Progress: [████████████████████] 100% (25/25 plans across all milestones)
+Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 2/5
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
-- Average duration: 6.2min
-- Total execution time: 2.62 hours
+- Total plans completed: 27
+- Average duration: 5.9min
+- Total execution time: 2.72 hours
 
 **By Phase:**
 
@@ -37,6 +37,7 @@ Progress: [████████████████████] 100% (2
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
 | 09-ai-profiling-comparison | 4 | 25min | 6min |
+| 10-add-better-test-suite | 2 | 6min | 3min |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ v1.1 decisions:
 - PROF Positions tab placed between Attendance History and Roles tabs in profile page
 - PROF Council NavLink converted to NavDropdown with Members, Alignment, Compare sub-items
 - PROF Agreement thresholds: position_score distance <=0.5 agree, >1.0 disagree, between partial
+- TEST Dynamic import (await import()) for supabase.server tests to handle module-level singleton side effects
+- TEST Reusable chainable mock Supabase query builder with thenable pattern for service layer testing
 
 ### Roadmap Evolution
 
@@ -111,7 +114,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Completed quick task 3: Fix about page video hours showing 0. Backfilled video_duration_seconds for 201 meetings (432 hours) from transcript segment end_time data. Pipeline now auto-populates duration on future ingestion.
+Completed 10-02: Web app server-layer tests. 70 Vitest tests across intent classifier (45), supabase.server (6), meetings service (19). Chainable mock builder pattern established for testing Supabase query chains.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
