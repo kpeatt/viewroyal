@@ -22,6 +22,7 @@ import { formatDate, cn } from "../lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { MattersMap } from "../components/matters-map";
 import type { Matter } from "../lib/types";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -30,7 +31,10 @@ export const meta: Route.MetaFunction = () => {
     { property: "og:title", content: "Council Matters | ViewRoyal.ai" },
     { property: "og:description", content: "Active and historical council matters for View Royal" },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/matters") },
+    { property: "og:image", content: ogImageUrl("Council Matters", { type: "matter" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

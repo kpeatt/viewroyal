@@ -55,6 +55,7 @@ import {
 } from "../components/ui/tabs";
 import { cn, formatDate } from "../lib/utils";
 import { AskQuestion } from "../components/ask-question";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data, matches }) => {
   if (!data?.person) return [{ title: "Person | ViewRoyal.ai" }];
@@ -67,16 +68,19 @@ export const meta: Route.MetaFunction = ({ data, matches }) => {
   const role = activeMembership?.role || "Council Member";
   const title = `${p.name} — ${role} | ViewRoyal.ai`;
   const description = p.bio || `${role} for the ${municipalityName}.`;
-  const tags: Record<string, string>[] = [
+  const image = p.image_url || ogImageUrl(p.name, { subtitle: role, type: "person" });
+  return [
     { title },
     { name: "description", content: description },
     { property: "og:title", content: `${p.name} — ${role}` },
     { property: "og:description", content: description },
     { property: "og:type", content: "profile" },
+    { property: "og:url", content: ogUrl(`/people/${p.id}`) },
+    { property: "og:image", content: image },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
-    { property: "og:image", content: p.image_url || "https://viewroyal.ai/og-image.png" },
   ];
-  return tags;
 };
 
 export async function loader({ params, request }: Route.LoaderArgs) {

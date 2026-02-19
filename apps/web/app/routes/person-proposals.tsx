@@ -16,6 +16,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { cn, formatDate } from "../lib/utils";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   const person = (data as any)?.person;
@@ -28,7 +29,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: `${person.name} — Legislative Proposals` },
     { property: "og:description", content: description },
     { property: "og:type", content: "profile" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/people/${person.id}/proposals`) },
+    { property: "og:image", content: ogImageUrl(`${person.name} — Legislative Proposals`, { type: "person" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

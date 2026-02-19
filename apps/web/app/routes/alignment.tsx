@@ -15,6 +15,7 @@ import { cn } from "../lib/utils";
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -23,7 +24,10 @@ export const meta: Route.MetaFunction = () => {
     { property: "og:title", content: "Voting Alignment | ViewRoyal.ai" },
     { property: "og:description", content: "See how View Royal council members vote together — alignment matrix and trends" },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/alignment") },
+    { property: "og:image", content: ogImageUrl("Voting Alignment", { type: "person" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

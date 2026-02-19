@@ -15,6 +15,7 @@ import {
   getDocumentTypeLabel,
   getDocumentTypeColor,
 } from "../lib/document-types";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.meeting) return [{ title: "Documents | ViewRoyal.ai" }];
@@ -26,7 +27,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: `Documents — ${m.title}` },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/meetings/${m.id}/documents`) },
+    { property: "og:image", content: ogImageUrl(`Documents — ${m.title}`, { type: "meeting" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

@@ -3,6 +3,7 @@ import { getBylawById } from "../services/bylaws";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link, useRouteLoaderData } from "react-router";
 import type { Municipality } from "../lib/types";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.bylaw) return [{ title: "Bylaw | ViewRoyal.ai" }];
@@ -16,7 +17,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: label },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/bylaws/${b.id}`) },
+    { property: "og:image", content: ogImageUrl(label, { subtitle: b.status, type: "bylaw" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

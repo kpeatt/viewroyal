@@ -6,6 +6,7 @@ import type { Municipality } from "../lib/types";
 import { Gavel, ChevronRight, Calendar, Users, Trophy } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { formatDate } from "../lib/utils";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -14,7 +15,10 @@ export const meta: Route.MetaFunction = () => {
     { property: "og:title", content: "Elections | ViewRoyal.ai" },
     { property: "og:description", content: "Historical election results and candidate data for View Royal" },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/elections") },
+    { property: "og:image", content: ogImageUrl("Elections Archive", { type: "election" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

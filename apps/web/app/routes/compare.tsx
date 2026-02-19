@@ -20,6 +20,7 @@ import { StanceSpectrum } from "../components/profile/stance-spectrum";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { cn } from "../lib/utils";
+import { ogImageUrl, ogUrl } from "../lib/og";
 import { Link, useNavigate } from "react-router";
 import {
   Scale,
@@ -77,7 +78,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
       { property: "og:title", content: `${d.personA.name} vs ${d.personB.name}` },
       { property: "og:description", content: description },
       { property: "og:type", content: "profile" },
-      { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+      { property: "og:url", content: ogUrl(`/compare?a=${d.personA.id}&b=${d.personB.id}`) },
+      { property: "og:image", content: ogImageUrl(`${d.personA.name} vs ${d.personB.name}`, { subtitle: "Voting Comparison", type: "person" }) },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
     ];
   }
@@ -87,7 +91,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: "Compare Councillors | ViewRoyal.ai" },
     { property: "og:description", content: "Compare two councillors side-by-side on voting alignment, policy stances, and speaking time." },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/compare") },
+    { property: "og:image", content: ogImageUrl("Compare Councillors", { type: "person" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

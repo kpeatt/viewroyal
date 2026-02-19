@@ -10,6 +10,7 @@ import { RecentMeetingSection } from "../components/home/recent-meeting-section"
 import { ActiveMattersSection } from "../components/home/active-matters-section";
 import { DecisionsFeedSection } from "../components/home/decisions-feed-section";
 import { PublicNoticesSection } from "../components/home/public-notices-section";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   const municipality = (data as any)?.municipality as Municipality | undefined;
@@ -20,7 +21,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: "ViewRoyal.ai | Council Meeting Intelligence" },
     { property: "og:description", content: `AI-powered civic transparency platform for the ${municipalityName}.` },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/") },
+    { property: "og:image", content: ogImageUrl("Council Meeting Intelligence") },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

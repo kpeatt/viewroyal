@@ -12,6 +12,7 @@ import { SearchResults } from "../components/search/search-results";
 import { FollowUp } from "../components/search/follow-up";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 // ---------------------------------------------------------------------------
 // Meta
@@ -27,7 +28,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
       { property: "og:title", content: `"${query}" — View Royal Council Search` },
       { property: "og:description", content: "AI-powered search result from View Royal council records" },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+      { property: "og:url", content: ogUrl("/search") },
+      { property: "og:image", content: ogImageUrl(query, { subtitle: "AI-powered council search", type: "search" }) },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
     ];
   }
@@ -37,7 +41,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: "Search | ViewRoyal.ai" },
     { property: "og:description", content: "Search View Royal council meetings, motions, documents, and transcripts" },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/search") },
+    { property: "og:image", content: ogImageUrl("Search", { subtitle: "AI-powered council search", type: "search" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };
