@@ -19,12 +19,15 @@ import {
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.meeting) return [{ title: "Documents | ViewRoyal.ai" }];
   const m = data.meeting as any;
+  const description = `All documents for ${m.title} on ${m.meeting_date}`;
   return [
     { title: `Documents — ${m.title} | ViewRoyal.ai` },
-    {
-      name: "description",
-      content: `All documents for ${m.title} on ${m.meeting_date}`,
-    },
+    { name: "description", content: description },
+    { property: "og:title", content: `Documents — ${m.title}` },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "article" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
   ];
 };
 

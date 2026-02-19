@@ -38,6 +38,22 @@ import {
 import { getSpeakerColorIndex, SPEAKER_TEXT_COLORS } from "../lib/colors";
 import type { Person, Membership, Attendance } from "../lib/types";
 
+export const meta: Route.MetaFunction = ({ data }) => {
+  const meeting = (data as any)?.meeting;
+  if (!meeting) return [{ title: "Meeting Explorer | ViewRoyal.ai" }];
+  const title = `Explore: ${meeting.title} | ViewRoyal.ai`;
+  const description = meeting.summary || `Detailed explorer for ${meeting.title} on ${meeting.meeting_date}`;
+  return [
+    { title },
+    { name: "description", content: description },
+    { property: "og:title", content: `Explore: ${meeting.title}` },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "article" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
 export async function loader({ params }: Route.LoaderArgs) {
   // ... existing loader ...
   const { id } = params;

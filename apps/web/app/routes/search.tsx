@@ -14,6 +14,35 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 
 // ---------------------------------------------------------------------------
+// Meta
+// ---------------------------------------------------------------------------
+
+export const meta: Route.MetaFunction = ({ data }) => {
+  const query = (data as any)?.query;
+  if (query) {
+    const title = `"${query}" — Search | ViewRoyal.ai`;
+    return [
+      { title },
+      { name: "description", content: "AI-powered search result from View Royal council records" },
+      { property: "og:title", content: `"${query}" — View Royal Council Search` },
+      { property: "og:description", content: "AI-powered search result from View Royal council records" },
+      { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ];
+  }
+  return [
+    { title: "Search | ViewRoyal.ai" },
+    { name: "description", content: "Search View Royal council meetings, motions, documents, and transcripts" },
+    { property: "og:title", content: "Search | ViewRoyal.ai" },
+    { property: "og:description", content: "Search View Royal council meetings, motions, documents, and transcripts" },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
+// ---------------------------------------------------------------------------
 // Server loader
 // ---------------------------------------------------------------------------
 

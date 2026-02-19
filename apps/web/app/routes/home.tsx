@@ -1,3 +1,4 @@
+import type { Route } from "./+types/home";
 import { useRouteLoaderData } from "react-router";
 import { getHomeData, getPublicNotices } from "../services/site";
 import { createSupabaseServerClient } from "../lib/supabase.server";
@@ -9,6 +10,20 @@ import { RecentMeetingSection } from "../components/home/recent-meeting-section"
 import { ActiveMattersSection } from "../components/home/active-matters-section";
 import { DecisionsFeedSection } from "../components/home/decisions-feed-section";
 import { PublicNoticesSection } from "../components/home/public-notices-section";
+
+export const meta: Route.MetaFunction = ({ data }) => {
+  const municipality = (data as any)?.municipality as Municipality | undefined;
+  const municipalityName = municipality?.name || "Town of View Royal";
+  return [
+    { title: "ViewRoyal.ai | Council Meeting Intelligence" },
+    { name: "description", content: `Searchable database of ${municipalityName} council meetings, voting records, and AI-powered insights.` },
+    { property: "og:title", content: "ViewRoyal.ai | Council Meeting Intelligence" },
+    { property: "og:description", content: `AI-powered civic transparency platform for the ${municipalityName}.` },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
 
 export async function loader({ request }: { request: Request }) {
   try {

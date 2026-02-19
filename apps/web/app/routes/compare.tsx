@@ -69,20 +69,26 @@ type LoaderData = SelectModeData | CompareModeData;
 export const meta: Route.MetaFunction = ({ data }) => {
   const d = data as LoaderData | undefined;
   if (d?.mode === "compare" && d.personA && d.personB) {
+    const title = `Compare ${d.personA.name} vs ${d.personB.name} | ViewRoyal.ai`;
+    const description = `Side-by-side comparison of ${d.personA.name} and ${d.personB.name} on voting alignment, stances, and speaking time.`;
     return [
-      { title: `Compare ${d.personA.name} vs ${d.personB.name} | ViewRoyal.ai` },
-      {
-        name: "description",
-        content: `Side-by-side comparison of ${d.personA.name} and ${d.personB.name} on voting alignment, stances, and speaking time.`,
-      },
+      { title },
+      { name: "description", content: description },
+      { property: "og:title", content: `${d.personA.name} vs ${d.personB.name}` },
+      { property: "og:description", content: description },
+      { property: "og:type", content: "profile" },
+      { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+      { name: "twitter:card", content: "summary_large_image" },
     ];
   }
   return [
     { title: "Compare Councillors | ViewRoyal.ai" },
-    {
-      name: "description",
-      content: "Compare two councillors side-by-side on voting alignment, policy stances, and speaking time.",
-    },
+    { name: "description", content: "Compare two councillors side-by-side on voting alignment, policy stances, and speaking time." },
+    { property: "og:title", content: "Compare Councillors | ViewRoyal.ai" },
+    { property: "og:description", content: "Compare two councillors side-by-side on voting alignment, policy stances, and speaking time." },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
   ];
 };
 

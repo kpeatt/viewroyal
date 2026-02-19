@@ -17,6 +17,22 @@ import { Button } from "../components/ui/button";
 import { cn, formatDate } from "../lib/utils";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 
+export const meta: Route.MetaFunction = ({ data }) => {
+  const person = (data as any)?.person;
+  if (!person) return [{ title: "Legislative Proposals | ViewRoyal.ai" }];
+  const title = `${person.name} — Legislative Proposals | ViewRoyal.ai`;
+  const description = `Motions moved and seconded by ${person.name} on View Royal council`;
+  return [
+    { title },
+    { name: "description", content: description },
+    { property: "og:title", content: `${person.name} — Legislative Proposals` },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "profile" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
 export async function loader({ params, request }: Route.LoaderArgs) {
   const { id } = params;
   const url = new URL(request.url);

@@ -7,6 +7,18 @@ import { Gavel, ChevronRight, Calendar, Users, Trophy } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { formatDate } from "../lib/utils";
 
+export const meta: Route.MetaFunction = () => {
+  return [
+    { title: "Elections | ViewRoyal.ai" },
+    { name: "description", content: "Historical election results and candidate data for View Royal" },
+    { property: "og:title", content: "Elections | ViewRoyal.ai" },
+    { property: "og:description", content: "Historical election results and candidate data for View Royal" },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
 export async function loader() {
   try {
     const supabase = getSupabaseAdminClient();
