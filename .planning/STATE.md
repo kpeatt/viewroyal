@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 10 (Add Better Test Suite)
-Plan: 2 of 5
+Plan: 4 of 5
 Status: In Progress
-Last activity: 2026-02-18 - Completed 10-02 web app server-layer tests
+Last activity: 2026-02-19 - Completed 10-04 outer pipeline tests (scrapers, video, profiling, orchestrator)
 
-Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 2/5
+Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 4/5
 
 ## Performance Metrics
 
@@ -37,8 +37,9 @@ Progress: [████████████████████] 100% (2
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
 | 09-ai-profiling-comparison | 4 | 25min | 6min |
-| 10-add-better-test-suite | 2 | 6min | 3min |
+| 10-add-better-test-suite | 4 | 12min | 3min |
 | Phase 10 P01 | 5min | 2 tasks | 12 files |
+| Phase 10 P04 | 6min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,7 @@ v1.1 decisions:
 - TEST Dynamic import (await import()) for supabase.server tests to handle module-level singleton side effects
 - TEST Reusable chainable mock Supabase query builder with thenable pattern for service layer testing
 - [Phase 10]: Meeting 693 fixture data created as representative samples (no live DB access); double-brace bug fixed in _merge_refinements
+- [Phase 10]: VimeoClient tests use __new__ + manual attrs to avoid __init__ config side effects; per-table Supabase mock for _gather_evidence multi-table queries
 
 ### Roadmap Evolution
 
@@ -116,7 +118,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Completed 10-01: Test infrastructure. Installed pytest-cov/responses/syrupy/freezegun, created shared conftest.py with chainable Supabase/Gemini mocks, canonical meeting 693 fixtures, fixed skipped test_merge_refinements (including production bug in _merge_refinements). 16 tests passing with coverage reporting.
+Completed 10-04: Outer pipeline tests. 108 new tests covering scrapers (CivicWeb, base, registry), Vimeo client, stance generator (category normalization, Gemini mocking, syrupy snapshots), and Archiver orchestrator (phase coordination, CLI flags, progress tracking). All tests passing in 1.8s.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
