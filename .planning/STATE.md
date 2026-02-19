@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.1 Deep Intelligence -- Phase 10 Add Better Test Suite
+**Current focus:** v1.1 Deep Intelligence -- Phase 11 Gap Closure Gemini Fix
 
 ## Current Position
 
-Phase: 10 (Add Better Test Suite)
-Plan: 5 of 5
+Phase: 11 (Gap Closure Gemini Fix)
+Plan: 1 of 1
 Status: Complete
-Last activity: 2026-02-19 - Completed 10-05 integration tests, pre-deploy gate, deploy gating
+Last activity: 2026-02-19 - Completed 11-01 Gemini SDK migration + model upgrade
 
-Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 5/5 COMPLETE
+Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 5/5 COMPLETE + Phase 11: 1/1 COMPLETE
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
-- Average duration: 5.9min
-- Total execution time: 2.72 hours
+- Total plans completed: 28
+- Average duration: 5.8min
+- Total execution time: 2.77 hours
 
 **By Phase:**
 
@@ -38,10 +38,12 @@ Progress: [████████████████████] 100% (2
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
 | 09-ai-profiling-comparison | 4 | 25min | 6min |
 | 10-add-better-test-suite | 5 | 26min | 5min |
+| 11-gap-closure-gemini-fix | 1 | 3min | 3min |
 | Phase 10 P01 | 5min | 2 tasks | 12 files |
 | Phase 10 P03 | 7min | 2 tasks | 9 files |
 | Phase 10 P04 | 6min | 2 tasks | 9 files |
 | Phase 10 P05 | 7min | 2 tasks | 6 files |
+| Phase 11 P01 | 3min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -95,12 +97,16 @@ v1.1 decisions:
 - [Phase 10]: VimeoClient tests use __new__ + manual attrs to avoid __init__ config side effects; per-table Supabase mock for _gather_evidence multi-table queries
 - [Phase 10]: MeetingIngester instantiated with dummy URLs for pure function testing; lazy-imported functions patched at source module path
 - [Phase 10]: Integration tests use per-table Supabase mock dict (pre-created) for realistic multi-table flow testing; gitignore scripts/* with negation for tracked shell scripts
+- [Phase 11]: @google/generative-ai replaced with @google/genai; getGenerativeModel() removed, model specified per-call
+- [Phase 11]: Streaming uses async iterable directly (no .stream property) with .text property (not method)
+- [Phase 11]: All Gemini calls unified on gemini-3-flash-preview model name across web app and pipeline
 
 ### Roadmap Evolution
 
 - Phase 07.1 inserted after Phase 07: Upgrade document extraction with Docling and Gemini (URGENT)
 - Phase 07.1 paused at Plan 03 (2/3 done) — backfill needs Gemini Batch API, advancing to Phase 8
 - Phase 10 added: Add better test suite
+- Phase 11 added: Gap closure -- Gemini SDK migration + model upgrade
 
 ### Pending Todos
 
@@ -122,7 +128,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Completed 10-05: Integration tests and deploy gating. 6 integration tests for MeetingIngester.process_meeting() (happy path, no docs, Gemini failure, missing transcript, dry run, already ingested). Pre-deploy gate script, test-all wrapper, deploy gating via predeploy hook. Total suite: 427 tests (357 pipeline + 70 web), all passing.
+Completed 11-01: Gemini SDK migration + model upgrade. Replaced deprecated @google/generative-ai with @google/genai in 3 web app files. Updated all 7 pipeline model references to gemini-3-flash-preview. Fixed SRCH-04 heading mismatch. Web app builds, 357 pipeline tests pass.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
