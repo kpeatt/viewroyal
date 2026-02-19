@@ -1,0 +1,9 @@
+# Coverage reports
+coverage_html/
+.coverage
+
+# Syrupy snapshots
+__snapshots__/
+
+# Script output (one-off maintenance scripts)
+scripts/
