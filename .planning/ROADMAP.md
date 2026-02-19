@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Land & Launch** -- Phases 1-6 (shipped 2026-02-17) -- [Archive](milestones/v1.0-ROADMAP.md)
-- 🚧 **v1.1 Deep Intelligence** -- Phases 7-9 (in progress)
+- 🚧 **v1.1 Deep Intelligence** -- Phases 7-11 (in progress)
 
 ## Phases
 
@@ -94,7 +94,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 7 -> 7.1 (paused) -> 8 -> 9
+**Execution Order:** 7 -> 7.1 (paused) -> 8 -> 9 -> 10 -> 11
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -108,6 +108,8 @@ Plans:
 | 7.1 Upgrade Document Extraction | v1.1 | 2/3 | Paused | - |
 | 8. Unified Search & Hybrid RAG | v1.1 | 5/5 | Complete | 2026-02-18 |
 | 9. AI Profiling & Comparison | v1.1 | Complete    | 2026-02-18 | - |
+| 10. Add Better Test Suite | v1.1 | 5/5 | Complete | 2026-02-19 |
+| 11. Gap Closure & Gemini Fix | v1.1 | 0/1 | Pending | - |
 
 ### Phase 10: Add better test suite
 
@@ -122,3 +124,18 @@ Plans:
 - [ ] 10-03-PLAN.md -- Pipeline core + ingestion tests (ingester, ai_refiner, document_extractor, embed, audit)
 - [ ] 10-04-PLAN.md -- Pipeline scraper, profiling, video, orchestrator tests
 - [ ] 10-05-PLAN.md -- Integration test, pre-deploy hooks, coverage verification
+
+### Phase 11: Gap Closure & Gemini Fix
+**Goal:** Close all audit-identified integration gaps, upgrade Gemini model to gemini-3-flash-preview across web and pipeline, and clean up dead code paths
+**Depends on:** Phase 10
+**Requirements**: SRCH-04 (restores section-level RAG citations)
+**Gap Closure:** Closes INT-01, INT-02, FLOW-01 from v1.1 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. RAG answer citations for document sections show section headings (not generic document titles)
+  2. All Gemini API calls use `gemini-3-flash-preview` and respond successfully
+  3. No dead code querying non-existent database tables
+  4. REQUIREMENTS.md checkboxes reflect actual completion status (all 15 checked)
+**Plans:** 1 plan
+
+Plans:
+- [ ] 11-01-PLAN.md -- Fix RAG heading mismatch, upgrade Gemini to gemini-3-flash-preview, remove dead code, update docs
