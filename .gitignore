@@ -56,7 +56,10 @@ sql/migrations
 
 # Pipeline scripts (one-off / maintenance — not part of core pipeline)
 apps/pipeline/scripts/
-scripts/
+scripts/*
+# Keep deploy/test shell scripts
+!scripts/pre-deploy.sh
+!scripts/test-all.sh
 
 # Legacy src/ (being migrated)
 src/
