@@ -1,0 +1,23 @@
+{
+  "id": 693,
+  "title": "Regular Council Meeting",
+  "meeting_date": "2025-11-18",
+  "meeting_type": "Regular Council",
+  "status": "Completed",
+  "organization_id": 1,
+  "civicweb_url": "https://viewroyalbc.civicweb.net/portal/MeetingInformation.aspx?Id=693",
+  "vimeo_url": "https://vimeo.com/viewroyal/review/1032178536/abc123",
+  "video_duration_seconds": 7823.5,
+  "summary": "Council approved second and third readings of the Tree Protection Bylaw, received the annual financial report, and heard from residents about traffic concerns on Helmcken Road. The committee of the whole recommended advancing the Official Community Plan amendment for the Thetis Cove neighbourhood.",
+  "chair_person_name": "David Screech",
+  "attendees": [
+    "David Screech",
+    "Ron Mattson",
+    "Damian Kowalewich",
+    "Sid Tobias",
+    "John Rogers",
+    "Heidi Rast"
+  ],
+  "created_at": "2025-11-19T08:30:00Z",
+  "updated_at": "2025-12-01T14:22:00Z"
+}

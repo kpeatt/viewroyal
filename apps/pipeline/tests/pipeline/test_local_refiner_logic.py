@@ -1,7 +1,6 @@
 import pytest
-from pipeline.ingestion.ai_refiner import _merge_refinements, MeetingRefinement, AgendaItemRecord, MotionRecord
+from pipeline.ingestion.ai_refiner import _merge_refinements, MeetingRefinement, AgendaItemRecord, MotionRecord, SpeakerAlias
 
-@pytest.mark.skip(reason="Pre-existing: speaker_aliases dict/model mismatch — needs SpeakerAlias Pydantic model")
 def test_merge_refinements():
     # Create mock refinements
     r1 = MeetingRefinement(
@@ -12,7 +11,7 @@ def test_merge_refinements():
         status="Completed",
         chair_person_name="Sid Tobias",
         attendees=["Sid Tobias", "Ron Mattson"],
-        speaker_aliases=[{"label": "Speaker_01", "name": "Sid Tobias"}],
+        speaker_aliases=[SpeakerAlias(label="Speaker_01", name="Sid Tobias")],
         transcript_corrections=[],
         items=[
             AgendaItemRecord(
@@ -40,7 +39,7 @@ def test_merge_refinements():
         status="Completed",
         chair_person_name="Sid Tobias",
         attendees=["Sid Tobias", "Damian Kowalewich"],
-        speaker_aliases=[{"label": "Speaker_02", "name": "Damian Kowalewich"}],
+        speaker_aliases=[SpeakerAlias(label="Speaker_02", name="Damian Kowalewich")],
         transcript_corrections=[{"original_text": "Foo", "corrected_text": "Bar", "reason": "Typo"}],
         items=[
             AgendaItemRecord(

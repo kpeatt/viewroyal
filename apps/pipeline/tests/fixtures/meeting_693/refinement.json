@@ -1,0 +1,149 @@
+{
+  "scratchpad_speaker_map": "Speaker_01 = David Screech (Mayor, chairs the meeting, introduces items)\nSpeaker_02 = Ron Mattson (Councillor, frequently seconds motions)\nSpeaker_03 = Damian Kowalewich (Councillor, asks financial questions)\nSpeaker_04 = Sid Tobias (Councillor, moves substantive motions)\nSpeaker_05 = John Rogers (Councillor, raises property rights concerns)\nSpeaker_06 = Heidi Rast (Councillor, community safety focus)",
+  "scratchpad_timeline": "1. Call to Order: 0:00-0:15 (Mayor opens meeting)\n2. Approval of Agenda: 0:15-0:45 (Routine approval)\n5.1 Public Participation - Helmcken Road: 2:00-14:05 (Three delegations, traffic study motion)\n8.1 Tree Protection Bylaw: 35:50-57:00 (Debate on threshold, second and third readings)\n9.1 Annual Financial Report: 58:20-70:00 (Finance presentation, questions, received)",
+  "summary": "Council approved second and third readings of the Tree Protection Bylaw No. 1160, with amendments to increase the diameter threshold from 20cm to 30cm. Residents presented traffic concerns on Helmcken Road near View Royal Elementary, and council directed staff to conduct a traffic study. The annual financial report showed a $142,000 surplus for fiscal year 2024-2025.",
+  "meeting_type": "Regular Council",
+  "status": "Completed",
+  "chair_person_name": "David Screech",
+  "attendees": [
+    "David Screech",
+    "Ron Mattson",
+    "Damian Kowalewich",
+    "Sid Tobias",
+    "John Rogers",
+    "Heidi Rast"
+  ],
+  "speaker_aliases": [
+    {"label": "Speaker_01", "name": "David Screech"},
+    {"label": "Speaker_02", "name": "Ron Mattson"},
+    {"label": "Speaker_03", "name": "Damian Kowalewich"},
+    {"label": "Speaker_04", "name": "Sid Tobias"},
+    {"label": "Speaker_05", "name": "John Rogers"},
+    {"label": "Speaker_06", "name": "Heidi Rast"}
+  ],
+  "transcript_corrections": [
+    {
+      "original_text": "Helmkin Road",
+      "corrected_text": "Helmcken Road",
+      "reason": "Misspelled street name"
+    }
+  ],
+  "items": [
+    {
+      "item_order": "1",
+      "title": "Call to Order",
+      "matter_identifier": null,
+      "matter_title": null,
+      "plain_english_summary": "Mayor Screech called the meeting to order at 7:00 PM.",
+      "related_address": null,
+      "description": null,
+      "category": "Procedural",
+      "tags": [],
+      "financial_cost": null,
+      "funding_source": null,
+      "is_controversial": false,
+      "debate_summary": "The meeting was called to order at 7:00 PM with all council members present.",
+      "key_quotes": [],
+      "key_statements": [],
+      "discussion_start_time": 0.0,
+      "discussion_end_time": 15.0,
+      "motions": []
+    },
+    {
+      "item_order": "2",
+      "title": "Approval of the Agenda",
+      "matter_identifier": null,
+      "matter_title": null,
+      "plain_english_summary": "Council approved the agenda as presented.",
+      "related_address": null,
+      "description": null,
+      "category": "Procedural",
+      "tags": [],
+      "financial_cost": null,
+      "funding_source": null,
+      "is_controversial": false,
+      "debate_summary": "The agenda was approved without amendment.",
+      "key_quotes": [],
+      "key_statements": [],
+      "discussion_start_time": 15.0,
+      "discussion_end_time": 45.0,
+      "motions": [
+        {
+          "motion_text": "THAT the agenda be approved as presented.",
+          "plain_english_summary": "Council approved the meeting agenda.",
+          "disposition": "Procedural",
+          "mover": "Ron Mattson",
+          "seconder": "Damian Kowalewich",
+          "result": "CARRIED",
+          "timestamp": 20.0,
+          "end_timestamp": 40.0,
+          "votes": [
+            {"person_name": "David Screech", "vote": "Yes", "reason": null},
+            {"person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+            {"person_name": "Damian Kowalewich", "vote": "Yes", "reason": null},
+            {"person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+            {"person_name": "John Rogers", "vote": "Yes", "reason": null},
+            {"person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+          ],
+          "financial_cost": null,
+          "funding_source": null
+        }
+      ]
+    },
+    {
+      "item_order": "5.1",
+      "title": "Public Participation - Traffic Concerns on Helmcken Road",
+      "matter_identifier": null,
+      "matter_title": "Helmcken Road Traffic Calming",
+      "plain_english_summary": "Residents asked council to add traffic calming measures on Helmcken Road near the elementary school.",
+      "related_address": ["Helmcken Road"],
+      "description": "Resident delegation regarding traffic calming measures on Helmcken Road near View Royal Elementary School.",
+      "category": "Transportation",
+      "tags": ["traffic", "public safety", "helmcken road", "school zone"],
+      "financial_cost": null,
+      "funding_source": null,
+      "is_controversial": false,
+      "debate_summary": "Three residents presented concerns about speeding on Helmcken Road during school hours. They requested speed humps and improved crosswalk signage. Council referred the matter to staff for a traffic study.",
+      "key_quotes": [
+        {
+          "text": "We've clocked cars going 60 to 70 kilometers per hour right past the school.",
+          "speaker": "Resident A",
+          "timestamp": 148.5
+        }
+      ],
+      "key_statements": [
+        {
+          "statement_text": "Residents reported vehicles regularly exceeding the 30 km/h speed limit near View Royal Elementary School during drop-off and pick-up times.",
+          "speaker": null,
+          "statement_type": "public_input",
+          "context": "During public delegation on Helmcken Road traffic",
+          "timestamp": 148.5
+        }
+      ],
+      "discussion_start_time": 120.5,
+      "discussion_end_time": 845.0,
+      "motions": [
+        {
+          "motion_text": "THAT staff be directed to conduct a traffic study on Helmcken Road between View Royal Avenue and Beaumont Avenue.",
+          "plain_english_summary": "Council asked staff to study traffic problems on Helmcken Road.",
+          "disposition": "Substantive",
+          "mover": "Heidi Rast",
+          "seconder": "Sid Tobias",
+          "result": "CARRIED",
+          "timestamp": 800.0,
+          "end_timestamp": 840.0,
+          "votes": [
+            {"person_name": "David Screech", "vote": "Yes", "reason": null},
+            {"person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+            {"person_name": "Damian Kowalewich", "vote": "Yes", "reason": null},
+            {"person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+            {"person_name": "John Rogers", "vote": "Yes", "reason": null},
+            {"person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+          ],
+          "financial_cost": null,
+          "funding_source": null
+        }
+      ]
+    }
+  ]
+}

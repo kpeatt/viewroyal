@@ -1,0 +1,191 @@
+[
+  {
+    "id": 5001,
+    "meeting_id": 693,
+    "item_order": "1",
+    "title": "Call to Order",
+    "description": null,
+    "plain_english_summary": "Mayor Screech called the meeting to order at 7:00 PM.",
+    "category": "Procedural",
+    "tags": [],
+    "financial_cost": null,
+    "funding_source": null,
+    "is_controversial": false,
+    "debate_summary": "The meeting was called to order at 7:00 PM with all council members present.",
+    "discussion_start_time": 0.0,
+    "discussion_end_time": 15.0,
+    "motions": []
+  },
+  {
+    "id": 5002,
+    "meeting_id": 693,
+    "item_order": "2",
+    "title": "Approval of the Agenda",
+    "description": null,
+    "plain_english_summary": "Council approved the agenda as presented.",
+    "category": "Procedural",
+    "tags": [],
+    "financial_cost": null,
+    "funding_source": null,
+    "is_controversial": false,
+    "debate_summary": "The agenda was approved without amendment.",
+    "discussion_start_time": 15.0,
+    "discussion_end_time": 45.0,
+    "motions": [
+      {
+        "id": 8001,
+        "agenda_item_id": 5002,
+        "motion_text": "THAT the agenda be approved as presented.",
+        "plain_english_summary": "Council approved the meeting agenda.",
+        "disposition": "Procedural",
+        "mover": "Ron Mattson",
+        "seconder": "Damian Kowalewich",
+        "result": "CARRIED",
+        "timestamp": 20.0,
+        "end_timestamp": 40.0,
+        "votes": [
+          {"id": 9001, "motion_id": 8001, "person_name": "David Screech", "vote": "Yes", "reason": null},
+          {"id": 9002, "motion_id": 8001, "person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+          {"id": 9003, "motion_id": 8001, "person_name": "Damian Kowalewich", "vote": "Yes", "reason": null},
+          {"id": 9004, "motion_id": 8001, "person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+          {"id": 9005, "motion_id": 8001, "person_name": "John Rogers", "vote": "Yes", "reason": null},
+          {"id": 9006, "motion_id": 8001, "person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+        ]
+      }
+    ]
+  },
+  {
+    "id": 5003,
+    "meeting_id": 693,
+    "item_order": "5.1",
+    "title": "Public Participation - Traffic Concerns on Helmcken Road",
+    "description": "Resident delegation regarding traffic calming measures on Helmcken Road near View Royal Elementary School.",
+    "plain_english_summary": "Residents asked council to add traffic calming measures on Helmcken Road near the elementary school.",
+    "category": "Transportation",
+    "tags": ["traffic", "public safety", "helmcken road", "school zone"],
+    "financial_cost": null,
+    "funding_source": null,
+    "is_controversial": false,
+    "debate_summary": "Three residents presented concerns about speeding on Helmcken Road during school hours. They requested speed humps and improved crosswalk signage. Council referred the matter to staff for a traffic study.",
+    "discussion_start_time": 120.5,
+    "discussion_end_time": 845.0,
+    "motions": [
+      {
+        "id": 8002,
+        "agenda_item_id": 5003,
+        "motion_text": "THAT staff be directed to conduct a traffic study on Helmcken Road between View Royal Avenue and Beaumont Avenue.",
+        "plain_english_summary": "Council asked staff to study traffic problems on Helmcken Road.",
+        "disposition": "Substantive",
+        "mover": "Heidi Rast",
+        "seconder": "Sid Tobias",
+        "result": "CARRIED",
+        "timestamp": 800.0,
+        "end_timestamp": 840.0,
+        "votes": [
+          {"id": 9007, "motion_id": 8002, "person_name": "David Screech", "vote": "Yes", "reason": null},
+          {"id": 9008, "motion_id": 8002, "person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+          {"id": 9009, "motion_id": 8002, "person_name": "Damian Kowalewich", "vote": "Yes", "reason": null},
+          {"id": 9010, "motion_id": 8002, "person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+          {"id": 9011, "motion_id": 8002, "person_name": "John Rogers", "vote": "Yes", "reason": null},
+          {"id": 9012, "motion_id": 8002, "person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+        ]
+      }
+    ]
+  },
+  {
+    "id": 5004,
+    "meeting_id": 693,
+    "item_order": "8.1",
+    "title": "Tree Protection Bylaw No. 1160 - Second and Third Readings",
+    "description": "Consideration of second and third readings of Tree Protection Bylaw No. 1160.",
+    "plain_english_summary": "Council voted to advance the new tree protection bylaw that requires permits before cutting significant trees.",
+    "category": "Environment",
+    "tags": ["trees", "bylaw", "environment", "permits"],
+    "financial_cost": null,
+    "funding_source": null,
+    "is_controversial": true,
+    "debate_summary": "Councillor Kowalewich raised concerns about the threshold for tree size requiring permits. Councillor Rogers argued the bylaw was too restrictive for homeowners. After debate, council passed second and third readings with amendments to increase the diameter threshold from 20cm to 30cm.",
+    "discussion_start_time": 2150.0,
+    "discussion_end_time": 3420.0,
+    "motions": [
+      {
+        "id": 8003,
+        "agenda_item_id": 5004,
+        "motion_text": "THAT Tree Protection Bylaw No. 1160 be given second reading as amended.",
+        "plain_english_summary": "Council approved the second reading of the tree protection bylaw with changes.",
+        "disposition": "Substantive",
+        "mover": "Sid Tobias",
+        "seconder": "Heidi Rast",
+        "result": "CARRIED",
+        "timestamp": 3100.0,
+        "end_timestamp": 3200.0,
+        "votes": [
+          {"id": 9013, "motion_id": 8003, "person_name": "David Screech", "vote": "Yes", "reason": null},
+          {"id": 9014, "motion_id": 8003, "person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+          {"id": 9015, "motion_id": 8003, "person_name": "Damian Kowalewich", "vote": "No", "reason": "Threshold still too low"},
+          {"id": 9016, "motion_id": 8003, "person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+          {"id": 9017, "motion_id": 8003, "person_name": "John Rogers", "vote": "No", "reason": "Too restrictive for homeowners"},
+          {"id": 9018, "motion_id": 8003, "person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+        ]
+      },
+      {
+        "id": 8004,
+        "agenda_item_id": 5004,
+        "motion_text": "THAT Tree Protection Bylaw No. 1160 be given third reading as amended.",
+        "plain_english_summary": "Council approved the third reading of the tree protection bylaw.",
+        "disposition": "Substantive",
+        "mover": "Ron Mattson",
+        "seconder": "Sid Tobias",
+        "result": "CARRIED",
+        "timestamp": 3300.0,
+        "end_timestamp": 3410.0,
+        "votes": [
+          {"id": 9019, "motion_id": 8004, "person_name": "David Screech", "vote": "Yes", "reason": null},
+          {"id": 9020, "motion_id": 8004, "person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+          {"id": 9021, "motion_id": 8004, "person_name": "Damian Kowalewich", "vote": "No", "reason": null},
+          {"id": 9022, "motion_id": 8004, "person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+          {"id": 9023, "motion_id": 8004, "person_name": "John Rogers", "vote": "No", "reason": null},
+          {"id": 9024, "motion_id": 8004, "person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+        ]
+      }
+    ]
+  },
+  {
+    "id": 5005,
+    "meeting_id": 693,
+    "item_order": "9.1",
+    "title": "Annual Financial Report for Fiscal Year 2024-2025",
+    "description": "Presentation of the annual financial report by the Director of Finance.",
+    "plain_english_summary": "The finance director presented the town's annual financial report showing a small surplus.",
+    "category": "Finance",
+    "tags": ["finance", "budget", "annual report"],
+    "financial_cost": null,
+    "funding_source": null,
+    "is_controversial": false,
+    "debate_summary": "The Director of Finance presented the annual report showing the Town ended the fiscal year with a $142,000 surplus. Council asked questions about infrastructure reserves and the capital plan. The report was received for information.",
+    "discussion_start_time": 3500.0,
+    "discussion_end_time": 4200.0,
+    "motions": [
+      {
+        "id": 8005,
+        "agenda_item_id": 5005,
+        "motion_text": "THAT the Annual Financial Report for fiscal year 2024-2025 be received for information.",
+        "plain_english_summary": "Council acknowledged receipt of the annual financial report.",
+        "disposition": "Procedural",
+        "mover": "Damian Kowalewich",
+        "seconder": "Ron Mattson",
+        "result": "CARRIED",
+        "timestamp": 4150.0,
+        "end_timestamp": 4195.0,
+        "votes": [
+          {"id": 9025, "motion_id": 8005, "person_name": "David Screech", "vote": "Yes", "reason": null},
+          {"id": 9026, "motion_id": 8005, "person_name": "Ron Mattson", "vote": "Yes", "reason": null},
+          {"id": 9027, "motion_id": 8005, "person_name": "Damian Kowalewich", "vote": "Yes", "reason": null},
+          {"id": 9028, "motion_id": 8005, "person_name": "Sid Tobias", "vote": "Yes", "reason": null},
+          {"id": 9029, "motion_id": 8005, "person_name": "John Rogers", "vote": "Yes", "reason": null},
+          {"id": 9030, "motion_id": 8005, "person_name": "Heidi Rast", "vote": "Yes", "reason": null}
+        ]
+      }
+    ]
+  }
+]

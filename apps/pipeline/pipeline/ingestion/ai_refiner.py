@@ -321,8 +321,8 @@ def _merge_refinements(results: List[MeetingRefinement]) -> MeetingRefinement:
 
     all_items = []
     merged_attendees = set(base.attendees)
-    merged_aliases = {{a.label: a for a in base.speaker_aliases}}
-    merged_corrections = {{c.original_text: c for c in base.transcript_corrections}}
+    merged_aliases = {a.label: a for a in base.speaker_aliases}
+    merged_corrections = {c.original_text: c for c in base.transcript_corrections}
 
     for r in results[1:]:
         merged_attendees.update(r.attendees)
@@ -331,7 +331,7 @@ def _merge_refinements(results: List[MeetingRefinement]) -> MeetingRefinement:
         for c in r.transcript_corrections:
             merged_corrections[c.original_text] = c
 
-    item_map = {{}}
+    item_map = {}
 
     for r in results:
         for item in r.items:
