@@ -19,3 +19,29 @@
 
 ---
 
+
+## v1.1 Deep Intelligence (Shipped: 2026-02-19)
+
+**Phases completed:** 6 phases (5 complete + 1 paused), 20/21 plans complete
+**Timeline:** 3 days (2026-02-17 → 2026-02-19), 2.77 hours execution
+**Commits:** 98 commits since v1.0
+**Codebase:** ~80,700 LOC (TypeScript + Python)
+
+**Key accomplishments:**
+1. PDF documents chunked into searchable sections with per-section halfvec(384) embeddings and tsvector indexes
+2. Unified search page with intent detection — keyword queries show results list, questions trigger AI answers with citations
+3. Hybrid search RPCs using Reciprocal Rank Fusion across document sections, key statements, motions, and transcripts
+4. AI councillor stance summaries with confidence scoring and links to source evidence (motions, statements, transcripts)
+5. Side-by-side councillor comparison page with voting alignment, activity metrics, and stance diffs
+6. Comprehensive test suite (357 tests) with pre-deploy hooks gating deployments on test passes
+7. Gemini SDK migrated to @google/genai with gemini-3-flash-preview across web app and pipeline
+
+**Known gaps (tech debt):**
+- Phase 7.1 paused at 2/3 plans — Gemini Batch API extraction backfill waiting on quota
+- `councillor_highlights` dead code path removed but highlights feature not yet built
+- `document_chunker.py` and several web modules lack dedicated test coverage
+
+**Delivered:** Citizens can search across all content types with a single input, get AI answers with conversation memory, view AI-generated councillor stance summaries backed by evidence, and compare councillors side by side — all backed by granular document sections with embeddings.
+
+---
+

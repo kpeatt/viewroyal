@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A civic transparency platform that scrapes council meeting documents and video from municipal websites, diarizes speakers, extracts structured data with AI, and serves it through a searchable web app with subscription-based email alerts. Currently live for View Royal, BC with multi-town architecture built in. Citizens can browse meetings, motions, bylaws, people, and matters — ask natural language questions answered by a RAG agent — subscribe to topics, councillors, and matters for personalized email digests — and manage preferences through a guided onboarding flow.
+A civic transparency platform that scrapes council meeting documents and video from municipal websites, diarizes speakers, extracts structured data with AI, and serves it through a searchable web app with subscription-based email alerts. Citizens can browse meetings, motions, bylaws, people, and matters — search across all content types with hybrid keyword+vector search — ask natural language questions answered by a RAG agent with conversation memory — view AI-generated councillor stance summaries backed by evidence — compare councillors side by side — and subscribe to topics for personalized email digests.
 
 ## Core Value
 
@@ -44,24 +44,28 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ Divided vote visualization with controversial toggle — v1.0
 - ✓ Personalized digest emails with subscription highlighting — v1.0
 - ✓ Pre-meeting alert capability in Edge Function — v1.0
+- ✓ Pipeline chunks PDF documents into sections with heading-based parsing — v1.1
+- ✓ Document sections with halfvec(384) embeddings and tsvector FTS indexes — v1.1
+- ✓ Document sections linked to agenda items via title matching — v1.1
+- ✓ Existing documents backfilled into sections with embeddings — v1.1
+- ✓ Unified search page replacing separate Search and Ask pages — v1.1
+- ✓ Intent detection: keyword queries show results, questions trigger AI answers — v1.1
+- ✓ Hybrid search RPCs with Reciprocal Rank Fusion across 4 content types — v1.1
+- ✓ Follow-up questions with 5-turn conversation memory — v1.1
+- ✓ Speaking time metrics from transcript segment durations — v1.1
+- ✓ AI stance summaries per councillor per topic with confidence scoring — v1.1
+- ✓ Side-by-side councillor comparison (voting, stances, activity) — v1.1
 
 ### Active
 
-## Current Milestone: v1.1 Deep Intelligence
-
-**Goal:** Deepen the platform's intelligence layer — chunk and embed documents for granular search, upgrade RAG with hybrid search and conversation memory, and build comprehensive council member profiles.
-
-**Target features:**
-- PDF document sectioning with per-section embeddings (agendas, addendums, supplementary schedules)
-- RAG enhancements: hybrid search, conversation memory, document sections as sources
-- Council member profiling: AI stance summaries, voting pattern analysis, activity/engagement metrics
+(No active requirements — planning next milestone)
 
 ### Out of Scope
 
 - Document viewer with official-document styling — future milestone candidate
 - Public API with OCD-compliant endpoints — future milestone candidate
 - Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — future milestone candidate
-- Second town onboarding (Esquimalt, RDOS) — deferred until v1.0 is stable in production
+- Second town onboarding (Esquimalt, RDOS) — deferred until intelligence layer is stable
 - Push notifications / native app — overkill for current user base size
 - Social features (comments, reactions, forums) — undermines official record credibility
 - Real-time live meeting notifications — architecture mismatch (batch pipeline)
@@ -70,23 +74,20 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ## Context
 
-Shipped v1.0 with ~28K LOC TypeScript (web app), ~40+ database tables.
-Tech stack: React Router 7, Cloudflare Workers, Supabase PostgreSQL + pgvector, Google Gemini, fastembed.
-6 phases, 11 plans, 25 tasks completed in 1.65 hours of execution time.
-4 long-running PRs (#35, #37, #36, #13) merged in strict dependency order.
+Shipped v1.1 with ~80,700 LOC (TypeScript + Python), 40+ database tables, 357 automated tests.
+Tech stack: React Router 7, Cloudflare Workers, Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed.
+v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours.
 
 **Known technical debt:**
-- `bootstrap.sql` is out of date with 23+ applied migrations
-- `searchKeyStatements` export in vectorSearch.ts is orphaned dead code
-- `search_key_statements` tool label missing from TOOL_LABELS in ask.tsx (cosmetic)
-- `login.tsx` labels page "Admin Access" — should be "Sign In" for public users
-- `settings.tsx` hardcodes `VIEW_ROYAL_NEIGHBORHOODS` (intentional for single-town MVP)
+- `bootstrap.sql` is out of date with 30+ applied migrations
+- Phase 7.1 Gemini Batch API extraction paused — backfill waiting on quota
+- `document_chunker.py` and several web modules lack dedicated test coverage
 - Email delivery requires one-time external Resend/SMTP configuration
 
 ## Constraints
 
 - **Runtime**: Cloudflare Workers — no `process.env`, no Node.js APIs, env vars inlined at build time via Vite
-- **AI**: Google Gemini for refinement + RAG; OpenAI text-embedding-3-small for web app embeddings; fastembed for pipeline embeddings
+- **AI**: Google Gemini (gemini-3-flash-preview) for refinement + RAG + stances; fastembed for pipeline embeddings
 - **Diarization**: MLX on Apple Silicon — pipeline runs locally, not in CI/CD
 - **Auth**: Supabase Auth with public signup (needs dashboard toggle to enable)
 - **Cost**: Gemini API calls per meeting; Legistar fast path skips AI for structured sources
@@ -100,15 +101,15 @@ Tech stack: React Router 7, Cloudflare Workers, Supabase PostgreSQL + pgvector, 
 | Supabase for DB + auth + storage | Managed Postgres with pgvector, auth, storage, edge functions | ✓ Good |
 | Cloudflare Workers for web app | SSR at edge, KV/R2 available, single deployment | ✓ Good |
 | Municipality context via DB, not config files | Enables runtime discovery of towns, no redeploy to add one | ✓ Good |
-| halfvec(384) over vector(768) | 95% storage reduction, Matryoshka truncation preserves quality | ✓ Good — merged and working |
-| Resend for transactional email | Free tier sufficient for initial scale, Edge Function compatible | ✓ Good — code complete, needs config |
-| Mix multi-town + UX features in v1.0 | Land existing PRs while adding high-impact UX features | ✓ Good — all 29 requirements met |
-| PR merge order #35→#37→#36→#13 | Strict dependency chain prevents runtime failures | ✓ Good — zero conflicts |
-| tsvector FTS instead of RPC restoration | Simpler, faster, no custom RPC maintenance | ✓ Good |
-| Cherry-pick PR #13 instead of merge | Preserves Phase 2 municipality context changes | ✓ Good |
-| Hand-drawn SVG map instead of GeoJSON | Lighter, decorative, no build dependency | ✓ Good |
-| Onboarding as 3-step wizard with React state | Smoother UX than URL params, easy to extend | ✓ Good |
-| Phase 6 gap closure from audit | Systematic requirement verification before shipping | ✓ Good — all gaps closed |
+| halfvec(384) over vector(768) | 95% storage reduction, Matryoshka truncation preserves quality | ✓ Good |
+| Resend for transactional email | Free tier sufficient for initial scale, Edge Function compatible | ✓ Good |
+| PyMuPDF font-analysis for doc chunking | Body_size * 1.2 threshold for headings, no ML dependency | ✓ Good |
+| Hybrid search with RRF over Elasticsearch | pgvector + tsvector covers hybrid search natively | ✓ Good |
+| Gemini for stance generation | Same provider as refinement, lazy singleton pattern | ✓ Good |
+| Category normalization as IMMUTABLE SQL fn | Covers ~300/470 categories to 8 topics, no RPC needed | ✓ Good |
+| @google/genai SDK over @google/generative-ai | New official SDK, model-per-call pattern, async iterables | ✓ Good |
+| Pre-deploy test gating | pytest + vitest must pass before wrangler deploy | ✓ Good |
+| Phase 7.1 pause (Batch API) | DOC requirements satisfied by Phase 7; batch backfill deferred | ✓ Good |
 
 ---
-*Last updated: 2026-02-16 after v1.1 milestone start*
+*Last updated: 2026-02-19 after v1.1 milestone completion*
