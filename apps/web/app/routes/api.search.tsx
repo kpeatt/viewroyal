@@ -8,7 +8,7 @@ import {
 import { runQuestionAgent, type AgentEvent } from "../services/rag.server";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getMunicipality } from "../services/municipality";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 // Simple in-memory rate limiter: max requests per IP within a window
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -167,14 +167,14 @@ export async function loader({ request }: Route.LoaderArgs) {
             try {
               const geminiKey = process.env.GEMINI_API_KEY;
               if (geminiKey && fullAnswer.length > 50) {
-                const followupAI = new GoogleGenerativeAI(geminiKey);
-                const followupModel = followupAI.getGenerativeModel({
-                  model: "gemini-flash-latest",
-                });
+                const followupAI = new GoogleGenAI({ apiKey: geminiKey });
                 const followupPrompt = `Based on this civic question and answer about a municipal council, suggest 2-3 natural follow-up questions a citizen might ask. Return ONLY a JSON array of strings, nothing else.\n\nQuestion: ${query}\n\nAnswer summary: ${fullAnswer.slice(0, 500)}`;
                 const followupResult =
-                  await followupModel.generateContent([followupPrompt]);
-                const followupText = followupResult.response.text().trim();
+                  await followupAI.models.generateContent({
+                    model: "gemini-3-flash-preview",
+                    contents: followupPrompt,
+                  });
+                const followupText = (followupResult.text ?? "").trim();
                 const cleaned = followupText
                   .replace(/^```(?:json)?\s*\n?/i, "")
                   .replace(/\n?```\s*$/, "")
