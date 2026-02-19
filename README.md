@@ -48,8 +48,8 @@ sql/
 | Hosting | [Cloudflare Workers](https://workers.cloudflare.com/) |
 | Database | [Supabase](https://supabase.com/) (PostgreSQL + pgvector + halfvec) |
 | Pipeline | Python 3.13+, [uv](https://github.com/astral-sh/uv) |
-| AI Refinement | Google Gemini Flash (structured meeting extraction) |
-| AI Q&A | Google Gemini Flash (multi-tool RAG agent with citations) |
+| AI Refinement | Google Gemini 3 Flash (structured meeting extraction) |
+| AI Q&A | Google Gemini 3 Flash (multi-tool RAG agent with citations) |
 | Embeddings | OpenAI `text-embedding-3-small` (384-dim halfvec via Matryoshka truncation) |
 | Transcription | Local MLX-based diarization on Apple Silicon |
 | Video | Vimeo API + HLS playback |

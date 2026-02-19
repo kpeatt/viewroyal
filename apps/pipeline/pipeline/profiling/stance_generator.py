@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 
 # The 8 predefined topics matching the normalize_category_to_topic SQL function
 TOPICS = [
@@ -390,8 +390,17 @@ def _enrich_quotes_with_meeting_id(
     for q in key_quotes:
         if not isinstance(q, dict):
             continue
+
+        # Skip enrichment if meeting_id is already set (e.g. from profile agent)
+        if q.get("meeting_id"):
+            # Normalize date field name for frontend consistency
+            if "meeting_date" in q and "date" not in q:
+                q["date"] = q.pop("meeting_date")
+            enriched.append(q)
+            continue
+
         # Try exact date + prefix match
-        q_date = q.get("meeting_date", "")
+        q_date = q.get("meeting_date") or q.get("date") or ""
         q_text = (q.get("text", "") or "")[:80].lower().strip()
         mid = lookup.get((q_date, q_text))
 
@@ -564,122 +573,6 @@ def generate_all_stances(supabase, gemini_model: str | None = None, person_id: i
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def _gather_all_evidence(supabase, person_id: int) -> dict:
-    """Gather ALL key statements and votes for a person across all topics.
-
-    Returns the same shape as _gather_evidence but without topic filtering.
-    """
-    key_statements = []
-    try:
-        ks_result = supabase.table("key_statements").select(
-            "id, statement_text, statement_type, context, source_segment_ids, "
-            "agenda_item_id, "
-            "agenda_items!inner(id, title, category), "
-            "meetings!inner(id, meeting_date)"
-        ).eq("person_id", person_id).not_.is_("agenda_item_id", "null").execute()
-
-        if ks_result.data:
-            for row in ks_result.data:
-                meeting_date = row.get("meetings", {}).get("meeting_date", "")
-                segment_ids = row.get("source_segment_ids", [])
-                segment_id = segment_ids[0] if segment_ids else None
-                key_statements.append({
-                    "text": row["statement_text"],
-                    "meeting_date": meeting_date,
-                    "meeting_id": row.get("meetings", {}).get("id"),
-                    "segment_id": segment_id,
-                    "agenda_item_title": row.get("agenda_items", {}).get("title", ""),
-                    "category": row.get("agenda_items", {}).get("category", ""),
-                })
-    except Exception as e:
-        logger.warning("Error fetching all key_statements for person %d: %s", person_id, e)
-
-    votes = []
-    try:
-        votes_result = supabase.table("votes").select(
-            "id, vote, "
-            "motions!inner(id, text_content, result, "
-            "agenda_items!inner(id, category), "
-            "meetings!inner(id, meeting_date))"
-        ).eq("person_id", person_id).execute()
-
-        if votes_result.data:
-            for row in votes_result.data:
-                motion = row.get("motions", {})
-                if not motion:
-                    continue
-                meeting_info = motion.get("meetings", {})
-                votes.append({
-                    "vote": row["vote"],
-                    "motion_text": motion.get("text_content", ""),
-                    "result": motion.get("result", ""),
-                    "meeting_date": meeting_info.get("meeting_date", ""),
-                    "meeting_id": meeting_info.get("id"),
-                })
-    except Exception as e:
-        logger.warning("Error fetching all votes for person %d: %s", person_id, e)
-
-    return {
-        "key_statements": key_statements,
-        "votes": votes,
-        "statement_count": len(key_statements) + len(votes),
-    }
-
-
-def _build_highlights_prompt(person_name: str, evidence: dict) -> str:
-    """Build Gemini prompt for generating councillor highlights."""
-    # Format evidence
-    statements_text = ""
-    if evidence["key_statements"]:
-        statements_text = "Key Statements:\n"
-        for i, ks in enumerate(evidence["key_statements"][:30], 1):
-            date_str = ks.get("meeting_date", "unknown date")
-            title_str = ks.get("agenda_item_title", "")
-            statements_text += f'  {i}. [{date_str}] (Re: {title_str}) "{ks["text"]}"\n'
-
-    votes_text = ""
-    if evidence["votes"]:
-        votes_text = "\nVoting Record:\n"
-        for i, v in enumerate(evidence["votes"][:20], 1):
-            date_str = v.get("meeting_date", "unknown date")
-            motion_preview = (v.get("motion_text", "") or "")[:150]
-            votes_text += (
-                f'  {i}. [{date_str}] Voted {v["vote"]} on: "{motion_preview}..." '
-                f'(Result: {v.get("result", "unknown")})\n'
-            )
-
-    return f"""You are analyzing a municipal councillor's overall record on View Royal Town Council.
-
-Councillor: {person_name}
-Total evidence items: {evidence["statement_count"]}
-
-Evidence:
-{statements_text}{votes_text}
-
-Respond with a JSON object (no markdown fencing):
-{{
-  "overview": "2-3 sentences describing this councillor's overall role, priorities, and approach on council. Write in third person. Be specific about their actual focus areas based on the evidence.",
-  "highlights": [
-    {{
-      "title": "Short descriptive title of a specific policy position (e.g. 'Advocates park project deferrals over cancellations')",
-      "summary": "1-2 sentences explaining this position with specific evidence.",
-      "position": "for" | "against" | "nuanced",
-      "evidence": [{{"text": "exact quote or vote description", "meeting_date": "YYYY-MM-DD"}}]
-    }}
-  ]
-}}
-
-Rules:
-- Generate 3-5 highlights that represent their most distinctive/notable positions
-- Each highlight should be a SPECIFIC policy position, not a generic topic (e.g. "Champions volunteer organizations in environmental stewardship" NOT "Cares about the environment")
-- Titles should be action-oriented and concrete
-- Position "for" = advocates/supports, "against" = opposes/resists, "nuanced" = conditional/qualified support
-- Each highlight must have 1-2 evidence items with exact quotes or vote descriptions and dates
-- The overview should mention their most prominent themes
-- Never editorialize or express your own opinion
-- Ground all claims in specific evidence from the record
-"""
-
 
 def _upsert_highlights(supabase, person_id: int, result: dict, evidence: dict) -> bool:
     """Upsert councillor highlights into the database."""
@@ -713,84 +606,25 @@ def _upsert_highlights(supabase, person_id: int, result: dict, evidence: dict) -
         return False
 
 
-def generate_councillor_highlights(supabase, person_id: int | None = None, gemini_model: str | None = None):
+def generate_councillor_highlights(
+    supabase, person_id: int | None = None, gemini_model: str | None = None,
+    force: bool = False,
+):
     """Generate AI overview + notable policy positions for councillors.
 
-    For each councillor:
-    1. Gather ALL evidence across all topics
-    2. Single Gemini call for overview + 3-5 specific highlights
-    3. Enrich evidence with meeting_id
-    4. Upsert into councillor_highlights
+    Delegates to the embedding-powered profile agent which uses vector search
+    to discover themes and gathers temporally diverse evidence.
 
     Args:
         supabase: Supabase client instance
         person_id: Optional - generate for only this person ID
         gemini_model: Optional override for the Gemini model name
+        force: If True, regenerate even if profile is recent (<30 days old)
     """
     global GEMINI_MODEL
     if gemini_model:
         GEMINI_MODEL = gemini_model
 
-    if person_id:
-        result = supabase.table("people").select("id, name").eq("id", person_id).execute()
-    else:
-        result = supabase.table("people").select("id, name").eq("is_councillor", True).execute()
+    from pipeline.profiling.profile_agent import generate_all_profiles
 
-    councillors = result.data or []
-    if not councillors:
-        print("[Highlights] No councillors found.")
-        return
-
-    print(f"[Highlights] Generating highlights for {len(councillors)} councillor(s)...")
-
-    total_generated = 0
-    total_skipped = 0
-    total_errors = 0
-
-    for councillor in councillors:
-        c_id = councillor["id"]
-        c_name = councillor["name"]
-
-        evidence = _gather_all_evidence(supabase, c_id)
-        if evidence["statement_count"] < 3:
-            print(f"[Highlights] Skipping {c_name} (only {evidence['statement_count']} evidence items)")
-            total_skipped += 1
-            continue
-
-        print(f"[Highlights] Processing {c_name} ({evidence['statement_count']} evidence items)...")
-
-        prompt = _build_highlights_prompt(c_name, evidence)
-        response_text = _call_gemini(prompt, label=f"highlights-{c_name}")
-
-        if not response_text:
-            print(f"[Highlights]   Error: No response from Gemini for {c_name}")
-            total_errors += 1
-            time.sleep(RATE_LIMIT_DELAY)
-            continue
-
-        parsed = _parse_json_response(response_text, required_fields={"overview", "highlights"})
-        if not parsed:
-            print(f"[Highlights]   Retrying {c_name} (malformed JSON)...")
-            time.sleep(RATE_LIMIT_DELAY)
-            response_text = _call_gemini(prompt, label=f"highlights-retry-{c_name}")
-            if response_text:
-                parsed = _parse_json_response(response_text, required_fields={"overview", "highlights"})
-
-        if not parsed:
-            print(f"[Highlights]   Error: Could not parse response for {c_name}")
-            total_errors += 1
-            time.sleep(RATE_LIMIT_DELAY)
-            continue
-
-        success = _upsert_highlights(supabase, c_id, parsed, evidence)
-        if success:
-            n = len(parsed.get("highlights", []))
-            print(f"[Highlights]   -> {n} highlights generated")
-            total_generated += 1
-        else:
-            total_errors += 1
-
-        time.sleep(RATE_LIMIT_DELAY)
-
-    print(f"\n[Highlights] Generated highlights for {total_generated} councillor(s)")
-    print(f"[Highlights] Skipped {total_skipped}, {total_errors} errors")
+    generate_all_profiles(supabase, person_id=person_id, force=force)
