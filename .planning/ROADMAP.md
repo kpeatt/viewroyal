@@ -108,3 +108,17 @@ Plans:
 | 7.1 Upgrade Document Extraction | v1.1 | 2/3 | Paused | - |
 | 8. Unified Search & Hybrid RAG | v1.1 | 5/5 | Complete | 2026-02-18 |
 | 9. AI Profiling & Comparison | v1.1 | Complete    | 2026-02-18 | - |
+
+### Phase 10: Add better test suite
+
+**Goal:** Comprehensive automated test suite covering the full Python ETL pipeline (all 5 phases) with light coverage of the React Router 7 web app's server layer, plus pre-deploy hooks to gate deploys on test passes
+**Depends on:** Phase 9
+**Requirements**: (none -- testing phase, no feature requirements)
+**Plans:** 5 plans
+
+Plans:
+- [ ] 10-01-PLAN.md -- Pipeline test infrastructure (conftest.py, fixtures, coverage config, fix skipped test)
+- [ ] 10-02-PLAN.md -- Web app Vitest setup + server-layer tests (intent, supabase.server, meetings)
+- [ ] 10-03-PLAN.md -- Pipeline core + ingestion tests (ingester, ai_refiner, document_extractor, embed, audit)
+- [ ] 10-04-PLAN.md -- Pipeline scraper, profiling, video, orchestrator tests
+- [ ] 10-05-PLAN.md -- Integration test, pre-deploy hooks, coverage verification
