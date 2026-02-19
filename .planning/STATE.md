@@ -110,7 +110,7 @@ v1.1 decisions:
 
 ### Pending Todos
 
-None.
+1. **Connect R2 images to document viewer inline** (ui) — Render R2-hosted document images within document sections in the web viewer
 
 ### Blockers/Concerns
 
