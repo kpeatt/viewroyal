@@ -9,17 +9,17 @@ Requirements for v1.1 Deep Intelligence milestone. Each maps to roadmap phases.
 
 ### Document Intelligence
 
-- [ ] **DOC-01**: Pipeline chunks PDF documents into sections using heading-based parsing with fixed-size fallback
-- [ ] **DOC-02**: Document sections stored in `document_sections` table with per-section halfvec(384) embeddings
-- [ ] **DOC-03**: Document sections have tsvector full-text search indexes
-- [ ] **DOC-04**: Pipeline links document sections to corresponding agenda items via title matching
-- [ ] **DOC-05**: Existing documents backfilled into sections with embeddings
+- [x] **DOC-01**: Pipeline chunks PDF documents into sections using heading-based parsing with fixed-size fallback
+- [x] **DOC-02**: Document sections stored in `document_sections` table with per-section halfvec(384) embeddings
+- [x] **DOC-03**: Document sections have tsvector full-text search indexes
+- [x] **DOC-04**: Pipeline links document sections to corresponding agenda items via title matching
+- [x] **DOC-05**: Existing documents backfilled into sections with embeddings
 
 ### Search & Intelligence
 
 - [x] **SRCH-01**: Unified search page replaces separate Search and Ask pages with a single input
 - [x] **SRCH-02**: System detects query intent -- keyword queries show results list, questions trigger AI answer with citations
-- [ ] **SRCH-03**: Hybrid search RPC combines vector similarity and full-text search using Reciprocal Rank Fusion
+- [x] **SRCH-03**: Hybrid search RPC combines vector similarity and full-text search using Reciprocal Rank Fusion
 - [x] **SRCH-04**: Search covers document sections, key statements, transcript segments, and motions
 - [x] **SRCH-05**: User can ask follow-up questions that reference previous answers in the same session
 - [x] **SRCH-06**: Conversation history stored per session, limited to last 5 turns
@@ -79,14 +79,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOC-01 | Phase 7 | Pending |
-| DOC-02 | Phase 7 | Pending |
-| DOC-03 | Phase 7 | Pending |
-| DOC-04 | Phase 7 | Pending |
-| DOC-05 | Phase 7 | Pending |
+| DOC-01 | Phase 7 | Complete |
+| DOC-02 | Phase 7 | Complete |
+| DOC-03 | Phase 7 | Complete |
+| DOC-04 | Phase 7 | Complete |
+| DOC-05 | Phase 7 | Complete |
 | SRCH-01 | Phase 8 | Complete |
 | SRCH-02 | Phase 8 | Complete |
-| SRCH-03 | Phase 8 | Pending |
+| SRCH-03 | Phase 8 | Complete |
 | SRCH-04 | Phase 8 | Complete |
 | SRCH-05 | Phase 8 | Complete |
 | SRCH-06 | Phase 8 | Complete |
@@ -102,4 +102,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-16*
-*Last updated: 2026-02-16 after roadmap revision (dropped Phase 9, validated PROF-01/PROF-03)*
+*Last updated: 2026-02-18 after v1.1 milestone audit — all 15 requirements confirmed complete*
