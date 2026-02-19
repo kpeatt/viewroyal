@@ -26,12 +26,15 @@ export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.extractedDoc)
     return [{ title: "Document | ViewRoyal.ai" }];
   const ed = data.extractedDoc as ExtractedDocument;
+  const description = ed.summary || `Document: ${ed.title}`;
   return [
     { title: `${ed.title} | ViewRoyal.ai` },
-    {
-      name: "description",
-      content: ed.summary || `Document: ${ed.title}`,
-    },
+    { name: "description", content: description },
+    { property: "og:title", content: ed.title },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "article" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
   ];
 };
 

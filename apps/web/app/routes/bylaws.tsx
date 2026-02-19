@@ -16,6 +16,18 @@ import { Input } from "../components/ui/input";
 import { useState, useMemo } from "react";
 import { cn } from "../lib/utils";
 
+export const meta: Route.MetaFunction = () => {
+  return [
+    { title: "Bylaws | ViewRoyal.ai" },
+    { name: "description", content: "Browse View Royal municipal bylaws and policies" },
+    { property: "og:title", content: "Bylaws | ViewRoyal.ai" },
+    { property: "og:description", content: "Browse View Royal municipal bylaws and policies" },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
 export async function loader() {
   try {
     const supabase = getSupabaseAdminClient();

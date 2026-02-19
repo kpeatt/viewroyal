@@ -23,6 +23,18 @@ import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { MattersMap } from "../components/matters-map";
 import type { Matter } from "../lib/types";
 
+export const meta: Route.MetaFunction = () => {
+  return [
+    { title: "Council Matters | ViewRoyal.ai" },
+    { name: "description", content: "Active and historical council matters for View Royal" },
+    { property: "og:title", content: "Council Matters | ViewRoyal.ai" },
+    { property: "og:description", content: "Active and historical council matters for View Royal" },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
 export async function loader() {
   try {
     const supabase = getSupabaseAdminClient();

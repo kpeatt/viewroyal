@@ -16,6 +16,18 @@ import { useMemo, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 
+export const meta: Route.MetaFunction = () => {
+  return [
+    { title: "Voting Alignment | ViewRoyal.ai" },
+    { name: "description", content: "See how View Royal council members vote together — alignment matrix and trends" },
+    { property: "og:title", content: "Voting Alignment | ViewRoyal.ai" },
+    { property: "og:description", content: "See how View Royal council members vote together — alignment matrix and trends" },
+    { property: "og:type", content: "website" },
+    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ];
+};
+
 export async function loader() {
   try {
     const supabase = getSupabaseAdminClient();
