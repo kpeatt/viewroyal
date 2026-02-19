@@ -497,7 +497,7 @@ def _refine_gemini(prompt):
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-flash-latest",
+                model="gemini-3-flash-preview",
                 contents=prompt,
                 config={
                     "system_instruction": SYSTEM_INSTRUCTION,  # Use System Instruction for static rules
@@ -921,7 +921,7 @@ Find missing items. Return JSON matching the `BackfillResponse` schema.
 
     try:
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemini-3-flash-preview",
             contents=prompt,
             config={
                 "system_instruction": BACKFILL_INSTRUCTION,
@@ -982,7 +982,7 @@ Summarize the debate and extract key quotes.
 
     try:
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemini-3-flash-preview",
             contents=prompt,
             config={
                 "system_instruction": ENRICHMENT_INSTRUCTION,

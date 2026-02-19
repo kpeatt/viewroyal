@@ -33,7 +33,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Use Flash for large context window and speed
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "gemini-3-flash-preview"
 
 class Argument(BaseModel):
     side: str = Field(description="'Pro' or 'Con'")
