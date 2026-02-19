@@ -124,11 +124,12 @@ v1.1 decisions:
 | 1 | Change hero background to faded map view of View Royal with Ken Burns effect | 2026-02-18 | fb1d7909 | [1-change-the-hero-background-to-be-a-faded](./quick/1-change-the-hero-background-to-be-a-faded/) |
 | 2 | Add beta banner to homepage header | 2026-02-18 | 77b17c18 | [2-add-beta-banner-to-homepage-header](./quick/2-add-beta-banner-to-homepage-header/) |
 | 3 | Fix about page video hours showing 0 | 2026-02-18 | f8e1097d | [3-fix-about-page-video-hours-showing-0](./quick/3-fix-about-page-video-hours-showing-0/) |
+| 4 | Dynamic OG meta tags per page | 2026-02-19 | 64256f7f | [4-dynamic-og-meta-tags-per-page](./quick/4-dynamic-og-meta-tags-per-page/) |
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Completed 11-01: Gemini SDK migration + model upgrade. Replaced deprecated @google/generative-ai with @google/genai in 3 web app files. Updated all 7 pipeline model references to gemini-3-flash-preview. Fixed SRCH-04 heading mismatch. Web app builds, 357 pipeline tests pass.
+Completed quick-4: Dynamic OG meta tags. Added workers-og for dynamic OG image generation, meta exports on 20+ routes with contextual titles/descriptions, shared ogImageUrl helper. All routes use dynamic /api/og-image endpoint instead of static og-image.png.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
