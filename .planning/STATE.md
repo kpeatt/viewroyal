@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-16)
 ## Current Position
 
 Phase: 10 (Add Better Test Suite)
-Plan: 4 of 5
-Status: In Progress
-Last activity: 2026-02-19 - Completed 10-04 outer pipeline tests (scrapers, video, profiling, orchestrator)
+Plan: 5 of 5
+Status: Complete
+Last activity: 2026-02-19 - Completed 10-05 integration tests, pre-deploy gate, deploy gating
 
-Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 4/5
+Progress: [████████████████████] 100% (25/25 plans across milestones 1.0-1.1) + Phase 10: 5/5 COMPLETE
 
 ## Performance Metrics
 
@@ -37,10 +37,11 @@ Progress: [████████████████████] 100% (2
 | 07.1-upgrade-document-extraction | 2 | 8min | 4min |
 | 08-unified-search-hybrid-rag | 4 | 12min | 3min |
 | 09-ai-profiling-comparison | 4 | 25min | 6min |
-| 10-add-better-test-suite | 4 | 19min | 5min |
+| 10-add-better-test-suite | 5 | 26min | 5min |
 | Phase 10 P01 | 5min | 2 tasks | 12 files |
 | Phase 10 P03 | 7min | 2 tasks | 9 files |
 | Phase 10 P04 | 6min | 2 tasks | 9 files |
+| Phase 10 P05 | 7min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,7 @@ v1.1 decisions:
 - [Phase 10]: Meeting 693 fixture data created as representative samples (no live DB access); double-brace bug fixed in _merge_refinements
 - [Phase 10]: VimeoClient tests use __new__ + manual attrs to avoid __init__ config side effects; per-table Supabase mock for _gather_evidence multi-table queries
 - [Phase 10]: MeetingIngester instantiated with dummy URLs for pure function testing; lazy-imported functions patched at source module path
+- [Phase 10]: Integration tests use per-table Supabase mock dict (pre-created) for realistic multi-table flow testing; gitignore scripts/* with negation for tracked shell scripts
 
 ### Roadmap Evolution
 
@@ -120,7 +122,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Completed 10-03: Core utilities and ingestion module tests. 227 new tests covering alignment, matter matching, paths, ingester pure functions (to_seconds, extract_identifier, normalize_address_list), AI refiner (Gemini mock, retry, agenda-only), document extractor, embed (OpenAI mock), and audit. Total suite: 351 passing in 6.5s.
+Completed 10-05: Integration tests and deploy gating. 6 integration tests for MeetingIngester.process_meeting() (happy path, no docs, Gemini failure, missing transcript, dry run, already ingested). Pre-deploy gate script, test-all wrapper, deploy gating via predeploy hook. Total suite: 427 tests (357 pipeline + 70 web), all passing.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
