@@ -1,5 +1,5 @@
 import type { Route } from "./+types/api.intel";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { isAuthenticated } from "../lib/auth.server";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 
@@ -79,14 +79,8 @@ export async function action({ params, request }: Route.ActionArgs) {
       .join("\n");
 
     // 5. Call Gemini
-    console.log(`[Intelligence API] Calling Gemini 2.0 Flash...`);
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash",
-        generationConfig: {
-            responseMimeType: "application/json",
-        }
-    });
+    console.log(`[Intelligence API] Calling Gemini 3 Flash...`);
+    const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
 You are a City Council Intelligence Analyst.
@@ -117,9 +111,12 @@ Example structure:
 }
 `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const intelData = JSON.parse(response.text());
+    const result = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { responseMimeType: "application/json" },
+    });
+    const intelData = JSON.parse(result.text ?? "{}");
     console.log(`[Intelligence API] Gemini response received.`);
 
     // 6. Update Database

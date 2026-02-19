@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { generateQueryEmbedding } from "../lib/embeddings.server";
 
@@ -18,12 +18,12 @@ function getSupabase() {
   return _supabase;
 }
 
-let genAI: GoogleGenerativeAI | null = null;
+let genAI: GoogleGenAI | null = null;
 
-function getGenAI(): GoogleGenerativeAI | null {
+function getGenAI(): GoogleGenAI | null {
   if (!GEMINI_API_KEY) return null;
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   }
   return genAI;
 }
@@ -1108,7 +1108,7 @@ async function search_document_sections({
         return {
           id: d.id,
           document_id: d.document_id,
-          heading: d.heading,
+          heading: d.section_title,
           content: d.content,
           meeting_id: doc?.meeting_id || 0,
           document_title: doc?.title || "Unknown",
@@ -1177,10 +1177,6 @@ export async function* runQuestionAgent(
   const client = getGenAI();
   if (!client) throw new Error("Gemini API not configured");
 
-  const model = client.getGenerativeModel({
-    model: "gemini-flash-latest",
-  });
-
   const history: string[] = [];
   const allSources: NormalizedSource[] = [];
 
@@ -1198,11 +1194,14 @@ ${history.join("\n\n") || "(none)"}
 
 Respond with a single JSON object. No markdown fences.`;
 
-    const result = await model.generateContent([
-      getOrchestratorSystemPrompt(municipalityName),
-      userPrompt,
-    ]);
-    const responseText = result.response.text().trim();
+    const result = await client.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        getOrchestratorSystemPrompt(municipalityName),
+        userPrompt,
+      ],
+    });
+    const responseText = (result.text ?? "").trim();
 
     let agentResponse;
     try {
@@ -1330,12 +1329,15 @@ IMPORTANT: You have exactly ${uniqueSources.length} sources numbered [1] through
 
 Synthesize a final answer based *only* on the evidence above. Use [1], [2], etc. to cite sources inline.`;
 
-  const stream = await model.generateContentStream([
-    getFinalSystemPrompt(municipalityName),
-    finalUserPrompt,
-  ]);
-  for await (const chunk of stream.stream) {
-    yield { type: "final_answer_chunk", chunk: chunk.text() };
+  const stream = await client.models.generateContentStream({
+    model: "gemini-3-flash-preview",
+    contents: [
+      getFinalSystemPrompt(municipalityName),
+      finalUserPrompt,
+    ],
+  });
+  for await (const chunk of stream) {
+    yield { type: "final_answer_chunk", chunk: chunk.text ?? "" };
   }
 
   yield { type: "done" };
