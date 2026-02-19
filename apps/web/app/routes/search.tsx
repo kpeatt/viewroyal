@@ -595,6 +595,10 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
         {/* Results state */}
         {hasQuery && (
           <>
+            <h1 className="text-xl font-bold text-zinc-900 mt-4 mb-4 leading-snug">
+              {activeQuery}
+            </h1>
+
             {/* Tabs */}
             <SearchTabs
               activeTab={activeTab}
