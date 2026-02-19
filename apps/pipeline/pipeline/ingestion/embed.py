@@ -378,6 +378,10 @@ def embed_table(table: str, force: bool = False, min_words: int = None):
             skipped += 1
             continue
 
+        # Truncate to stay within model's token limit
+        if len(text) > MAX_EMBED_CHARS:
+            text = text[:MAX_EMBED_CHARS]
+
         batch_ids.append(row_id)
         batch_texts.append(text)
 
