@@ -89,6 +89,7 @@ v1.1 decisions:
 
 - Phase 07.1 inserted after Phase 07: Upgrade document extraction with Docling and Gemini (URGENT)
 - Phase 07.1 paused at Plan 03 (2/3 done) — backfill needs Gemini Batch API, advancing to Phase 8
+- Phase 10 added: Add better test suite
 
 ### Pending Todos
 
