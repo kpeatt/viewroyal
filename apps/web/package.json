@@ -43,7 +43,8 @@
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "workers-og": "^0.0.27"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.24.0",
