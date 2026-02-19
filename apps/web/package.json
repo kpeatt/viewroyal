@@ -8,6 +8,7 @@
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "preview": "pnpm run build && vite preview",
+    "predeploy": "vitest run",
     "deploy": "pnpm run build && wrangler deploy",
     "deploy:preview": "pnpm run build && wrangler versions upload",
     "test": "vitest",
