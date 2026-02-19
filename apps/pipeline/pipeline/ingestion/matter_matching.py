@@ -334,6 +334,14 @@ class MatterMatcher:
             if match:
                 return match
 
+        # --- Stage 3: Title similarity matching ---
+        # Fallback when identifier and address matching both fail.
+        # Uses high threshold to avoid false positives.
+        if title:
+            match = self._match_by_title_similarity(title)
+            if match:
+                return match
+
         # No match found
         return None, "no_match", 0.0
 
@@ -471,6 +479,44 @@ class MatterMatcher:
                 best_match["id"],
                 f"address_category_title:{best_sim:.2f}",
                 0.85,
+            )
+
+        return None
+
+    def _match_by_title_similarity(
+        self,
+        title: str,
+    ) -> Optional[tuple[int, str, float]]:
+        """Match by title similarity alone (high threshold to avoid false positives).
+
+        Only matches when titles are very similar (>= 0.75 SequenceMatcher ratio)
+        and there's no conflicting number mismatch.
+        """
+        if not title or len(title) < 10:
+            return None
+
+        best_sim = 0.0
+        best_match = None
+        title_lower = title.lower()
+
+        for m in self.matters:
+            m_title = (m.get("title") or "").lower()
+            if not m_title or len(m_title) < 10:
+                continue
+
+            sim = difflib.SequenceMatcher(None, title_lower, m_title).ratio()
+            if sim > best_sim:
+                # Safety: reject if numbers conflict (e.g. "Bylaw 1160" vs "Bylaw 1161")
+                if check_number_mismatch(title, m.get("title") or ""):
+                    continue
+                best_sim = sim
+                best_match = m
+
+        if best_match and best_sim >= 0.75:
+            return (
+                best_match["id"],
+                f"title_similarity:{best_sim:.2f}",
+                best_sim,
             )
 
         return None

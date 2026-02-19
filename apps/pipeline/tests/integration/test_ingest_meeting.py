@@ -181,9 +181,13 @@ def _setup_supabase_responses(tables):
     # documents: empty (no existing docs)
     tables["documents"].execute.return_value = MagicMock(data=[], count=0)
 
+    # matters: return a new matter record when insert is called
+    tables["matters"].execute.return_value = MagicMock(
+        data=[{"id": 9001, "title": "test matter", "identifier": None}], count=1
+    )
+
     # attendance, meeting_speaker_aliases, votes, key_statements: default empty OK
     # memberships: default empty OK
-    # matters: default empty OK
 
 
 class TestIngestMeeting:
