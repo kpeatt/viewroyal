@@ -107,13 +107,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body className="antialiased">
-        <div className="bg-amber-50 border-b border-amber-200 text-center text-xs text-amber-800 py-1.5 px-4">
-          <span className="inline-flex items-center gap-1.5">
-            <FlaskConical className="h-3 w-3" />
-            This site is in beta — data may be incomplete and features are still being added.
-          </span>
-        </div>
-        <Navbar />
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -141,6 +134,13 @@ export default function App() {
   return (
     <>
       <NavigationProgress />
+      <div className="bg-amber-50 border-b border-amber-200 text-center text-xs text-amber-800 py-1.5 px-4">
+        <span className="inline-flex items-center gap-1.5">
+          <FlaskConical className="h-3 w-3" />
+          This site is in beta — data may be incomplete and features are still being added.
+        </span>
+      </div>
+      <Navbar />
       <Outlet />
     </>
   );

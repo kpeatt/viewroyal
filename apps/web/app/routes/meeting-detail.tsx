@@ -36,6 +36,7 @@ import { Separator } from "../components/ui/separator";
 import {
   Clock,
   ChevronLeft,
+  ChevronRight,
   ExternalLink,
   FileText,
   Sparkles,
@@ -45,10 +46,6 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { cn, formatDate } from "../lib/utils";
-import {
-  getDocumentTypeLabel,
-  getDocumentTypeColor,
-} from "../lib/document-types";
 import {
   getSpeakerColorIndex,
   SPEAKER_COLORS,
@@ -140,18 +137,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const [data, documentSections, extractedDocuments, docsRes] = await Promise.all([
+    const [data, documentSections, extractedDocuments] = await Promise.all([
       getMeetingById(supabase, id),
       getDocumentSectionsForMeeting(supabase, id),
       getExtractedDocumentsForMeeting(supabase, id),
-      supabase
-        .from("documents")
-        .select("id, title, category, source_url, page_count")
-        .eq("meeting_id", id)
-        .order("title"),
     ]);
 
-    return { ...data, documentSections, extractedDocuments, documents: docsRes.data || [] };
+    return { ...data, documentSections, extractedDocuments };
   } catch (error: any) {
     console.error("[meeting-detail loader]", error?.message || error);
     if (error.message === "Meeting Not Found") {
@@ -177,7 +169,6 @@ export default function MeetingDetail({ loaderData }: any) {
     activeCouncilMemberIds,
     documentSections,
     extractedDocuments,
-    documents: rawDocuments,
   } = loaderData;
 
   // Hydrate data from normalized people map
@@ -591,73 +582,21 @@ export default function MeetingDetail({ loaderData }: any) {
                 </div>
 
                 {/* Documents */}
-                {rawDocuments && rawDocuments.length > 0 && (
+                {extractedDocuments && extractedDocuments.length > 0 && (
                   <div className="px-6 py-4 border-t border-zinc-100">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 flex items-center gap-2">
-                      <FileText className="w-3.5 h-3.5" />
-                      Documents
-                    </h3>
-                    <div className="space-y-4">
-                      {rawDocuments.map((doc: any) => {
-                        const docExtracted = (extractedDocuments || []).filter(
-                          (ed: any) => ed.document_id === doc.id,
-                        );
-                        return (
-                          <div key={doc.id}>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-zinc-900 font-medium">
-                                {doc.title}
-                              </span>
-                              <div className="flex items-center gap-3 text-xs text-zinc-400">
-                                {doc.page_count && <span>{doc.page_count} pages</span>}
-                                {doc.source_url && (
-                                  <a
-                                    href={doc.source_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="hover:text-zinc-600"
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                            {docExtracted.length > 0 && (
-                              <ul className="mt-1.5 ml-4 space-y-1">
-                                {docExtracted.slice(0, 8).map((ed: any) => (
-                                  <li key={ed.id} className="flex items-center gap-2">
-                                    <span
-                                      className={cn(
-                                        "inline-block px-1.5 py-0.5 text-[8px] font-bold uppercase rounded border shrink-0",
-                                        getDocumentTypeColor(ed.document_type),
-                                      )}
-                                    >
-                                      {getDocumentTypeLabel(ed.document_type).slice(0, 6)}
-                                    </span>
-                                    <Link
-                                      to={`/meetings/${meeting.id}/documents/${ed.id}`}
-                                      className="text-xs text-zinc-600 hover:text-zinc-900 truncate transition-colors"
-                                    >
-                                      {ed.title}
-                                    </Link>
-                                  </li>
-                                ))}
-                                {docExtracted.length > 8 && (
-                                  <li className="text-xs text-zinc-400 ml-1">
-                                    <Link
-                                      to={`/meetings/${meeting.id}/documents`}
-                                      className="hover:text-zinc-600 transition-colors"
-                                    >
-                                      +{docExtracted.length - 8} more
-                                    </Link>
-                                  </li>
-                                )}
-                              </ul>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <Link
+                      to={`/meetings/${meeting.id}/documents`}
+                      className="flex items-center justify-between group"
+                    >
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2 group-hover:text-zinc-600 transition-colors">
+                        <FileText className="w-3.5 h-3.5" />
+                        Documents
+                        <span className="text-zinc-300 font-normal normal-case">
+                          ({extractedDocuments.length})
+                        </span>
+                      </h3>
+                      <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-500 transition-colors" />
+                    </Link>
                   </div>
                 )}
 
