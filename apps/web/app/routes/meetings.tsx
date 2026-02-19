@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
 import type { Meeting } from "../lib/types";
 import { cn } from "../lib/utils";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data, matches }) => {
   const municipality = getMunicipalityFromMatches(matches);
@@ -12,12 +13,18 @@ export const meta: Route.MetaFunction = ({ data, matches }) => {
   const title = year
     ? `${year} Council Meetings | ViewRoyal.ai`
     : "Council Meetings | ViewRoyal.ai";
+  const ogTitle = year ? `${year} Council Meetings` : "Council Meetings";
+  const description = `Browse all ${shortName} council meetings, agendas, transcripts, and voting records.`;
   return [
     { title },
-    { name: "description", content: `Browse all ${shortName} council meetings, agendas, transcripts, and voting records.` },
+    { name: "description", content: description },
     { property: "og:title", content: title },
-    { property: "og:description", content: `Browse all ${shortName} council meetings, agendas, transcripts, and voting records.` },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "website" },
+    { property: "og:url", content: ogUrl("/meetings") },
+    { property: "og:image", content: ogImageUrl(ogTitle, { type: "meeting" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

@@ -1,16 +1,22 @@
 import { useMemo, useState } from "react";
 import type { Route } from "./+types/people";
 import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ matches }) => {
   const municipality = getMunicipalityFromMatches(matches);
   const shortName = municipality?.short_name || "View Royal";
+  const description = `${shortName} council members, attendance records, and voting history.`;
   return [
     { title: "Council Members | ViewRoyal.ai" },
-    { name: "description", content: `${shortName} council members, attendance records, and voting history.` },
+    { name: "description", content: description },
     { property: "og:title", content: "Council Members | ViewRoyal.ai" },
-    { property: "og:description", content: `${shortName} council members, attendance records, and voting history.` },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:description", content: description },
+    { property: "og:type", content: "website" },
+    { property: "og:url", content: ogUrl("/people") },
+    { property: "og:image", content: ogImageUrl("Council Members", { type: "person" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

@@ -3,6 +3,7 @@ import { getMatterById } from "../services/matters";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link } from "react-router";
 import { SubscribeButton } from "../components/subscribe-button";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.matter) return [{ title: "Matter | ViewRoyal.ai" }];
@@ -16,7 +17,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: m.title },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/matters/${m.id}`) },
+    { property: "og:image", content: ogImageUrl(m.title, { subtitle: m.status, type: "matter" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

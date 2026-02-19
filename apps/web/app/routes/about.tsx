@@ -17,6 +17,7 @@ import {
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getAboutStats } from "../services/site";
 import aboutContent from "../content/about.md?raw";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -25,7 +26,10 @@ export const meta: Route.MetaFunction = () => {
     { property: "og:title", content: "About | ViewRoyal.ai" },
     { property: "og:description", content: "About ViewRoyal.ai — an AI-powered civic transparency platform for the Town of View Royal" },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/about") },
+    { property: "og:image", content: ogImageUrl("About ViewRoyal.ai") },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

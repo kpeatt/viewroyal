@@ -2,6 +2,7 @@ import type { Route } from "./+types/election-detail";
 import { getElectionById } from "../services/elections";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link } from "react-router";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.election) return [{ title: "Election | ViewRoyal.ai" }];
@@ -14,7 +15,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: e.name },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/elections/${e.id}`) },
+    { property: "og:image", content: ogImageUrl(e.name, { subtitle: e.election_date, type: "election" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

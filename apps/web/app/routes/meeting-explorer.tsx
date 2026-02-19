@@ -37,6 +37,7 @@ import {
 } from "../components/meeting-player";
 import { getSpeakerColorIndex, SPEAKER_TEXT_COLORS } from "../lib/colors";
 import type { Person, Membership, Attendance } from "../lib/types";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   const meeting = (data as any)?.meeting;
@@ -49,7 +50,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: `Explore: ${meeting.title}` },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/meetings/${meeting.id}/explorer`) },
+    { property: "og:image", content: ogImageUrl(meeting.title, { subtitle: meeting.meeting_date, type: "meeting" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

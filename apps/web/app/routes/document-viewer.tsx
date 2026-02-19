@@ -21,6 +21,7 @@ import {
   getDocumentTypeLabel,
   getDocumentTypeColor,
 } from "../lib/document-types";
+import { ogImageUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.extractedDoc)
@@ -33,7 +34,9 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: ed.title },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:image", content: ogImageUrl(ed.title, { type: "default" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

@@ -13,6 +13,7 @@ import { createSupabaseServerClient } from "./lib/supabase.server";
 import { getMunicipality } from "./services/municipality";
 import { getUserProfile } from "./services/subscriptions";
 import { getMunicipalityFromMatches } from "./lib/municipality-helpers";
+import { ogImageUrl } from "./lib/og";
 
 import { FlaskConical } from "lucide-react";
 
@@ -37,11 +38,11 @@ export const meta: Route.MetaFunction = ({ matches }) => {
     { property: "og:type", content: "website" },
     { property: "og:url", content: "https://viewroyal.ai" },
     { property: "og:site_name", content: "ViewRoyal.ai" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:image", content: ogImageUrl("Council Meeting Intelligence") },
     { property: "og:image:width", content: "1200" },
     { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:image", content: "https://viewroyal.ai/og-image.png" },
+    { name: "twitter:image", content: ogImageUrl("Council Meeting Intelligence") },
   ];
 };
 

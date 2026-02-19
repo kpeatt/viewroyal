@@ -15,6 +15,7 @@ import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { useState, useMemo } from "react";
 import { cn } from "../lib/utils";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = () => {
   return [
@@ -23,7 +24,10 @@ export const meta: Route.MetaFunction = () => {
     { property: "og:title", content: "Bylaws | ViewRoyal.ai" },
     { property: "og:description", content: "Browse View Royal municipal bylaws and policies" },
     { property: "og:type", content: "website" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl("/bylaws") },
+    { property: "og:image", content: ogImageUrl("Bylaws & Policies", { type: "bylaw" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };

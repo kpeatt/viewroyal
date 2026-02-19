@@ -14,6 +14,7 @@ import type {
   Person,
 } from "../lib/types";
 import { Link, useRevalidator, useRouteLoaderData } from "react-router";
+import { ogImageUrl, ogUrl } from "../lib/og";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.meeting) return [{ title: "Meeting | ViewRoyal.ai" }];
@@ -27,7 +28,10 @@ export const meta: Route.MetaFunction = ({ data }) => {
     { property: "og:title", content: m.title },
     { property: "og:description", content: description },
     { property: "og:type", content: "article" },
-    { property: "og:image", content: "https://viewroyal.ai/og-image.png" },
+    { property: "og:url", content: ogUrl(`/meetings/${m.id}`) },
+    { property: "og:image", content: ogImageUrl(m.title, { subtitle: m.meeting_date, type: "meeting" }) },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
     { name: "twitter:card", content: "summary_large_image" },
   ];
 };
