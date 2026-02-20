@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 Phase: 13 of 14 (Notifications)
 Plan: 1 of 1 in current phase
 Status: Phase Complete
-Last activity: 2026-02-20 - Completed 13-01 (Moshi push notifications for update-mode)
+Last activity: 2026-02-20 - Completed quick task 6: Update main README as monorepo readme and move pipeline README
 
 Progress: [████████████████████████░░░░░░] 34/34 plans complete (v1.0+v1.1+12+13), v1.2 in progress
 
