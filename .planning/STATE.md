@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Planning next milestone
+**Current focus:** Phase 12 - Update Detection (v1.2 Pipeline Automation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-19 — Milestone v1.2 started
+Phase: 12 of 14 (Update Detection)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-19 -- Roadmap created for v1.2 Pipeline Automation
+
+Progress: [██████████████████████░░░░░░░░] 31/31 milestone-plans complete (v1.0+v1.1), v1.2 starting
 
 ## Performance Metrics
 
@@ -66,7 +68,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 ## Session Continuity
 
 Last session: 2026-02-19
-Completed v1.1 Deep Intelligence milestone. All 15 requirements satisfied. 6 phases (5 complete + 1 paused), 20/21 plans shipped.
+Completed v1.2 roadmap creation. 3 phases (12-14), 8 requirements mapped.
+Resume: Ready for `/gsd:plan-phase 12`
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
