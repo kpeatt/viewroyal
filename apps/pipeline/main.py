@@ -1,7 +1,10 @@
 import argparse
+from datetime import datetime
 from pipeline import config
 from pipeline.paths import ARCHIVE_ROOT
 from pipeline.orchestrator import Archiver, load_municipality
+from pipeline.lockfile import PipelineLock
+from pipeline.logging_config import setup_logging
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Municipal CivicWeb & Vimeo Archiver")
@@ -162,97 +165,106 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Load municipality config if specified
-    municipality = None
-    if args.municipality:
-        municipality = load_municipality(args.municipality)
-        print(f"[*] Municipality: {municipality.name} ({municipality.slug})")
+    # Set up rotating log file + console logging before any work
+    setup_logging()
 
-    # Use centralized ARCHIVE_ROOT as default
-    output_dir = args.input_dir if args.input_dir else ARCHIVE_ROOT
+    # Acquire exclusive lock -- exits cleanly if another run is in progress
+    with PipelineLock():
+        print(f"[*] Pipeline started at {datetime.now().isoformat()}")
 
-    app = Archiver(municipality=municipality)
+        # Load municipality config if specified
+        municipality = None
+        if args.municipality:
+            municipality = load_municipality(args.municipality)
+            print(f"[*] Municipality: {municipality.name} ({municipality.slug})")
 
-    if args.check_updates:
-        print("\n--- Update Check (Dry Run) ---")
-        app.run_update_check()
-    elif args.update_mode:
-        print("\n--- Update Mode ---")
-        app.run_update_mode(
-            download_audio=True,  # Always download audio in update mode
-            skip_diarization=args.skip_diarization,
-            skip_embed=args.skip_embed,
-            test=args.test,
-        )
-    elif args.generate_stances:
-        print("\n--- Generating Councillor Stance Summaries ---")
-        person_id = int(args.target) if args.target else None
-        app.generate_stances(person_id=person_id)
-    elif args.generate_highlights:
-        print("\n--- Generating Councillor Highlights ---")
-        person_id = int(args.target) if args.target else None
-        app.generate_highlights(person_id=person_id, force=args.force)
-    elif args.target:
-        # Targeted mode: diarize → ingest → embed for a single meeting
-        folder = app._resolve_target(args.target)
-        diarized = set()
-        if app.ai_enabled and not args.skip_diarization:
-            print(f"\n--- Diarizing target: {folder} ---")
-            diarized = app._process_audio_files(
-                limit=args.limit, output_dir=folder, rediarize=args.rediarize
+        # Use centralized ARCHIVE_ROOT as default
+        output_dir = args.input_dir if args.input_dir else ARCHIVE_ROOT
+
+        app = Archiver(municipality=municipality)
+
+        if args.check_updates:
+            print("\n--- Update Check (Dry Run) ---")
+            app.run_update_check()
+        elif args.update_mode:
+            print("\n--- Update Mode ---")
+            app.run_update_mode(
+                download_audio=True,  # Always download audio in update mode
+                skip_diarization=args.skip_diarization,
+                skip_embed=args.skip_embed,
+                test=args.test,
             )
-        if not args.skip_ingest:
-            print(f"\n--- Ingesting target: {folder} ---")
-            app._ingest_meetings(diarized_folders=diarized, target_folder=folder, force_update=True)
-        if not args.skip_embed:
-            print("\n--- Embedding new content ---")
-            app._embed_new_content()
-    elif args.ingest_only:
-        print("\n--- Ingestion Only (with change detection) ---")
-        app._ingest_meetings(force_update=args.update)
-    elif args.embed_only:
-        print("\n--- Embedding Only ---")
-        app._embed_new_content()
-    elif args.extract_documents:
-        if args.batch:
-            print("\n--- Extract Documents (Gemini Batch API) ---")
-            app.backfill_extracted_documents_batch(force=args.force, limit=args.limit)
-        else:
-            print("\n--- Extract Documents (Gemini 2.5 Flash) ---")
-            app.backfill_extracted_documents(force=args.force, limit=args.limit, concurrency=args.concurrency)
-        if not args.skip_embed:
-            print("\n--- Embedding Document Sections ---")
-            app._embed_new_content()
-    elif args.backfill_sections:
-        print("\n--- Backfill Document Sections (DEPRECATED: use --extract-documents) ---")
-        app.backfill_document_sections(force=args.force)
-        if not args.skip_embed:
-            print("\n--- Embedding Document Sections ---")
-            app._embed_new_content()
-    elif args.process_only or args.rediarize:
-        if app.ai_enabled:
-            mode = "Re-diarizing" if args.rediarize else "Processing"
-            print(f"{mode} existing audio files in {output_dir}...")
-            # pylint: disable=protected-access
-            diarized = app._process_audio_files(
-                limit=args.limit, output_dir=output_dir, rediarize=args.rediarize
-            )
+        elif args.generate_stances:
+            print("\n--- Generating Councillor Stance Summaries ---")
+            person_id = int(args.target) if args.target else None
+            app.generate_stances(person_id=person_id)
+        elif args.generate_highlights:
+            print("\n--- Generating Councillor Highlights ---")
+            person_id = int(args.target) if args.target else None
+            app.generate_highlights(person_id=person_id, force=args.force)
+        elif args.target:
+            # Targeted mode: diarize → ingest → embed for a single meeting
+            folder = app._resolve_target(args.target)
+            diarized = set()
+            if app.ai_enabled and not args.skip_diarization:
+                print(f"\n--- Diarizing target: {folder} ---")
+                diarized = app._process_audio_files(
+                    limit=args.limit, output_dir=folder, rediarize=args.rediarize
+                )
             if not args.skip_ingest:
-                print("\n--- Phase 4: Database Ingestion ---")
-                app._ingest_meetings(diarized_folders=diarized)
+                print(f"\n--- Ingesting target: {folder} ---")
+                app._ingest_meetings(diarized_folders=diarized, target_folder=folder, force_update=True)
             if not args.skip_embed:
-                print("\n--- Phase 5: Embedding Generation ---")
+                print("\n--- Embedding new content ---")
                 app._embed_new_content()
+        elif args.ingest_only:
+            print("\n--- Ingestion Only (with change detection) ---")
+            app._ingest_meetings(force_update=args.update)
+        elif args.embed_only:
+            print("\n--- Embedding Only ---")
+            app._embed_new_content()
+        elif args.extract_documents:
+            if args.batch:
+                print("\n--- Extract Documents (Gemini Batch API) ---")
+                app.backfill_extracted_documents_batch(force=args.force, limit=args.limit)
+            else:
+                print("\n--- Extract Documents (Gemini 2.5 Flash) ---")
+                app.backfill_extracted_documents(force=args.force, limit=args.limit, concurrency=args.concurrency)
+            if not args.skip_embed:
+                print("\n--- Embedding Document Sections ---")
+                app._embed_new_content()
+        elif args.backfill_sections:
+            print("\n--- Backfill Document Sections (DEPRECATED: use --extract-documents) ---")
+            app.backfill_document_sections(force=args.force)
+            if not args.skip_embed:
+                print("\n--- Embedding Document Sections ---")
+                app._embed_new_content()
+        elif args.process_only or args.rediarize:
+            if app.ai_enabled:
+                mode = "Re-diarizing" if args.rediarize else "Processing"
+                print(f"{mode} existing audio files in {output_dir}...")
+                # pylint: disable=protected-access
+                diarized = app._process_audio_files(
+                    limit=args.limit, output_dir=output_dir, rediarize=args.rediarize
+                )
+                if not args.skip_ingest:
+                    print("\n--- Phase 4: Database Ingestion ---")
+                    app._ingest_meetings(diarized_folders=diarized)
+                if not args.skip_embed:
+                    print("\n--- Phase 5: Embedding Generation ---")
+                    app._embed_new_content()
+            else:
+                print("[Error] AI processing not enabled.")
         else:
-            print("[Error] AI processing not enabled.")
-    else:
-        app.run(
-            skip_docs=args.videos_only,
-            include_video=args.include_video,
-            limit=args.limit,
-            download_audio=args.download_audio,
-            skip_diarization=args.skip_diarization,
-            rediarize=args.rediarize,
-            skip_ingest=args.skip_ingest,
-            skip_embed=args.skip_embed,
-        )
+            app.run(
+                skip_docs=args.videos_only,
+                include_video=args.include_video,
+                limit=args.limit,
+                download_audio=args.download_audio,
+                skip_diarization=args.skip_diarization,
+                rediarize=args.rediarize,
+                skip_ingest=args.skip_ingest,
+                skip_embed=args.skip_embed,
+            )
+
+        print(f"[*] Pipeline finished at {datetime.now().isoformat()}")
