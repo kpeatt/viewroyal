@@ -38,7 +38,7 @@
 
 - [x] **Phase 12: Update Detection** - Pipeline detects new documents and video for existing meetings and selectively re-ingests only what changed (completed 2026-02-20)
 - [x] **Phase 13: Notifications** - Pipeline sends push notifications summarizing new content found and processed (completed 2026-02-20)
-- [ ] **Phase 14: Scheduled Automation** - Pipeline runs daily via launchd with logging and concurrency protection
+- [x] **Phase 14: Scheduled Automation** - Pipeline runs daily via launchd with logging and concurrency protection (completed 2026-02-20)
 
 ## Phase Details
 
@@ -106,4 +106,4 @@ Phases execute in numeric order: 12 -> 13 -> 14
 | 11. Gap Closure & Gemini Fix | v1.1 | 1/1 | Complete | 2026-02-19 |
 | 12. Update Detection | 2/2 | Complete    | 2026-02-20 | - |
 | 13. Notifications | 1/1 | Complete    | 2026-02-20 | - |
-| 14. Scheduled Automation | 1/2 | In Progress|  | - |
+| 14. Scheduled Automation | 2/2 | Complete   | 2026-02-20 | - |
