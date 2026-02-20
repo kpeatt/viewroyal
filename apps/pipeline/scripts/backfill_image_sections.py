@@ -49,21 +49,31 @@ def get_supabase():
 def backfill(limit: int | None = None, dry_run: bool = False):
     supabase = get_supabase()
 
-    # Find all extracted_document IDs that have images
-    logger.info("Querying extracted documents with images...")
-    query = (
-        supabase.table("document_images")
-        .select("extracted_document_id")
-        .is_("document_section_id", "null")
-    )
-    result = query.execute()
+    # Find all extracted_document IDs that have unlinked images (paginated)
+    logger.info("Querying extracted documents with unlinked images...")
+    all_rows = []
+    page_size = 1000
+    offset = 0
+    while True:
+        result = (
+            supabase.table("document_images")
+            .select("extracted_document_id")
+            .is_("document_section_id", "null")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        batch = result.data or []
+        all_rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
 
-    if not result.data:
+    if not all_rows:
         logger.info("No images without section links found. Nothing to do.")
         return
 
     # Unique extracted_document_ids
-    ed_ids = sorted(set(row["extracted_document_id"] for row in result.data))
+    ed_ids = sorted(set(row["extracted_document_id"] for row in all_rows))
     logger.info("Found %d extracted documents with unlinked images", len(ed_ids))
 
     if limit:
@@ -89,10 +99,10 @@ def backfill(limit: int | None = None, dry_run: bool = False):
         if not sections:
             continue
 
-        # Load images in order (page, then id for stable ordering)
+        # Load ALL images in order (page, then id for stable positional matching)
         img_res = (
             supabase.table("document_images")
-            .select("id, page, description")
+            .select("id, page, description, document_section_id")
             .eq("extracted_document_id", ed_id)
             .order("page", desc=False)
             .order("id", desc=False)
@@ -122,15 +132,18 @@ def backfill(limit: int | None = None, dry_run: bool = False):
 
                 img = images[img_idx]
                 img_idx += 1
-                updates.append((img["id"], section_id, desc))
+                already_linked = img.get("document_section_id") is not None
+                updates.append((img["id"], section_id, desc, already_linked))
 
-        linked_count = len(updates)
+        newly_linked = sum(1 for _, _, _, al in updates if not al)
         unmatched_count = len(images) - img_idx
-        total_linked += linked_count
+        total_linked += newly_linked
         total_unmatched += unmatched_count
 
         if not dry_run and updates:
-            for img_id, section_id, desc in updates:
+            for img_id, section_id, desc, already_linked in updates:
+                if already_linked:
+                    continue  # Skip images already linked (e.g. by SQL backfill)
                 update_data = {"document_section_id": section_id}
                 # Also backfill description if it was null
                 if desc:

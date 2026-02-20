@@ -125,32 +125,64 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
   const allSections = sections as DocumentSection[];
   const keyFacts = ed.key_facts || [];
 
-  // Group images by section ID for inline placement
+  // Minimum area to consider an image "substantial" (filters logos/artifacts)
+  const MIN_IMAGE_AREA = 80_000; // ~283x283
+  // Junk [Image:] tag patterns — strip these tags without consuming an image
+  const JUNK_TAG_RE =
+    /\b(logo|signature|letterhead|header|footer|crest|coat of arms|watermark|handwritten|stamp|seal|branding)\b/i;
+
+  // Sort all images by (page, id), split into substantial vs artifacts
+  const sortedImages = [...documentImages].sort(
+    (a, b) => a.page - b.page || a.id - b.id,
+  );
+  const substantialImages = sortedImages.filter(
+    (img) => (img.width ?? 0) * (img.height ?? 0) >= MIN_IMAGE_AREA,
+  );
+
+  // Walk sections in order, match [Image:] tags to substantial images positionally.
+  // For each section, count how many non-junk [Image:] tags it has and consume
+  // that many images from the global queue.
+  let imgCursor = 0;
   const imagesBySection = new Map<number, DocumentImage[]>();
-  const unlinkedImages: DocumentImage[] = [];
-  for (const img of documentImages) {
-    if (img.document_section_id != null) {
-      const existing = imagesBySection.get(img.document_section_id) || [];
-      existing.push(img);
-      imagesBySection.set(img.document_section_id, existing);
-    } else {
-      unlinkedImages.push(img);
+
+  for (const section of allSections) {
+    const tags = section.section_text.match(/\[Image:\s*[^\]]+\]/g) || [];
+    const sectionImgs: DocumentImage[] = [];
+    for (const tag of tags) {
+      const desc = tag.replace(/^\[Image:\s*/, "").replace(/\]$/, "");
+      if (JUNK_TAG_RE.test(desc)) continue; // skip junk tags
+      if (imgCursor < substantialImages.length) {
+        sectionImgs.push(substantialImages[imgCursor++]);
+      }
+    }
+    if (sectionImgs.length > 0) {
+      imagesBySection.set(section.id, sectionImgs);
     }
   }
 
+  // Images not consumed by inline matching go to gallery
+  const usedIds = new Set<number>();
+  for (const imgs of imagesBySection.values()) {
+    for (const img of imgs) usedIds.add(img.id);
+  }
+  const galleryImages = sortedImages.filter((img) => !usedIds.has(img.id));
+
   /**
    * Replace [Image: ...] tags in markdown with actual <img> HTML,
-   * consuming linked images in order. Unmatched tags are stripped.
+   * consuming images in order. Junk tags are stripped without consuming.
+   * Unmatched tags (more tags than images) are also stripped.
    */
-  function inlineImages(markdown: string, images: DocumentImage[]): string {
+  function inlineImages(
+    markdown: string,
+    images: DocumentImage[],
+  ): string {
     let imgIdx = 0;
-    return markdown.replace(/\[Image:\s*[^\]]+\]/g, (match) => {
+    return markdown.replace(/\[Image:\s*([^\]]+)\]/g, (_match, desc) => {
+      if (JUNK_TAG_RE.test(desc)) return ""; // strip junk tags
       if (imgIdx >= images.length) return ""; // strip unmatched tags
       const img = images[imgIdx++];
       const src = `https://images.viewroyal.ai/${img.r2_key}`;
-      const alt = img.description
-        ? img.description.replace(/"/g, "&quot;")
-        : "Document image";
+      const alt = desc.replace(/"/g, "&quot;");
       const widthAttr = img.width ? ` width="${img.width}"` : "";
       const heightAttr = img.height ? ` height="${img.height}"` : "";
       return (
@@ -159,9 +191,7 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
         `<img src="${src}" alt="${alt}"${widthAttr}${heightAttr} loading="lazy" ` +
         `class="rounded-lg border border-zinc-200 bg-zinc-50 w-full h-auto object-contain hover:shadow-md transition-shadow" />` +
         `</a>` +
-        (img.description
-          ? `<figcaption class="mt-1 text-xs text-zinc-500">${img.description}</figcaption>`
-          : "") +
+        `<figcaption class="mt-1 text-xs text-zinc-500">${desc}</figcaption>` +
         `</figure>`
       );
     });
@@ -284,10 +314,12 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
           <div>
             {allSections.map((section, idx) => {
               const sectionImages = imagesBySection.get(section.id) || [];
-              const content =
-                sectionImages.length > 0
-                  ? inlineImages(section.section_text, sectionImages)
-                  : section.section_text;
+              const hasImageTags = /\[Image:\s*[^\]]+\]/.test(
+                section.section_text,
+              );
+              const content = hasImageTags
+                ? inlineImages(section.section_text, sectionImages)
+                : section.section_text;
               return (
                 <div
                   key={section.id}
@@ -325,8 +357,8 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
           </p>
         )}
 
-        {/* Unlinked images gallery (images without section FK) */}
-        {unlinkedImages.length > 0 && (
+        {/* Gallery: images not consumed by inline matching */}
+        {galleryImages.length > 0 && (
           <div className="mt-10">
             <div className="flex items-center gap-2 mb-4">
               <Images className="w-4 h-4 text-zinc-400" />
@@ -334,11 +366,11 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
                 Document Images
               </h2>
               <span className="text-xs text-zinc-400">
-                ({unlinkedImages.length})
+                ({galleryImages.length})
               </span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {unlinkedImages.map((img) => (
+              {galleryImages.map((img) => (
                 <a
                   key={img.id}
                   href={`https://images.viewroyal.ai/${img.r2_key}`}
