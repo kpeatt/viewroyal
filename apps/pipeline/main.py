@@ -127,6 +127,21 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--check-updates",
+        action="store_true",
+        help="Check CivicWeb and Vimeo for new content without processing. "
+             "Prints a report of meetings with changes.",
+    )
+
+    parser.add_argument(
+        "--update-mode",
+        action="store_true",
+        help="Run in update mode: scrape CivicWeb, check Vimeo, detect changes, "
+             "and selectively re-process only meetings with new content. "
+             "Recommended for daily automated runs.",
+    )
+
+    parser.add_argument(
         "--generate-stances",
         action="store_true",
         help="Generate AI stance summaries for all councillors using Gemini. "
@@ -152,14 +167,24 @@ if __name__ == "__main__":
 
     app = Archiver(municipality=municipality)
 
-    if args.generate_stances:
+    if args.check_updates:
+        print("\n--- Update Check (Dry Run) ---")
+        app.run_update_check()
+    elif args.update_mode:
+        print("\n--- Update Mode ---")
+        app.run_update_mode(
+            download_audio=True,  # Always download audio in update mode
+            skip_diarization=args.skip_diarization,
+            skip_embed=args.skip_embed,
+        )
+    elif args.generate_stances:
         print("\n--- Generating Councillor Stance Summaries ---")
         person_id = int(args.target) if args.target else None
         app.generate_stances(person_id=person_id)
     elif args.generate_highlights:
         print("\n--- Generating Councillor Highlights ---")
         person_id = int(args.target) if args.target else None
-        app.generate_highlights(person_id=person_id)
+        app.generate_highlights(person_id=person_id, force=args.force)
     elif args.target:
         # Targeted mode: diarize → ingest → embed for a single meeting
         folder = app._resolve_target(args.target)

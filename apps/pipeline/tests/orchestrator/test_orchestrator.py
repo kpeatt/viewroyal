@@ -339,3 +339,199 @@ class TestGenerateHighlights:
             with patch("pipeline.profiling.stance_generator.generate_councillor_highlights") as mock_gen:
                 archiver.generate_highlights(person_id=35, force=True)
                 mock_gen.assert_called_once()
+
+
+# ── Update Mode ──────────────────────────────────────────────────────
+
+
+class TestRunUpdateCheck:
+    def test_run_update_check_returns_report(self, mock_orchestrator_deps):
+        from pipeline.orchestrator import Archiver
+        from pipeline.update_detector import MeetingChange, ChangeReport
+
+        archiver = Archiver()
+
+        mock_report = ChangeReport(
+            meetings_with_new_docs=[
+                MeetingChange(
+                    archive_path="/archive/Council/2026-01-15",
+                    meeting_date="2026-01-15",
+                    meeting_type="Council",
+                    change_type="new_documents",
+                    details=["Minutes PDF available"],
+                ),
+            ],
+            meetings_with_new_video=[
+                MeetingChange(
+                    archive_path="/archive/Council/2026-02-12",
+                    meeting_date="2026-02-12",
+                    meeting_type="Council",
+                    change_type="new_video",
+                    details=["Vimeo video available: Council Meeting"],
+                    meta={"video_data": [{"title": "Council Meeting", "uri": "/videos/123"}]},
+                ),
+            ],
+        )
+
+        with patch("pipeline.orchestrator.config") as mock_config, \
+             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls:
+            mock_config.SUPABASE_URL = "https://test.supabase.co"
+            mock_config.SUPABASE_SECRET_KEY = "secret"
+            mock_config.SUPABASE_KEY = "key"
+
+            mock_detector = MagicMock()
+            mock_detector.detect_all_changes.return_value = mock_report
+            mock_detector_cls.return_value = mock_detector
+
+            report = archiver.run_update_check()
+
+            assert report.total_changes == 2
+            assert len(report.meetings_with_new_docs) == 1
+            assert len(report.meetings_with_new_video) == 1
+            # Scraper should have been called first
+            mock_orchestrator_deps["scraper"].scrape_recursive.assert_called_once()
+            # Detector should have been created and called
+            mock_detector_cls.assert_called_once()
+            mock_detector.detect_all_changes.assert_called_once()
+
+
+class TestRunUpdateMode:
+    def test_run_update_mode_processes_only_changed_meetings(self, mock_orchestrator_deps, tmp_path):
+        from pipeline.orchestrator import Archiver
+        from pipeline.update_detector import MeetingChange, ChangeReport
+
+        archiver = Archiver()
+        archiver._ingest_meetings = MagicMock()
+        archiver._embed_new_content = MagicMock()
+        archiver._process_audio_files = MagicMock(return_value=set())
+
+        # Use tmp_path for archive paths so os.makedirs works
+        doc_path_1 = str(tmp_path / "Council" / "2026-01-15")
+        doc_path_2 = str(tmp_path / "Council" / "2026-01-29")
+        video_path = str(tmp_path / "Council" / "2026-02-12")
+        os.makedirs(doc_path_1, exist_ok=True)
+        os.makedirs(doc_path_2, exist_ok=True)
+        os.makedirs(video_path, exist_ok=True)
+
+        mock_report = ChangeReport(
+            meetings_with_new_docs=[
+                MeetingChange(
+                    archive_path=doc_path_1,
+                    meeting_date="2026-01-15",
+                    meeting_type="Council",
+                    change_type="new_documents",
+                    details=["Minutes PDF available"],
+                ),
+                MeetingChange(
+                    archive_path=doc_path_2,
+                    meeting_date="2026-01-29",
+                    meeting_type="Council",
+                    change_type="new_documents",
+                    details=["Agenda items added"],
+                ),
+            ],
+            meetings_with_new_video=[
+                MeetingChange(
+                    archive_path=video_path,
+                    meeting_date="2026-02-12",
+                    meeting_type="Council",
+                    change_type="new_video",
+                    details=["Vimeo video available: Council Meeting"],
+                    meta={"video_data": [{"title": "Council Meeting", "uri": "/videos/123"}]},
+                ),
+            ],
+        )
+
+        with patch("pipeline.orchestrator.config") as mock_config, \
+             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls:
+            mock_config.SUPABASE_URL = "https://test.supabase.co"
+            mock_config.SUPABASE_SECRET_KEY = "secret"
+            mock_config.SUPABASE_KEY = "key"
+
+            mock_detector = MagicMock()
+            mock_detector.detect_all_changes.return_value = mock_report
+            mock_detector_cls.return_value = mock_detector
+
+            archiver.run_update_mode(download_audio=True, skip_diarization=True)
+
+            # _ingest_meetings called 3 times (2 doc changes + 1 video change)
+            assert archiver._ingest_meetings.call_count == 3
+
+            # Each call should have force_update=True
+            for call in archiver._ingest_meetings.call_args_list:
+                assert call.kwargs.get("force_update") is True
+
+            # Verify the correct archive paths were passed
+            ingested_paths = [
+                call.kwargs.get("target_folder") for call in archiver._ingest_meetings.call_args_list
+            ]
+            assert doc_path_1 in ingested_paths
+            assert doc_path_2 in ingested_paths
+            assert video_path in ingested_paths
+
+            # _embed_new_content called exactly once at the end
+            archiver._embed_new_content.assert_called_once()
+
+            # Vimeo download should have been called for the video change
+            mock_orchestrator_deps["vimeo"].download_video.assert_called_once()
+
+    def test_run_update_mode_no_changes_skips_processing(self, mock_orchestrator_deps):
+        from pipeline.orchestrator import Archiver
+        from pipeline.update_detector import ChangeReport
+
+        archiver = Archiver()
+        archiver._ingest_meetings = MagicMock()
+        archiver._embed_new_content = MagicMock()
+
+        mock_report = ChangeReport()  # Empty report
+
+        with patch("pipeline.orchestrator.config") as mock_config, \
+             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls:
+            mock_config.SUPABASE_URL = "https://test.supabase.co"
+            mock_config.SUPABASE_SECRET_KEY = "secret"
+            mock_config.SUPABASE_KEY = "key"
+
+            mock_detector = MagicMock()
+            mock_detector.detect_all_changes.return_value = mock_report
+            mock_detector_cls.return_value = mock_detector
+
+            archiver.run_update_mode()
+
+            # Nothing should have been processed
+            archiver._ingest_meetings.assert_not_called()
+            archiver._embed_new_content.assert_not_called()
+
+    def test_run_update_mode_skip_embed(self, mock_orchestrator_deps):
+        from pipeline.orchestrator import Archiver
+        from pipeline.update_detector import MeetingChange, ChangeReport
+
+        archiver = Archiver()
+        archiver._ingest_meetings = MagicMock()
+        archiver._embed_new_content = MagicMock()
+
+        mock_report = ChangeReport(
+            meetings_with_new_docs=[
+                MeetingChange(
+                    archive_path="/archive/Council/2026-01-15",
+                    meeting_date="2026-01-15",
+                    meeting_type="Council",
+                    change_type="new_documents",
+                    details=["Minutes PDF available"],
+                ),
+            ],
+        )
+
+        with patch("pipeline.orchestrator.config") as mock_config, \
+             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls:
+            mock_config.SUPABASE_URL = "https://test.supabase.co"
+            mock_config.SUPABASE_SECRET_KEY = "secret"
+            mock_config.SUPABASE_KEY = "key"
+
+            mock_detector = MagicMock()
+            mock_detector.detect_all_changes.return_value = mock_report
+            mock_detector_cls.return_value = mock_detector
+
+            archiver.run_update_mode(skip_embed=True)
+
+            archiver._ingest_meetings.assert_called_once()
+            archiver._embed_new_content.assert_not_called()
