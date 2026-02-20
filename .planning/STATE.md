@@ -5,14 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.3 Platform APIs
+**Current focus:** v1.3 Platform APIs -- Phase 15 (API Foundation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-19 — Milestone v1.3 started
+Phase: 15 of 18 (API Foundation)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-19 -- Roadmap created for v1.3 Platform APIs
+
+Progress: [████████████████████████████░░░░] ~80% overall (36/~45 plans across all milestones)
 
 ## Performance Metrics
 
@@ -45,7 +47,14 @@ Last activity: 2026-02-19 — Milestone v1.3 started
 
 ### Decisions
 
-All v1.0, v1.1, and v1.2 decisions archived -- see PROJECT.md Key Decisions table and milestone archives.
+All v1.0-v1.2 decisions archived -- see PROJECT.md Key Decisions table.
+
+New for v1.3:
+- Hono router mounted in same Worker alongside React Router 7 (URL-prefix split at fetch level)
+- chanfana for OpenAPI 3.1 generation, Zod v4 for schema validation
+- SHA-256 key hashing with timing-safe comparison (not bcrypt -- keys are high-entropy)
+- Cloudflare Workers Rate Limit binding for durable per-key rate limiting
+- `/api/v1/*` prefix for public API; existing `/api/*` internal routes untouched
 
 ### Pending Todos
 
@@ -54,8 +63,10 @@ All v1.0, v1.1, and v1.2 decisions archived -- see PROJECT.md Key Decisions tabl
 ### Blockers/Concerns
 
 - bootstrap.sql is out of date with 30+ applied migrations -- technical debt to track
-- Email delivery requires external Resend configuration (documented in Phase 3 Plan 02)
+- Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
+- OCD division ID for View Royal (`csd:5917034`) needs verification against canonical repo before Phase 17
+- Rate Limit binding pricing needs verification before production launch
 
 ### Quick Tasks Completed
 
@@ -70,8 +81,9 @@ All v1.0, v1.1, and v1.2 decisions archived -- see PROJECT.md Key Decisions tabl
 
 ## Session Continuity
 
-Last session: 2026-02-20
-Completed v1.2 Pipeline Automation milestone. All phases archived.
+Last session: 2026-02-19
+Stopped at: Roadmap created for v1.3 Platform APIs milestone
+Resume file: None
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
