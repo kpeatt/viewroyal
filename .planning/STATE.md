@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 12 of 14 (Update Detection)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-20 - Completed 12-01 (UpdateDetector module)
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-20 - Completed 12-02 (CLI integration for update detection)
 
-Progress: [██████████████████████░░░░░░░░] 32/32 plans complete (v1.0+v1.1+12-01), v1.2 in progress
+Progress: [███████████████████████░░░░░░░] 33/33 plans complete (v1.0+v1.1+12), v1.2 in progress
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Progress: [██████████████████████░
 | 10-add-better-test-suite | 5 | 26min | 5min |
 | 11-gap-closure-gemini-fix | 1 | 3min | 3min |
 | Phase 12-update-detection P01 | 3min | 2 tasks | 2 files |
+| Phase 12-update-detection P02 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -47,6 +48,7 @@ Progress: [██████████████████████░
 
 All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and milestone archives.
 - [Phase 12-update-detection]: Reused existing find_meetings_needing_reingest() from audit.py for document detection rather than building new scraper-based detection
+- [Phase 12-update-detection]: Added meta dict field to MeetingChange to carry Vimeo video_data, avoiding redundant API calls in update-mode
 
 ### Pending Todos
 
@@ -71,8 +73,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 ## Session Continuity
 
 Last session: 2026-02-20
-Completed 12-01-PLAN.md (UpdateDetector module with document and video change detection).
-Resume: Execute 12-02-PLAN.md (CLI integration)
+Completed 12-02-PLAN.md (CLI integration for update detection). Phase 12 complete.
+Resume: Execute Phase 13 (selective pipeline) or Phase 14 (scheduling)
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md

@@ -36,7 +36,7 @@
 
 **Milestone Goal:** Make the pipeline run unattended on a daily schedule, automatically detecting and processing new minutes/video for existing meetings, with push notifications on new content.
 
-- [ ] **Phase 12: Update Detection** - Pipeline detects new documents and video for existing meetings and selectively re-ingests only what changed
+- [x] **Phase 12: Update Detection** - Pipeline detects new documents and video for existing meetings and selectively re-ingests only what changed (completed 2026-02-20)
 - [ ] **Phase 13: Notifications** - Pipeline sends push notifications summarizing new content found and processed
 - [ ] **Phase 14: Scheduled Automation** - Pipeline runs daily via launchd with logging and concurrency protection
 
@@ -103,6 +103,6 @@ Phases execute in numeric order: 12 -> 13 -> 14
 | 9. AI Profiling & Comparison | v1.1 | 4/4 | Complete | 2026-02-18 |
 | 10. Add Better Test Suite | v1.1 | 5/5 | Complete | 2026-02-19 |
 | 11. Gap Closure & Gemini Fix | v1.1 | 1/1 | Complete | 2026-02-19 |
-| 12. Update Detection | 1/2 | In Progress|  | - |
+| 12. Update Detection | 2/2 | Complete   | 2026-02-20 | - |
 | 13. Notifications | v1.2 | 0/? | Not started | - |
 | 14. Scheduled Automation | v1.2 | 0/? | Not started | - |
