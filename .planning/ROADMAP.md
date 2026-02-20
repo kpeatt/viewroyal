@@ -51,11 +51,11 @@
   2. Running the pipeline in update mode identifies meetings that have new video available on Vimeo when no video was previously ingested
   3. Only meetings with detected changes are re-ingested; meetings with no new content are skipped entirely
   4. After re-ingestion, the new content (documents, video/transcript) is visible in the web app on the corresponding meeting page
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md -- Create UpdateDetector module with document and video change detection
+- [ ] 12-02-PLAN.md -- Wire update detection into CLI and orchestrator with selective re-processing
 
 ### Phase 13: Notifications
 **Goal**: Pipeline notifies the operator via Moshi push notification when new content is found and processed, with a human-readable summary
@@ -103,6 +103,6 @@ Phases execute in numeric order: 12 -> 13 -> 14
 | 9. AI Profiling & Comparison | v1.1 | 4/4 | Complete | 2026-02-18 |
 | 10. Add Better Test Suite | v1.1 | 5/5 | Complete | 2026-02-19 |
 | 11. Gap Closure & Gemini Fix | v1.1 | 1/1 | Complete | 2026-02-19 |
-| 12. Update Detection | v1.2 | 0/? | Not started | - |
+| 12. Update Detection | v1.2 | 0/2 | Planning | - |
 | 13. Notifications | v1.2 | 0/? | Not started | - |
 | 14. Scheduled Automation | v1.2 | 0/? | Not started | - |
