@@ -1,9 +1,16 @@
+/// <reference types="@cloudflare/workers-types" />
+
 /**
  * API key utilities for hashing, comparison, and generation.
  *
  * Keys are stored as SHA-256 hashes. Comparison uses timing-safe equality
  * by double-hashing both inputs to guarantee equal-length buffers.
  */
+
+// Cloudflare Workers' crypto.subtle extends standard SubtleCrypto with timingSafeEqual
+const subtle = crypto.subtle as SubtleCrypto & {
+  timingSafeEqual(a: ArrayBuffer, b: ArrayBuffer): boolean;
+};
 
 /**
  * Hash an API key with SHA-256. Returns lowercase hex string.
@@ -32,7 +39,7 @@ export async function timingSafeCompare(
     crypto.subtle.digest("SHA-256", encoder.encode(a)),
     crypto.subtle.digest("SHA-256", encoder.encode(b)),
   ]);
-  return crypto.subtle.timingSafeEqual(hashA, hashB);
+  return subtle.timingSafeEqual(hashA, hashB);
 }
 
 /**
