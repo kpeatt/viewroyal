@@ -64,11 +64,12 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 | 2 | Add beta banner to homepage header | 2026-02-18 | 77b17c18 | [2-add-beta-banner-to-homepage-header](./quick/2-add-beta-banner-to-homepage-header/) |
 | 3 | Fix about page video hours showing 0 | 2026-02-18 | f8e1097d | [3-fix-about-page-video-hours-showing-0](./quick/3-fix-about-page-video-hours-showing-0/) |
 | 4 | Dynamic OG meta tags per page | 2026-02-19 | 64256f7f | [4-dynamic-og-meta-tags-per-page](./quick/4-dynamic-og-meta-tags-per-page/) |
+| 5 | Fix missing email alerts after pipeline ingestion | 2026-02-20 | dc50f436 | [5-bug-i-didn-t-get-an-email-sent-after-the](./quick/5-bug-i-didn-t-get-an-email-sent-after-the/) |
 
 ## Session Continuity
 
-Last session: 2026-02-19
-Completed v1.2 roadmap creation. 3 phases (12-14), 8 requirements mapped.
+Last session: 2026-02-20
+Completed quick task 5: fix missing email alerts after pipeline ingestion.
 Resume: Ready for `/gsd:plan-phase 12`
 
 ### Paused Work: Phase 7.1
