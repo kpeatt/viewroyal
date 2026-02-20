@@ -2,26 +2,23 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-19)
+See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 14 - Scheduled Automation (v1.2 Pipeline Automation)
+**Current focus:** Between milestones -- v1.2 complete, run `/gsd:new-milestone` to start next
 
 ## Current Position
 
-Phase: 14 of 14 (Scheduled Automation)
-Plan: 2 of 2 in current phase
-Status: Complete (awaiting human verification of launchd install)
-Last activity: 2026-02-20 - Completed 14-02 (Launchd Scheduling)
-
-Progress: [██████████████████████████████] 36/36 plans complete (v1.0+v1.1+12+13+14), v1.2 complete
+Milestone: v1.2 Pipeline Automation -- COMPLETE
+All 3 milestones shipped (v1.0, v1.1, v1.2) -- 14 phases, 36 plans total
+Last activity: 2026-02-20 - Completed v1.2 milestone archival
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 31 (across v1.0 + v1.1)
-- Average duration: 5.3min
-- Total execution time: 4.42 hours
+- Total plans completed: 36 (across v1.0 + v1.1 + v1.2)
+- Average duration: 4.7min
+- Total execution time: ~4.65 hours
 
 **By Phase:**
 
@@ -39,25 +36,15 @@ Progress: [███████████████████████
 | 09-ai-profiling-comparison | 4 | 25min | 6min |
 | 10-add-better-test-suite | 5 | 26min | 5min |
 | 11-gap-closure-gemini-fix | 1 | 3min | 3min |
-| Phase 12-update-detection P01 | 3min | 2 tasks | 2 files |
-| Phase 12-update-detection P02 | 3min | 2 tasks | 4 files |
-| Phase 13-notifications P01 | 2min | 2 tasks | 4 files |
-| Phase 14-scheduled-automation P01 | 2min | 2 tasks | 4 files |
-| Phase 14-scheduled-automation P02 | 2min | 1 task | 4 files |
+| 12-update-detection | 2 | 6min | 3min |
+| 13-notifications | 1 | 2min | 2min |
+| 14-scheduled-automation | 2 | 4min | 2min |
 
 ## Accumulated Context
 
 ### Decisions
 
-All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and milestone archives.
-- [Phase 12-update-detection]: Reused existing find_meetings_needing_reingest() from audit.py for document detection rather than building new scraper-based detection
-- [Phase 12-update-detection]: Added meta dict field to MeetingChange to carry Vimeo video_data, avoiding redundant API calls in update-mode
-- [Phase 13-notifications]: MOSHI_TOKEN env var is the sole on/off switch for notifications -- no CLI flag needed
-- [Phase 13-notifications]: Notifications only fire in update-mode (run_update_mode), not check-mode (run_update_check)
-- [Phase 14-scheduled-automation]: Used fcntl.flock for auto-release on crash/kill, TeeStream for print() capture without modifying existing code
-- [Phase 14-scheduled-automation]: Lock file not deleted on exit to avoid race conditions between concurrent processes
-- [Phase 14-scheduled-automation]: 6 AM daily schedule via launchd StartCalendarInterval, absolute uv path for launchd's minimal PATH
-- [Phase 14-scheduled-automation]: Shell wrapper sources .env for tokens rather than hardcoding in plist
+All v1.0, v1.1, and v1.2 decisions archived -- see PROJECT.md Key Decisions table and milestone archives.
 
 ### Pending Todos
 
@@ -83,8 +70,7 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 ## Session Continuity
 
 Last session: 2026-02-20
-Completed 14-02 (Launchd Scheduling). Phase 14 complete.
-All v1.2 plans executed. Awaiting human verification of launchd plist installation.
+Completed v1.2 Pipeline Automation milestone. All phases archived.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
