@@ -55,18 +55,15 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ Speaking time metrics from transcript segment durations — v1.1
 - ✓ AI stance summaries per councillor per topic with confidence scoring — v1.1
 - ✓ Side-by-side councillor comparison (voting, stances, activity) — v1.1
+- ✓ Pipeline detects new documents and video for existing meetings — v1.2
+- ✓ Pipeline selectively re-ingests only meetings with new content — v1.2
+- ✓ Daily scheduled pipeline runs via launchd on Mac Mini — v1.2
+- ✓ Moshi push notifications when new content is found and processed — v1.2
+- ✓ Rotating log file and concurrency lock for safe unattended runs — v1.2
 
 ### Active
 
-#### Current Milestone: v1.2 Pipeline Automation
-
-**Goal:** Make the pipeline run unattended on a daily schedule, automatically detecting and processing new minutes/video for existing meetings, with push notifications on new content.
-
-**Target features:**
-- Smart update detection — scraper compares CivicWeb listings against local archive to find new documents for existing meetings
-- Automated re-ingestion — pipeline selectively re-processes meetings when new minutes or video appear
-- Scheduled daily runs via launchd on Mac Mini
-- Moshi push notifications when new content is found and processed
+(No active milestone — run `/gsd:new-milestone` to start next cycle)
 
 ### Out of Scope
 
@@ -82,9 +79,9 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ## Context
 
-Shipped v1.1 with ~80,700 LOC (TypeScript + Python), 40+ database tables, 357 automated tests.
+Shipped v1.2 with ~81,500 LOC (TypeScript + Python), 40+ database tables, 357 automated tests.
 Tech stack: React Router 7, Cloudflare Workers, Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed.
-v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours.
+v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. v1.2: 3 phases, 5 plans in 12 minutes.
 
 **Known technical debt:**
 - `bootstrap.sql` is out of date with 30+ applied migrations
@@ -118,6 +115,10 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours.
 | @google/genai SDK over @google/generative-ai | New official SDK, model-per-call pattern, async iterables | ✓ Good |
 | Pre-deploy test gating | pytest + vitest must pass before wrangler deploy | ✓ Good |
 | Phase 7.1 pause (Batch API) | DOC requirements satisfied by Phase 7; batch backfill deferred | ✓ Good |
+| Reuse audit.py for update detection | Existing find_meetings_needing_reingest() covers document changes | ✓ Good |
+| MOSHI_TOKEN as feature toggle | Missing token silently disables notifications, no CLI flag needed | ✓ Good |
+| fcntl.flock for pipeline lock | Auto-releases on crash/kill, no stale pidfile cleanup needed | ✓ Good |
+| launchd over cron | Native macOS, better logging integration, StartCalendarInterval | ✓ Good |
 
 ---
-*Last updated: 2026-02-19 after v1.2 milestone start*
+*Last updated: 2026-02-20 after v1.2 milestone complete*

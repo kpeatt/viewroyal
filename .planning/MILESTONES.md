@@ -45,3 +45,22 @@
 
 ---
 
+
+## v1.2 Pipeline Automation (Shipped: 2026-02-20)
+
+**Phases completed:** 3 phases, 5 plans, 9 tasks
+**Timeline:** 1 day (2026-02-20), 12 minutes execution
+**Source files:** 18 files changed, +1,811/-121 lines
+
+**Key accomplishments:**
+1. UpdateDetector module detecting new documents (disk vs DB comparison) and new video (Vimeo vs local archive) for existing meetings
+2. --check-updates dry-run and --update-mode selective re-processing CLI flags wired into the pipeline
+3. Moshi push notifications when update-mode detects and processes new content, with meeting name + content type summaries
+4. fcntl.flock-based concurrency lock preventing overlapping pipeline runs, with automatic OS-level release on crash
+5. Rotating log file (5MB x 5 backups) with TeeStream stdout capture for unattended debugging
+6. launchd plist scheduling daily 6 AM pipeline runs via shell wrapper that sources .env and invokes uv
+
+**Delivered:** Pipeline runs daily without manual intervention, automatically detecting new documents and video for existing meetings on CivicWeb/Vimeo, selectively re-ingesting only what changed, and sending push notifications to the operator's phone when new content is found.
+
+---
+
