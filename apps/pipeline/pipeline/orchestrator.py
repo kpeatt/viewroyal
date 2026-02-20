@@ -148,6 +148,123 @@ class Archiver:
 
         print("\n[SUCCESS] Archiving Complete.")
 
+    def run_update_check(self):
+        """Check CivicWeb and Vimeo for new content without processing anything.
+
+        Scrapes CivicWeb first (idempotent -- skips existing files), then runs
+        the UpdateDetector to compare remote state against local archive and DB.
+
+        Returns:
+            ChangeReport with detected document and video changes.
+        """
+        from pipeline.update_detector import UpdateDetector
+
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        supabase = None
+        if config.SUPABASE_URL and supabase_key:
+            supabase = create_client(config.SUPABASE_URL, supabase_key)
+
+        # Scrape CivicWeb first to pick up any new files (idempotent)
+        print("  Scraping CivicWeb for new files...")
+        try:
+            self.scraper.scrape_recursive()
+        except Exception as e:
+            print(f"  [!] Scrape error (continuing with detection): {e}")
+
+        detector = UpdateDetector(
+            archive_root=self.archive_root,
+            scraper=self.scraper,
+            vimeo_client=self.vimeo_client,
+        )
+
+        report = detector.detect_all_changes(supabase=supabase)
+
+        print(f"\n=== Update Check Report ===")
+        print(f"Checked at: {report.checked_at}")
+        print()
+
+        if report.meetings_with_new_docs:
+            print(f"New Documents ({len(report.meetings_with_new_docs)} meetings):")
+            for change in report.meetings_with_new_docs:
+                details_str = ", ".join(change.details) if change.details else "New content"
+                print(f"  {change.meeting_date} {change.meeting_type}: {details_str}")
+        else:
+            print("New Documents: None")
+
+        if report.meetings_with_new_video:
+            print(f"\nNew Video ({len(report.meetings_with_new_video)} meetings):")
+            for change in report.meetings_with_new_video:
+                details_str = ", ".join(change.details) if change.details else "Video available"
+                print(f"  {change.meeting_date} {change.meeting_type}: {details_str}")
+        else:
+            print("\nNew Video: None")
+
+        print(f"\nTotal: {report.total_changes} meetings with new content")
+
+        return report
+
+    def run_update_mode(self, download_audio=True, skip_diarization=False, skip_embed=False):
+        """Scrape, detect changes, and selectively re-process only changed meetings.
+
+        Runs the full update check first, then for each meeting with changes:
+        - New documents: re-ingest that meeting folder
+        - New video: download audio (if enabled), diarize (if not skipped), re-ingest
+
+        Args:
+            download_audio: Download audio for meetings with new video (default True).
+            skip_diarization: Skip diarization/transcription phase.
+            skip_embed: Skip embedding generation at the end.
+        """
+        report = self.run_update_check()
+
+        if report.total_changes == 0:
+            print("No new content detected.")
+            return
+
+        processed = 0
+
+        # Process meetings with new documents
+        for change in report.meetings_with_new_docs:
+            print(f"\n  [update] Re-ingesting documents: {change.meeting_date} {change.meeting_type}")
+            try:
+                self._ingest_meetings(target_folder=change.archive_path, force_update=True)
+                processed += 1
+            except Exception as e:
+                print(f"  [!] Error processing {change.archive_path}: {e}")
+
+        # Process meetings with new video
+        for change in report.meetings_with_new_video:
+            print(f"\n  [update] Processing new video: {change.meeting_date} {change.meeting_type}")
+            try:
+                # Download audio if enabled and video_data is available
+                if download_audio and change.meta.get("video_data"):
+                    videos = change.meta["video_data"]
+                    audio_dir = os.path.join(change.archive_path, "Audio")
+                    os.makedirs(audio_dir, exist_ok=True)
+                    for video_data in videos:
+                        print(f"    Downloading audio: {video_data.get('title', 'Unknown')}")
+                        self.vimeo_client.download_video(
+                            video_data, audio_dir, include_video=False, download_audio=True
+                        )
+
+                # Diarize if not skipped
+                if not skip_diarization and self.ai_enabled:
+                    print(f"    Diarizing audio...")
+                    self._process_audio_files(output_dir=change.archive_path)
+
+                # Re-ingest
+                self._ingest_meetings(target_folder=change.archive_path, force_update=True)
+                processed += 1
+            except Exception as e:
+                print(f"  [!] Error processing {change.archive_path}: {e}")
+
+        # Embed all new content once at the end
+        if not skip_embed:
+            print("\n  [update] Embedding new content...")
+            self._embed_new_content()
+
+        print(f"\nUpdate complete: {processed} meetings re-processed")
+
     def _download_vimeo_content(
         self,
         video_map,
