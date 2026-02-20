@@ -5,7 +5,10 @@ import type { ApiEnv } from "./types";
 import { requestId } from "./middleware/request-id";
 import { errorHandler } from "./middleware/error-handler";
 import { municipality } from "./middleware/municipality";
+import { apiKeyAuth } from "./middleware/auth";
+import { rateLimit } from "./middleware/rate-limit";
 import { HealthEndpoint } from "./endpoints/health";
+import { TestAuthEndpoint } from "./endpoints/test-auth";
 
 // Create the base Hono app
 const app = new Hono<ApiEnv>();
@@ -60,8 +63,12 @@ const openapi = fromHono(app, {
 // Health endpoint (no municipality scope)
 openapi.get("/api/v1/health", HealthEndpoint);
 
-// Municipality-scoped routes use municipality middleware per-route
+// Municipality-scoped routes: health is unauthenticated
 app.use("/api/v1/:municipality/health", municipality);
 openapi.get("/api/v1/:municipality/health", HealthEndpoint);
+
+// Authenticated, rate-limited, municipality-scoped routes
+app.use("/api/v1/:municipality/test", apiKeyAuth, rateLimit, municipality);
+openapi.get("/api/v1/:municipality/test", TestAuthEndpoint);
 
 export default app;
