@@ -21,8 +21,8 @@ Requirements for Pipeline Automation milestone. Each maps to roadmap phases.
 
 ### Notifications
 
-- [ ] **NOTIF-01**: Pipeline sends Moshi push notification when new content is found and processed
-- [ ] **NOTIF-02**: Notification includes summary with meeting names and content types (e.g., "Jan 15 Council (minutes), Feb 3 Council (video)")
+- [x] **NOTIF-01**: Pipeline sends Moshi push notification when new content is found and processed
+- [x] **NOTIF-02**: Notification includes summary with meeting names and content types (e.g., "Jan 15 Council (minutes), Feb 3 Council (video)")
 
 ## Future Requirements
 
@@ -56,8 +56,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHED-01 | Phase 14 | Pending |
 | SCHED-02 | Phase 14 | Pending |
 | SCHED-03 | Phase 14 | Pending |
-| NOTIF-01 | Phase 13 | Pending |
-| NOTIF-02 | Phase 13 | Pending |
+| NOTIF-01 | Phase 13 | Complete |
+| NOTIF-02 | Phase 13 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 8 total
