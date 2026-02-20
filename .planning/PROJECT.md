@@ -63,14 +63,22 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start next cycle)
+## Current Milestone: v1.3 Platform APIs
+
+**Goal:** Expose civic data and RAG capabilities through a documented, stable JSON API with API key authentication, rate limiting, and OpenAPI documentation — plus OCD-standard endpoints for civic tech interoperability.
+
+**Target features:**
+- Public API with API key auth, rate limiting, cursor-based pagination, and OpenAPI 3.1 docs
+- Data endpoints: meetings, matters, people, motions, bylaws (per municipality)
+- Search and Ask API endpoints (semantic search + non-streaming RAG)
+- Open Civic Data (OCD) standard endpoints for interoperability
+- OCD entity mapping (jurisdictions, organizations, people, events, bills, votes)
 
 ### Out of Scope
 
-- Document viewer with official-document styling — future milestone candidate
-- Public API with OCD-compliant endpoints — future milestone candidate
-- Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — future milestone candidate
-- Second town onboarding (Esquimalt, RDOS) — deferred until intelligence layer is stable
+- Document viewer with official-document styling — v1.5 milestone candidate
+- Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — v2.0 milestone candidate
+- Second town onboarding (Esquimalt, RDOS) — separate milestone after APIs stable
 - Push notifications / native app — overkill for current user base size
 - Social features (comments, reactions, forums) — undermines official record credibility
 - Real-time live meeting notifications — architecture mismatch (batch pipeline)
@@ -121,4 +129,4 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | launchd over cron | Native macOS, better logging integration, StartCalendarInterval | ✓ Good |
 
 ---
-*Last updated: 2026-02-20 after v1.2 milestone complete*
+*Last updated: 2026-02-19 after v1.3 milestone started*

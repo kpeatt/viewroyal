@@ -2,16 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-20)
+See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Between milestones -- v1.2 complete, run `/gsd:new-milestone` to start next
+**Current focus:** v1.3 Platform APIs
 
 ## Current Position
 
-Milestone: v1.2 Pipeline Automation -- COMPLETE
-All 3 milestones shipped (v1.0, v1.1, v1.2) -- 14 phases, 36 plans total
-Last activity: 2026-02-20 - Completed v1.2 milestone archival
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-19 — Milestone v1.3 started
 
 ## Performance Metrics
 
@@ -48,7 +49,7 @@ All v1.0, v1.1, and v1.2 decisions archived -- see PROJECT.md Key Decisions tabl
 
 ### Pending Todos
 
-1. **Connect R2 images to document viewer inline** (ui) -- Render R2-hosted document images within document sections in the web viewer
+(None)
 
 ### Blockers/Concerns
 
