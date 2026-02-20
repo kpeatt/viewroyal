@@ -1913,6 +1913,7 @@ class MeetingIngester:
             self._geocode_agenda_items(meeting_id, refined["items"], dry_run)
 
         return {
+            "meeting_id": meeting_id,
             "meeting": meeting_data,
             "attendance": refined.get("attendees", []) if refined else [],
             "items": refined.get("items", []) if refined else [],
