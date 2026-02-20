@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 12 - Update Detection (v1.2 Pipeline Automation)
+**Current focus:** Phase 13 - Notifications (v1.2 Pipeline Automation)
 
 ## Current Position
 
-Phase: 12 of 14 (Update Detection)
-Plan: 2 of 2 in current phase
+Phase: 13 of 14 (Notifications)
+Plan: 1 of 1 in current phase
 Status: Phase Complete
-Last activity: 2026-02-20 - Completed 12-02 (CLI integration for update detection)
+Last activity: 2026-02-20 - Completed 13-01 (Moshi push notifications for update-mode)
 
-Progress: [███████████████████████░░░░░░░] 33/33 plans complete (v1.0+v1.1+12), v1.2 in progress
+Progress: [████████████████████████░░░░░░] 34/34 plans complete (v1.0+v1.1+12+13), v1.2 in progress
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [███████████████████████
 | 11-gap-closure-gemini-fix | 1 | 3min | 3min |
 | Phase 12-update-detection P01 | 3min | 2 tasks | 2 files |
 | Phase 12-update-detection P02 | 3min | 2 tasks | 4 files |
+| Phase 13-notifications P01 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -49,6 +50,8 @@ Progress: [███████████████████████
 All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and milestone archives.
 - [Phase 12-update-detection]: Reused existing find_meetings_needing_reingest() from audit.py for document detection rather than building new scraper-based detection
 - [Phase 12-update-detection]: Added meta dict field to MeetingChange to carry Vimeo video_data, avoiding redundant API calls in update-mode
+- [Phase 13-notifications]: MOSHI_TOKEN env var is the sole on/off switch for notifications -- no CLI flag needed
+- [Phase 13-notifications]: Notifications only fire in update-mode (run_update_mode), not check-mode (run_update_check)
 
 ### Pending Todos
 
@@ -73,8 +76,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 ## Session Continuity
 
 Last session: 2026-02-20
-Completed 12-02-PLAN.md (CLI integration for update detection). Phase 12 complete.
-Resume: Execute Phase 13 (selective pipeline) or Phase 14 (scheduling)
+Completed 13-01-PLAN.md (Moshi push notifications for update-mode). Phase 13 complete.
+Resume: Execute Phase 14 (scheduling)
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
