@@ -265,6 +265,10 @@ class Archiver:
 
         print(f"\nUpdate complete: {processed} meetings re-processed")
 
+        # Send push notification to operator's phone
+        from pipeline.notifier import send_update_notification
+        send_update_notification(report, processed_count=processed)
+
     def _download_vimeo_content(
         self,
         video_map,
