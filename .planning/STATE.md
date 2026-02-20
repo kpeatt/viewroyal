@@ -72,11 +72,12 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 | 3 | Fix about page video hours showing 0 | 2026-02-18 | f8e1097d | [3-fix-about-page-video-hours-showing-0](./quick/3-fix-about-page-video-hours-showing-0/) |
 | 4 | Dynamic OG meta tags per page | 2026-02-19 | 64256f7f | [4-dynamic-og-meta-tags-per-page](./quick/4-dynamic-og-meta-tags-per-page/) |
 | 5 | Fix missing email alerts after pipeline ingestion | 2026-02-20 | dc50f436 | [5-bug-i-didn-t-get-an-email-sent-after-the](./quick/5-bug-i-didn-t-get-an-email-sent-after-the/) |
+| 6 | Restructure root README as monorepo overview + pipeline README | 2026-02-20 | 18a6d11b | [6-update-main-readme-as-monorepo-readme-an](./quick/6-update-main-readme-as-monorepo-readme-an/) |
 
 ## Session Continuity
 
 Last session: 2026-02-20
-Completed 13-01-PLAN.md (Moshi push notifications for update-mode). Phase 13 complete.
+Completed quick-6 (README restructure). Phase 13 complete.
 Resume: Execute Phase 14 (scheduling)
 
 ### Paused Work: Phase 7.1
