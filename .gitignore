@@ -55,7 +55,9 @@ requirements.txt
 sql/migrations
 
 # Pipeline scripts (one-off / maintenance — not part of core pipeline)
-apps/pipeline/scripts/
+apps/pipeline/scripts/*
+# Keep the launchd wrapper script
+!apps/pipeline/scripts/run-pipeline.sh
 scripts/*
 # Keep deploy/test shell scripts
 !scripts/pre-deploy.sh

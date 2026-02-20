@@ -6,4 +6,6 @@ coverage_html/
 __snapshots__/
 
 # Script output (one-off maintenance scripts)
-scripts/
+scripts/*
+# Keep the launchd wrapper script
+!scripts/run-pipeline.sh
