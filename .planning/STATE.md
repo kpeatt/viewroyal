@@ -49,7 +49,7 @@ All v1.0, v1.1, and v1.2 decisions archived -- see PROJECT.md Key Decisions tabl
 
 ### Pending Todos
 
-(None)
+1. **Let users supply their own Gemini API key** (api) -- Allow power users to provide their own Gemini key for RAG queries
 
 ### Blockers/Concerns
 
