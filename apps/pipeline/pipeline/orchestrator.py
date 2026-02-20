@@ -6,6 +6,7 @@ import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
+import requests
 from supabase import create_client
 from tqdm import tqdm
 
@@ -388,12 +389,14 @@ class Archiver:
         if target_folder:
             needs_refine = force_update
             try:
-                ingester.process_meeting(
+                result = ingester.process_meeting(
                     target_folder,
                     force_update=force_update,
                     force_refine=needs_refine,
                     ai_provider=ai_provider,
                 )
+                if result and (result["meeting"].get("has_minutes") or result["meeting"].get("has_transcript")):
+                    self._trigger_alerts(result["meeting_id"])
             except Exception as e:
                 print(f"  [!] {target_folder}: {e}")
             return
@@ -421,19 +424,49 @@ class Archiver:
             if force_update or root in diarized_folders or rel_path in updated_paths:
                 needs_refine = force_update or rel_path in updated_paths
                 try:
-                    ingester.process_meeting(
+                    result = ingester.process_meeting(
                         root,
                         force_update=True,
                         force_refine=needs_refine,
                         ai_provider=ai_provider,
                     )
+                    if result and (result["meeting"].get("has_minutes") or result["meeting"].get("has_transcript")):
+                        self._trigger_alerts(result["meeting_id"])
                 except Exception as e:
                     print(f"  [!] {root}: {e}")
             else:
                 try:
-                    ingester.process_meeting(root, ai_provider=ai_provider)
+                    result = ingester.process_meeting(root, ai_provider=ai_provider)
+                    if result and (result["meeting"].get("has_minutes") or result["meeting"].get("has_transcript")):
+                        self._trigger_alerts(result["meeting_id"])
                 except Exception as e:
                     print(f"  [!] {root}: {e}")
+
+    def _trigger_alerts(self, meeting_id: int):
+        """POST to the send-alerts Edge Function after ingesting a meeting.
+
+        Triggers digest email alerts for subscribers. Failures are logged
+        but never crash the pipeline.
+        """
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            return
+
+        url = f"{config.SUPABASE_URL}/functions/v1/send-alerts"
+        headers = {
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {"meeting_id": meeting_id, "mode": "digest"}
+
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            if resp.ok:
+                print(f"  [+] Triggered alerts for meeting {meeting_id}: {resp.json()}")
+            else:
+                print(f"  [!] Alert trigger failed for meeting {meeting_id}: {resp.status_code} {resp.text[:200]}")
+        except Exception as e:
+            print(f"  [!] Alert trigger failed for meeting {meeting_id}: {e}")
 
     def _embed_new_content(self, force=False):
         from pipeline.ingestion.embed import embed_table, TABLE_CONFIG
@@ -463,11 +496,15 @@ class Archiver:
         supabase = create_client(config.SUPABASE_URL, supabase_key)
         generate_all_stances(supabase, person_id=person_id)
 
-    def generate_highlights(self, person_id=None):
+    def generate_highlights(self, person_id=None, force=False):
         """Generate AI overview + notable policy positions for councillors.
+
+        Uses embedding-powered profile agent for thematic discovery
+        and temporal diversity.
 
         Args:
             person_id: Optional person ID. If None, generates for all councillors.
+            force: If True, regenerate even if profile is recent (<30 days old).
         """
         from pipeline.profiling.stance_generator import generate_councillor_highlights
 
@@ -477,7 +514,7 @@ class Archiver:
             return
 
         supabase = create_client(config.SUPABASE_URL, supabase_key)
-        generate_councillor_highlights(supabase, person_id=person_id)
+        generate_councillor_highlights(supabase, person_id=person_id, force=force)
 
     def backfill_document_sections(self, force=False):
         """Backfill extracted documents and sections for all existing documents.
@@ -884,6 +921,25 @@ class Archiver:
             meeting_folders = meeting_folders[:limit]
             print(f"  Limiting to {limit} meetings")
 
+        # Skip documents that already have extracted_documents (unless force)
+        already_extracted_doc_ids = set()
+        if not force:
+            print("  Checking for existing extractions...")
+            ex_offset = 0
+            while True:
+                result = supabase.table("extracted_documents").select(
+                    "document_id"
+                ).eq("municipality_id", municipality_id).range(
+                    ex_offset, ex_offset + 999
+                ).execute()
+                batch = result.data or []
+                already_extracted_doc_ids.update(row["document_id"] for row in batch)
+                if len(batch) < 1000:
+                    break
+                ex_offset += 1000
+            if already_extracted_doc_ids:
+                print(f"  Found {len(already_extracted_doc_ids)} documents with existing extractions")
+
         # Build the meetings dict expected by batch_extractor
         # {meeting_id_str: {pdf_path, doc_id, archive_path}}
         meetings_dict = {}
@@ -913,6 +969,10 @@ class Archiver:
             if not doc_id:
                 print(f"  [!] Could not create document for {pdf_filename}")
                 skipped += 1
+                continue
+
+            # Skip if this document already has extractions
+            if doc_id in already_extracted_doc_ids:
                 continue
 
             meetings_dict[mid] = {
@@ -1027,6 +1087,10 @@ class Archiver:
             if not result.data or not result.data.get("archive_path"):
                 raise ValueError(f"Meeting ID {target} not found or has no archive_path")
             path = result.data["archive_path"]
+            # DB stores relative paths (e.g. viewroyal_archive/Council/...) —
+            # make absolute so file operations work regardless of CWD
+            if not os.path.isabs(path):
+                path = os.path.join(BASE_DIR, path)
             print(f"  Resolved meeting #{target} → {path}")
             return path
 
