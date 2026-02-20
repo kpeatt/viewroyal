@@ -28,6 +28,7 @@ class MeetingChange:
     meeting_type: str
     change_type: str  # "new_documents" or "new_video"
     details: list[str] = field(default_factory=list)
+    meta: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -181,7 +182,8 @@ class UpdateDetector:
                 continue
 
             # Meeting has Vimeo video but no local audio/transcript
-            video_titles = [v["title"] for v in video_map[date_key]]
+            videos = video_map[date_key]
+            video_titles = [v["title"] for v in videos]
             meeting_type = utils.infer_meeting_type(folder_name) or "Unknown"
 
             details = [f"Vimeo video available: {title}" for title in video_titles]
@@ -193,6 +195,7 @@ class UpdateDetector:
                     meeting_type=meeting_type,
                     change_type="new_video",
                     details=details,
+                    meta={"video_data": videos},
                 )
             )
 
