@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.viewroyal.pipeline</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kyle/development/viewroyal/apps/pipeline/scripts/run-pipeline.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kyle/development/viewroyal/logs/launchd-pipeline.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kyle/development/viewroyal/logs/launchd-pipeline.stderr.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kyle/development/viewroyal/apps/pipeline</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/kyle</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/Users/kyle/.local/bin</string>
+    </dict>
+</dict>
+</plist>
