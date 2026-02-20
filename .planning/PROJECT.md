@@ -58,7 +58,15 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(No active requirements — planning next milestone)
+#### Current Milestone: v1.2 Pipeline Automation
+
+**Goal:** Make the pipeline run unattended on a daily schedule, automatically detecting and processing new minutes/video for existing meetings, with push notifications on new content.
+
+**Target features:**
+- Smart update detection — scraper compares CivicWeb listings against local archive to find new documents for existing meetings
+- Automated re-ingestion — pipeline selectively re-processes meetings when new minutes or video appear
+- Scheduled daily runs via launchd on Mac Mini
+- Moshi push notifications when new content is found and processed
 
 ### Out of Scope
 
@@ -112,4 +120,4 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours.
 | Phase 7.1 pause (Batch API) | DOC requirements satisfied by Phase 7; batch backfill deferred | ✓ Good |
 
 ---
-*Last updated: 2026-02-19 after v1.1 milestone completion*
+*Last updated: 2026-02-19 after v1.2 milestone start*
