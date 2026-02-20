@@ -154,6 +154,32 @@ def test_message_truncation(mock_config):
     assert "+3 more" in lines[-1]
 
 
+@responses.activate
+@patch("pipeline.notifier.config")
+def test_test_flag_prefixes_title(mock_config):
+    """When test=True, notification title should be prefixed with [TEST]."""
+    mock_config.MOSHI_TOKEN = "test-token-123"
+
+    responses.add(
+        responses.POST,
+        "https://api.getmoshi.app/api/webhook",
+        json={"ok": True},
+        status=200,
+    )
+
+    report = _make_report(
+        doc_changes=[_make_change()],
+    )
+
+    send_update_notification(report, processed_count=1, test=True)
+
+    assert len(responses.calls) == 1
+    import json
+    payload = json.loads(responses.calls[0].request.body)
+    assert payload["title"].startswith("[TEST] ")
+    assert "1 meetings updated" in payload["title"]
+
+
 def test_summary_format():
     """Verify meeting summary line includes date, type, and content type."""
     change = _make_change(

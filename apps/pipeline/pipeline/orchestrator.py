@@ -203,7 +203,7 @@ class Archiver:
 
         return report
 
-    def run_update_mode(self, download_audio=True, skip_diarization=False, skip_embed=False):
+    def run_update_mode(self, download_audio=True, skip_diarization=False, skip_embed=False, test=False):
         """Scrape, detect changes, and selectively re-process only changed meetings.
 
         Runs the full update check first, then for each meeting with changes:
@@ -214,6 +214,7 @@ class Archiver:
             download_audio: Download audio for meetings with new video (default True).
             skip_diarization: Skip diarization/transcription phase.
             skip_embed: Skip embedding generation at the end.
+            test: If True, prefix push notification title with [TEST].
         """
         report = self.run_update_check()
 
@@ -267,7 +268,7 @@ class Archiver:
 
         # Send push notification to operator's phone
         from pipeline.notifier import send_update_notification
-        send_update_notification(report, processed_count=processed)
+        send_update_notification(report, processed_count=processed, test=test)
 
     def _download_vimeo_content(
         self,
