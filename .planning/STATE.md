@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 15 of 18 (API Foundation)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-02-19 -- Roadmap created for v1.3 Platform APIs
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-02-20 -- Completed 15-01-PLAN.md (API Foundation)
 
 Progress: [████████████████████████████░░░░] ~80% overall (36/~45 plans across all milestones)
 
@@ -42,6 +42,7 @@ Progress: [███████████████████████
 | 12-update-detection | 2 | 6min | 3min |
 | 13-notifications | 1 | 2min | 2min |
 | 14-scheduled-automation | 2 | 4min | 2min |
+| 15-api-foundation | 1 | 6min | 6min |
 
 ## Accumulated Context
 
@@ -55,6 +56,8 @@ New for v1.3:
 - SHA-256 key hashing with timing-safe comparison (not bcrypt -- keys are high-entropy)
 - Cloudflare Workers Rate Limit binding for durable per-key rate limiting
 - `/api/v1/*` prefix for public API; existing `/api/*` internal routes untouched
+- [Phase 15]: Per-route municipality middleware pattern instead of wildcard catch-all to preserve NOT_FOUND for unregistered paths
+- [Phase 15]: wrangler.toml [[ratelimits]] uses name field (not binding) per wrangler v4 schema
 
 ### Pending Todos
 
@@ -81,8 +84,8 @@ New for v1.3:
 
 ## Session Continuity
 
-Last session: 2026-02-19
-Stopped at: Roadmap created for v1.3 Platform APIs milestone
+Last session: 2026-02-20
+Stopped at: Completed 15-01-PLAN.md (API Foundation - Hono + health endpoint)
 Resume file: None
 
 ### Paused Work: Phase 7.1
