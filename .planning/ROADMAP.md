@@ -79,10 +79,11 @@ Plans:
   2. Pipeline output is captured to a rotating log file that can be inspected for debugging
   3. If a pipeline run is already in progress, a second invocation exits cleanly without corrupting data or running duplicate work
   4. After 24+ hours of no manual intervention, the pipeline has run automatically and any new content is reflected in the web app
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 14-01: TBD
+- [ ] 14-01-PLAN.md -- Lockfile concurrency protection and rotating log configuration
+- [ ] 14-02-PLAN.md -- launchd plist and wrapper script for daily scheduled execution
 
 ## Progress
 
@@ -105,4 +106,4 @@ Phases execute in numeric order: 12 -> 13 -> 14
 | 11. Gap Closure & Gemini Fix | v1.1 | 1/1 | Complete | 2026-02-19 |
 | 12. Update Detection | 2/2 | Complete    | 2026-02-20 | - |
 | 13. Notifications | 1/1 | Complete    | 2026-02-20 | - |
-| 14. Scheduled Automation | v1.2 | 0/? | Not started | - |
+| 14. Scheduled Automation | v1.2 | 0/2 | Not started | - |
