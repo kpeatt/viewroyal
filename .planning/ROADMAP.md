@@ -63,11 +63,11 @@
   3. An API consumer sending a malformed or unauthenticated request receives a consistent JSON error object with code, message, and status fields
   4. A cross-origin request to `/api/v1/*` receives proper CORS headers allowing browser-based API consumption
   5. All API routes are scoped to a municipality via URL path parameter (e.g., `/api/v1/{municipality}/meetings`)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: TBD
-- [ ] 15-02: TBD
+- [ ] 15-01-PLAN.md — Hono API framework, error handling, CORS, municipality middleware, health endpoint
+- [ ] 15-02-PLAN.md — API key auth, rate limiting, api_keys table, test endpoint
 
 ### Phase 16: Core Data & Search API
 **Goal**: API consumers can browse all civic data entity types and search across content through paginated, serialized REST endpoints
