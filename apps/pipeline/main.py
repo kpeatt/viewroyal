@@ -142,6 +142,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Mark this as a test run. Push notifications will be prefixed with [TEST].",
+    )
+
+    parser.add_argument(
         "--generate-stances",
         action="store_true",
         help="Generate AI stance summaries for all councillors using Gemini. "
@@ -176,6 +182,7 @@ if __name__ == "__main__":
             download_audio=True,  # Always download audio in update mode
             skip_diarization=args.skip_diarization,
             skip_embed=args.skip_embed,
+            test=args.test,
         )
     elif args.generate_stances:
         print("\n--- Generating Councillor Stance Summaries ---")

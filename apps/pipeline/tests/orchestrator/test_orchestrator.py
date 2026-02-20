@@ -443,10 +443,12 @@ class TestRunUpdateMode:
         )
 
         with patch("pipeline.orchestrator.config") as mock_config, \
-             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls:
+             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls, \
+             patch("pipeline.notifier.config") as mock_notifier_config:
             mock_config.SUPABASE_URL = "https://test.supabase.co"
             mock_config.SUPABASE_SECRET_KEY = "secret"
             mock_config.SUPABASE_KEY = "key"
+            mock_notifier_config.MOSHI_TOKEN = None  # Prevent real notifications
 
             mock_detector = MagicMock()
             mock_detector.detect_all_changes.return_value = mock_report
@@ -522,10 +524,12 @@ class TestRunUpdateMode:
         )
 
         with patch("pipeline.orchestrator.config") as mock_config, \
-             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls:
+             patch("pipeline.update_detector.UpdateDetector") as mock_detector_cls, \
+             patch("pipeline.notifier.config") as mock_notifier_config:
             mock_config.SUPABASE_URL = "https://test.supabase.co"
             mock_config.SUPABASE_SECRET_KEY = "secret"
             mock_config.SUPABASE_KEY = "key"
+            mock_notifier_config.MOSHI_TOKEN = None  # Prevent real notifications
 
             mock_detector = MagicMock()
             mock_detector.detect_all_changes.return_value = mock_report

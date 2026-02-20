@@ -55,12 +55,13 @@ def _format_change_line(change) -> str:
     return f"{formatted_date} {meeting_type} ({content_type})"
 
 
-def send_update_notification(report: ChangeReport, processed_count: int = 0) -> None:
+def send_update_notification(report: ChangeReport, processed_count: int = 0, test: bool = False) -> None:
     """Send a Moshi push notification summarizing pipeline update results.
 
     Args:
         report: ChangeReport from the update detector.
         processed_count: Number of meetings successfully re-processed.
+        test: If True, prefix the notification title with [TEST].
 
     Silently returns (no crash) when:
     - MOSHI_TOKEN is not set
@@ -75,10 +76,11 @@ def send_update_notification(report: ChangeReport, processed_count: int = 0) -> 
         return
 
     # Build title
+    prefix = "[TEST] " if test else ""
     if processed_count > 0:
-        title = f"Pipeline: {processed_count} meetings updated"
+        title = f"{prefix}Pipeline: {processed_count} meetings updated"
     else:
-        title = "Pipeline Update"
+        title = f"{prefix}Pipeline Update"
 
     # Build message body -- one line per meeting change
     all_changes = list(report.meetings_with_new_docs) + list(
