@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 13 - Notifications (v1.2 Pipeline Automation)
+**Current focus:** Phase 14 - Scheduled Automation (v1.2 Pipeline Automation)
 
 ## Current Position
 
-Phase: 13 of 14 (Notifications)
-Plan: 1 of 1 in current phase
-Status: Phase Complete
-Last activity: 2026-02-20 - Completed quick task 6: Update main README as monorepo readme and move pipeline README
+Phase: 14 of 14 (Scheduled Automation)
+Plan: 2 of 2 in current phase
+Status: Executing
+Last activity: 2026-02-20 - Completed 14-01 (Lockfile & Logging)
 
-Progress: [████████████████████████░░░░░░] 34/34 plans complete (v1.0+v1.1+12+13), v1.2 in progress
+Progress: [█████████████████████████████░] 35/36 plans complete (v1.0+v1.1+12+13+14-01), v1.2 in progress
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Progress: [███████████████████████
 | Phase 12-update-detection P01 | 3min | 2 tasks | 2 files |
 | Phase 12-update-detection P02 | 3min | 2 tasks | 4 files |
 | Phase 13-notifications P01 | 2min | 2 tasks | 4 files |
+| Phase 14-scheduled-automation P01 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -52,6 +53,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 - [Phase 12-update-detection]: Added meta dict field to MeetingChange to carry Vimeo video_data, avoiding redundant API calls in update-mode
 - [Phase 13-notifications]: MOSHI_TOKEN env var is the sole on/off switch for notifications -- no CLI flag needed
 - [Phase 13-notifications]: Notifications only fire in update-mode (run_update_mode), not check-mode (run_update_check)
+- [Phase 14-scheduled-automation]: Used fcntl.flock for auto-release on crash/kill, TeeStream for print() capture without modifying existing code
+- [Phase 14-scheduled-automation]: Lock file not deleted on exit to avoid race conditions between concurrent processes
 
 ### Pending Todos
 
@@ -77,8 +80,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 ## Session Continuity
 
 Last session: 2026-02-20
-Completed quick-6 (README restructure). Phase 13 complete.
-Resume: Execute Phase 14 (scheduling)
+Completed 14-01 (Lockfile & Logging). Phase 14 Plan 01 complete.
+Resume: Execute Phase 14 Plan 02 (cron scheduling)
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
