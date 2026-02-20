@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 Phase: 14 of 14 (Scheduled Automation)
 Plan: 2 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-20 - Completed 14-01 (Lockfile & Logging)
+Status: Complete (awaiting human verification of launchd install)
+Last activity: 2026-02-20 - Completed 14-02 (Launchd Scheduling)
 
-Progress: [█████████████████████████████░] 35/36 plans complete (v1.0+v1.1+12+13+14-01), v1.2 in progress
+Progress: [██████████████████████████████] 36/36 plans complete (v1.0+v1.1+12+13+14), v1.2 complete
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [███████████████████████
 | Phase 12-update-detection P02 | 3min | 2 tasks | 4 files |
 | Phase 13-notifications P01 | 2min | 2 tasks | 4 files |
 | Phase 14-scheduled-automation P01 | 2min | 2 tasks | 4 files |
+| Phase 14-scheduled-automation P02 | 2min | 1 task | 4 files |
 
 ## Accumulated Context
 
@@ -55,6 +56,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 - [Phase 13-notifications]: Notifications only fire in update-mode (run_update_mode), not check-mode (run_update_check)
 - [Phase 14-scheduled-automation]: Used fcntl.flock for auto-release on crash/kill, TeeStream for print() capture without modifying existing code
 - [Phase 14-scheduled-automation]: Lock file not deleted on exit to avoid race conditions between concurrent processes
+- [Phase 14-scheduled-automation]: 6 AM daily schedule via launchd StartCalendarInterval, absolute uv path for launchd's minimal PATH
+- [Phase 14-scheduled-automation]: Shell wrapper sources .env for tokens rather than hardcoding in plist
 
 ### Pending Todos
 
@@ -80,8 +83,8 @@ All v1.0 and v1.1 decisions archived -- see PROJECT.md Key Decisions table and m
 ## Session Continuity
 
 Last session: 2026-02-20
-Completed 14-01 (Lockfile & Logging). Phase 14 Plan 01 complete.
-Resume: Execute Phase 14 Plan 02 (cron scheduling)
+Completed 14-02 (Launchd Scheduling). Phase 14 complete.
+All v1.2 plans executed. Awaiting human verification of launchd plist installation.
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md

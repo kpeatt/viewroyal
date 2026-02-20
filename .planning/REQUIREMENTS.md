@@ -15,7 +15,7 @@ Requirements for Pipeline Automation milestone. Each maps to roadmap phases.
 
 ### Scheduling
 
-- [ ] **SCHED-01**: Pipeline runs daily on Mac Mini via launchd plist
+- [x] **SCHED-01**: Pipeline runs daily on Mac Mini via launchd plist
 - [x] **SCHED-02**: Pipeline output logs to a rotating log file for debugging
 - [x] **SCHED-03**: Lock file prevents overlapping pipeline runs
 
@@ -53,7 +53,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DETECT-01 | Phase 12 | Complete |
 | DETECT-02 | Phase 12 | Complete |
 | DETECT-03 | Phase 12 | Complete |
-| SCHED-01 | Phase 14 | Pending |
+| SCHED-01 | Phase 14 | Complete |
 | SCHED-02 | Phase 14 | Complete |
 | SCHED-03 | Phase 14 | Complete |
 | NOTIF-01 | Phase 13 | Complete |
