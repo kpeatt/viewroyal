@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 15 of 18 (API Foundation)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-20 -- Completed 15-01-PLAN.md (API Foundation)
+Phase: 15 of 18 (API Foundation) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-20 -- Completed 15-02-PLAN.md (API Auth & Rate Limiting)
 
-Progress: [████████████████████████████░░░░] ~80% overall (36/~45 plans across all milestones)
+Progress: [█████████████████████████████░░░] ~82% overall (38/~45 plans across all milestones)
 
 ## Performance Metrics
 
@@ -42,7 +42,7 @@ Progress: [███████████████████████
 | 12-update-detection | 2 | 6min | 3min |
 | 13-notifications | 1 | 2min | 2min |
 | 14-scheduled-automation | 2 | 4min | 2min |
-| 15-api-foundation | 1 | 6min | 6min |
+| 15-api-foundation | 2 | 11min | 6min |
 
 ## Accumulated Context
 
@@ -58,6 +58,8 @@ New for v1.3:
 - `/api/v1/*` prefix for public API; existing `/api/*` internal routes untouched
 - [Phase 15]: Per-route municipality middleware pattern instead of wildcard catch-all to preserve NOT_FOUND for unregistered paths
 - [Phase 15]: wrangler.toml [[ratelimits]] uses name field (not binding) per wrangler v4 schema
+- [Phase 15]: Per-route auth middleware chaining (apiKeyAuth, rateLimit, municipality) for authenticated routes
+- [Phase 15]: timingSafeEqual typed via inline SubtleCrypto extension (CF Workers types don't merge with DOM global)
 
 ### Pending Todos
 
@@ -85,7 +87,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 15-01-PLAN.md (API Foundation - Hono + health endpoint)
+Stopped at: Completed 15-02-PLAN.md (API Auth & Rate Limiting -- Phase 15 complete)
 Resume file: None
 
 ### Paused Work: Phase 7.1
