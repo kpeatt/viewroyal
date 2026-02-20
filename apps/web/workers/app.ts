@@ -1,7 +1,9 @@
 /// <reference types="@cloudflare/workers-types" />
 import { createRequestHandler } from "react-router";
+import apiApp from "../app/api";
 
 interface Env {
+  API_RATE_LIMITER: RateLimit;
   [key: string]: unknown;
 }
 
@@ -21,6 +23,14 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const url = new URL(request.url);
+
+    // Delegate /api/v1/* requests to the Hono API app
+    if (url.pathname.startsWith("/api/v1/") || url.pathname === "/api/v1") {
+      return apiApp.fetch(request, env, ctx);
+    }
+
+    // Everything else goes to React Router
     return requestHandler(request, {
       cloudflare: { env, ctx },
     });
