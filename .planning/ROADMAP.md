@@ -65,10 +65,10 @@ Plans:
   1. When the pipeline detects and processes new content, a Moshi push notification arrives on the operator's phone
   2. The notification includes meeting names and content types found (e.g., "Jan 15 Council (minutes), Feb 3 Council (video)")
   3. When no new content is found, no notification is sent (no noise on quiet days)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 13-01: TBD
+- [ ] 13-01-PLAN.md -- Create notifier module with Moshi push notifications and wire into update-mode
 
 ### Phase 14: Scheduled Automation
 **Goal**: Pipeline runs daily without manual intervention, with proper logging and protection against overlapping runs
