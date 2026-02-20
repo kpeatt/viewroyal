@@ -50,20 +50,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DETECT-01 | — | Pending |
-| DETECT-02 | — | Pending |
-| DETECT-03 | — | Pending |
-| SCHED-01 | — | Pending |
-| SCHED-02 | — | Pending |
-| SCHED-03 | — | Pending |
-| NOTIF-01 | — | Pending |
-| NOTIF-02 | — | Pending |
+| DETECT-01 | Phase 12 | Pending |
+| DETECT-02 | Phase 12 | Pending |
+| DETECT-03 | Phase 12 | Pending |
+| SCHED-01 | Phase 14 | Pending |
+| SCHED-02 | Phase 14 | Pending |
+| SCHED-03 | Phase 14 | Pending |
+| NOTIF-01 | Phase 13 | Pending |
+| NOTIF-02 | Phase 13 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 8 total
-- Mapped to phases: 0
-- Unmapped: 8 (pending roadmap creation)
+- Mapped to phases: 8
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-19*
-*Last updated: 2026-02-19 after initial definition*
+*Last updated: 2026-02-19 after roadmap creation*
