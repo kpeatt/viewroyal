@@ -9,8 +9,8 @@ Requirements for Pipeline Automation milestone. Each maps to roadmap phases.
 
 ### Update Detection
 
-- [ ] **DETECT-01**: Pipeline detects new documents (minutes, additional PDFs) on CivicWeb for meetings already in the local archive
-- [ ] **DETECT-02**: Pipeline detects new video availability on Vimeo for meetings already in the local archive
+- [x] **DETECT-01**: Pipeline detects new documents (minutes, additional PDFs) on CivicWeb for meetings already in the local archive
+- [x] **DETECT-02**: Pipeline detects new video availability on Vimeo for meetings already in the local archive
 - [ ] **DETECT-03**: Pipeline selectively re-ingests only meetings with new content, skipping meetings with no changes
 
 ### Scheduling
@@ -50,8 +50,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DETECT-01 | Phase 12 | Pending |
-| DETECT-02 | Phase 12 | Pending |
+| DETECT-01 | Phase 12 | Complete |
+| DETECT-02 | Phase 12 | Complete |
 | DETECT-03 | Phase 12 | Pending |
 | SCHED-01 | Phase 14 | Pending |
 | SCHED-02 | Phase 14 | Pending |
