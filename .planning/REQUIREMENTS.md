@@ -9,10 +9,10 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 
 ### API Infrastructure
 
-- [ ] **INFRA-01**: API consumers can authenticate via API key passed in `X-API-Key` header or `?apikey` query parameter
-- [ ] **INFRA-02**: API keys are stored as SHA-256 hashes with timing-safe comparison to prevent timing attacks
-- [ ] **INFRA-03**: API consumers are rate limited per-key using Cloudflare Workers Rate Limit binding (durable across isolate eviction)
-- [ ] **INFRA-04**: Rate-limited requests receive HTTP 429 with `Retry-After` header
+- [x] **INFRA-01**: API consumers can authenticate via API key passed in `X-API-Key` header or `?apikey` query parameter
+- [x] **INFRA-02**: API keys are stored as SHA-256 hashes with timing-safe comparison to prevent timing attacks
+- [x] **INFRA-03**: API consumers are rate limited per-key using Cloudflare Workers Rate Limit binding (durable across isolate eviction)
+- [x] **INFRA-04**: Rate-limited requests receive HTTP 429 with `Retry-After` header
 - [x] **INFRA-05**: All API errors return consistent JSON shape: `{ "error": { "code", "message", "status" } }`
 - [x] **INFRA-06**: Public API routes (`/api/v1/*`, `/api/ocd/*`) include proper CORS headers for cross-origin access
 - [x] **INFRA-07**: All API endpoints are scoped to a municipality via URL path parameter
@@ -85,10 +85,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 15 | Pending |
-| INFRA-02 | Phase 15 | Pending |
-| INFRA-03 | Phase 15 | Pending |
-| INFRA-04 | Phase 15 | Pending |
+| INFRA-01 | Phase 15 | Complete |
+| INFRA-02 | Phase 15 | Complete |
+| INFRA-03 | Phase 15 | Complete |
+| INFRA-04 | Phase 15 | Complete |
 | INFRA-05 | Phase 15 | Complete |
 | INFRA-06 | Phase 15 | Complete |
 | INFRA-07 | Phase 15 | Complete |
