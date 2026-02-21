@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 16 of 18 (Core Data & Search API)
-Plan: 1 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In Progress
-Last activity: 2026-02-21 -- Completed 16-01-PLAN.md (Shared Utilities & Slug Migration)
+Last activity: 2026-02-21 -- Completed 16-03-PLAN.md (Matters, Motions & Bylaws Endpoints)
 
-Progress: [██████████████████████████████░░] ~85% overall (39/~45 plans across all milestones)
+Progress: [███████████████████████████████░] ~91% overall (41/~45 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 37 (across v1.0 + v1.1 + v1.2 + v1.3)
-- Average duration: 4.7min
-- Total execution time: ~4.7 hours
+- Total plans completed: 41 (across v1.0 + v1.1 + v1.2 + v1.3)
+- Average duration: 4.5min
+- Total execution time: ~4.8 hours
 
 **By Phase:**
 
@@ -43,7 +43,8 @@ Progress: [███████████████████████
 | 13-notifications | 1 | 2min | 2min |
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
-| 16-core-data-search-api | 1 | 5min | 5min |
+| 16-core-data-search-api | 3 | 11min | 4min |
+| Phase 16 P03 | 3min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ New for v1.3:
 - [Phase 16]: snake_case for all API field names (matches DB columns and civic API conventions)
 - [Phase 16]: Always include null fields explicitly in responses (never omit empty fields)
 - [Phase 16]: Slug dedup via ranked CTEs + suffixes for people (duplicate names) and bylaws (shared bylaw_numbers)
+- [Phase 16]: Motions scoped to municipality via inner join on meetings (no municipality_id on motions table)
+- [Phase 16]: Mover filter resolves person slug to ID before applying filter (avoids complex join filter)
+- [Phase 16]: Matter detail fetches motions via agenda_item_ids (motions linked to matters through agenda items)
 
 ### Pending Todos
 
@@ -91,7 +95,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 16-01-PLAN.md (Shared Utilities & Slug Migration)
+Stopped at: Completed 16-03-PLAN.md (Matters, Motions & Bylaws Endpoints)
 Resume file: None
 
 ### Paused Work: Phase 7.1

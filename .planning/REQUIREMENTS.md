@@ -23,12 +23,12 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 - [ ] **DATA-02**: API consumer can get meeting detail including agenda items, motions, and attendance
 - [ ] **DATA-03**: API consumer can list people with filters (is_councillor, name search)
 - [ ] **DATA-04**: API consumer can get person detail including memberships and voting summary
-- [ ] **DATA-05**: API consumer can list matters with filters (status, category, date range)
-- [ ] **DATA-06**: API consumer can get matter detail including agenda items and timeline
-- [ ] **DATA-07**: API consumer can list motions with filters (result, meeting, mover)
-- [ ] **DATA-08**: API consumer can get motion detail including individual roll call votes
-- [ ] **DATA-09**: API consumer can list bylaws with filters (status, category, year)
-- [ ] **DATA-10**: API consumer can get bylaw detail including linked matters
+- [x] **DATA-05**: API consumer can list matters with filters (status, category, date range)
+- [x] **DATA-06**: API consumer can get matter detail including agenda items and timeline
+- [x] **DATA-07**: API consumer can list motions with filters (result, meeting, mover)
+- [x] **DATA-08**: API consumer can get motion detail including individual roll call votes
+- [x] **DATA-09**: API consumer can list bylaws with filters (status, category, year)
+- [x] **DATA-10**: API consumer can get bylaw detail including linked matters
 - [x] **DATA-11**: All list endpoints use cursor-based pagination with opaque base64 cursors, `per_page` (max 100), and `has_more` indicator
 - [x] **DATA-12**: All responses use consistent envelope: `{ "data", "pagination", "meta" }` with request ID
 
@@ -96,12 +96,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-02 | Phase 16 | Pending |
 | DATA-03 | Phase 16 | Pending |
 | DATA-04 | Phase 16 | Pending |
-| DATA-05 | Phase 16 | Pending |
-| DATA-06 | Phase 16 | Pending |
-| DATA-07 | Phase 16 | Pending |
-| DATA-08 | Phase 16 | Pending |
-| DATA-09 | Phase 16 | Pending |
-| DATA-10 | Phase 16 | Pending |
+| DATA-05 | Phase 16 | Complete |
+| DATA-06 | Phase 16 | Complete |
+| DATA-07 | Phase 16 | Complete |
+| DATA-08 | Phase 16 | Complete |
+| DATA-09 | Phase 16 | Complete |
+| DATA-10 | Phase 16 | Complete |
 | DATA-11 | Phase 16 | Complete |
 | DATA-12 | Phase 16 | Complete |
 | SRCH-01 | Phase 16 | Pending |
