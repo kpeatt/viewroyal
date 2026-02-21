@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.3 Platform APIs -- Phase 15 (API Foundation)
+**Current focus:** v1.3 Platform APIs -- Phase 16 (Core Data & Search API)
 
 ## Current Position
 
-Phase: 15 of 18 (API Foundation) -- COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-02-20 -- Completed 15-02-PLAN.md (API Auth & Rate Limiting)
+Phase: 16 of 18 (Core Data & Search API)
+Plan: 1 of 4 in current phase
+Status: In Progress
+Last activity: 2026-02-21 -- Completed 16-01-PLAN.md (Shared Utilities & Slug Migration)
 
-Progress: [█████████████████████████████░░░] ~82% overall (38/~45 plans across all milestones)
+Progress: [██████████████████████████████░░] ~85% overall (39/~45 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 36 (across v1.0 + v1.1 + v1.2)
+- Total plans completed: 37 (across v1.0 + v1.1 + v1.2 + v1.3)
 - Average duration: 4.7min
-- Total execution time: ~4.65 hours
+- Total execution time: ~4.7 hours
 
 **By Phase:**
 
@@ -43,6 +43,7 @@ Progress: [███████████████████████
 | 13-notifications | 1 | 2min | 2min |
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
+| 16-core-data-search-api | 1 | 5min | 5min |
 
 ## Accumulated Context
 
@@ -60,6 +61,9 @@ New for v1.3:
 - [Phase 15]: wrangler.toml [[ratelimits]] uses name field (not binding) per wrangler v4 schema
 - [Phase 15]: Per-route auth middleware chaining (apiKeyAuth, rateLimit, municipality) for authenticated routes
 - [Phase 15]: timingSafeEqual typed via inline SubtleCrypto extension (CF Workers types don't merge with DOM global)
+- [Phase 16]: snake_case for all API field names (matches DB columns and civic API conventions)
+- [Phase 16]: Always include null fields explicitly in responses (never omit empty fields)
+- [Phase 16]: Slug dedup via ranked CTEs + suffixes for people (duplicate names) and bylaws (shared bylaw_numbers)
 
 ### Pending Todos
 
@@ -86,8 +90,8 @@ New for v1.3:
 
 ## Session Continuity
 
-Last session: 2026-02-20
-Stopped at: Completed 15-02-PLAN.md (API Auth & Rate Limiting -- Phase 15 complete)
+Last session: 2026-02-21
+Stopped at: Completed 16-01-PLAN.md (Shared Utilities & Slug Migration)
 Resume file: None
 
 ### Paused Work: Phase 7.1
