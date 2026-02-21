@@ -79,12 +79,13 @@ Plans:
   3. All list and detail responses use a consistent envelope with `data`, `pagination` (with `has_more` and cursor), and `meta` (with request ID) fields
   4. An API consumer can search across all content types via `GET /api/v1/{municipality}/search?q=` and receive results with content type, relevance score, text snippets, and pagination
   5. No internal database fields (raw IDs, internal flags, full row data) leak into public API responses -- all entities pass through explicit serializers
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 16-01: TBD
-- [ ] 16-02: TBD
-- [ ] 16-03: TBD
+- [ ] 16-01-PLAN.md — Shared utilities (cursor pagination, response envelope, slug generation) and slug column migration
+- [ ] 16-02-PLAN.md — Meetings and people list/detail endpoints with serializers
+- [ ] 16-03-PLAN.md — Matters, motions, and bylaws list/detail endpoints with serializers
+- [ ] 16-04-PLAN.md — Cross-entity keyword search endpoint with type filtering and pagination
 
 ### Phase 17: OCD Interoperability
 **Goal**: Civic tech tools and researchers can consume View Royal council data through standardized Open Civic Data endpoints
