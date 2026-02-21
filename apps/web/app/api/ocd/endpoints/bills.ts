@@ -118,7 +118,8 @@ export async function getBill(c: Context<ApiEnv>) {
     .select(
       "id, title, identifier, description, status, category, first_seen, created_at",
     )
-    .eq("municipality_id", muni.id);
+    .eq("municipality_id", muni.id)
+    .limit(100000);
 
   if (error) {
     console.error("[OCD] getBill query error:", error);
