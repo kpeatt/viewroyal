@@ -30,14 +30,8 @@ export async function listOrganizations(c: Context<ApiEnv>) {
   const { page, perPage } = parsePaginationParams(c);
   const supabase = getSupabaseAdminClient();
 
-  // Fetch the division to compute jurisdiction ID
-  const { data: division } = await supabase
-    .from("ocd_divisions")
-    .select("division_id")
-    .eq("municipality_id", muni.id)
-    .maybeSingle();
-
-  const divisionId = division?.division_id ?? "";
+  // Derive jurisdiction ID from municipality's own OCD division ID
+  const divisionId = muni.ocd_id ?? "";
   const csdMatch = divisionId.match(/csd:(\d+)/);
   const csdCode = csdMatch ? csdMatch[1] : "";
   const jurisdictionId = ocdJurisdictionId(csdCode);
@@ -86,14 +80,8 @@ export async function getOrganization(c: Context<ApiEnv>) {
   const id = c.req.param("id");
   const supabase = getSupabaseAdminClient();
 
-  // Fetch the division to compute jurisdiction ID
-  const { data: division } = await supabase
-    .from("ocd_divisions")
-    .select("division_id")
-    .eq("municipality_id", muni.id)
-    .maybeSingle();
-
-  const divisionId = division?.division_id ?? "";
+  // Derive jurisdiction ID from municipality's own OCD division ID
+  const divisionId = muni.ocd_id ?? "";
   const csdMatch = divisionId.match(/csd:(\d+)/);
   const csdCode = csdMatch ? csdMatch[1] : "";
   const jurisdictionId = ocdJurisdictionId(csdCode);

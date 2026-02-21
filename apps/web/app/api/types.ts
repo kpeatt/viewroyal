@@ -18,6 +18,7 @@ export interface ApiEnv {
       slug: string;
       name: string;
       short_name: string;
+      ocd_id: string | null;
     };
   };
 }
