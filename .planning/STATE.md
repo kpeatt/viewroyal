@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 17 of 18 (OCD Interoperability)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-02-21 -- Completed 17-01-PLAN.md (OCD Infrastructure)
+Last activity: 2026-02-21 -- Completed 17-02-PLAN.md (OCD Entity Endpoints)
 
-Progress: [█████████████████████████████████░] ~95% overall (43/~45 plans across all milestones)
+Progress: [██████████████████████████████████░] ~96% overall (44/~45 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 43 (across v1.0 + v1.1 + v1.2 + v1.3)
+- Total plans completed: 44 (across v1.0 + v1.1 + v1.2 + v1.3)
 - Average duration: 4.5min
 - Total execution time: ~4.8 hours
 
@@ -44,7 +44,7 @@ Progress: [███████████████████████
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
 | 16-core-data-search-api | 4 | 18min | 5min |
-| 17-ocd-interoperability | 1 | 5min | 5min |
+| 17-ocd-interoperability | 2 | 8min | 4min |
 
 ## Accumulated Context
 
@@ -74,6 +74,9 @@ New for v1.3:
 - [Phase 16]: Position-based relevance scoring for textSearch results (PostgREST ordering as ts_rank proxy)
 - [Phase 17]: Hand-rolled UUID v5 via Web Crypto (no uuid npm dep) with hardcoded namespace UUID for deterministic OCD IDs
 - [Phase 17]: Separate OCD pagination (page-based) and envelope (results+pagination) from v1 API (cursor-based, data+pagination+meta)
+- [Phase 17]: Plain Hono handlers (not chanfana) for OCD endpoints -- OCD has its own spec, no OpenAPI generation needed
+- [Phase 17]: OCD ID reverse-lookup for detail endpoints -- fetch all entities, compute OCD IDs, find match (acceptable for small datasets)
+- [Phase 17]: Wildcard :id{.+} route params to handle OCD IDs containing slashes
 
 ### Pending Todos
 
@@ -101,7 +104,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 17-01-PLAN.md (OCD Infrastructure)
+Stopped at: Completed 17-02-PLAN.md (OCD Entity Endpoints)
 Resume file: None
 
 ### Paused Work: Phase 7.1
