@@ -16,6 +16,9 @@ import { municipality } from "../middleware/municipality";
 import { listJurisdictions, getJurisdiction } from "./endpoints/jurisdictions";
 import { listOrganizations, getOrganization } from "./endpoints/organizations";
 import { listPeople, getPerson } from "./endpoints/people";
+import { listEvents, getEvent } from "./endpoints/events";
+import { listBills, getBill } from "./endpoints/bills";
+import { listVotes, getVote } from "./endpoints/votes";
 
 const ocdApp = new Hono<ApiEnv>();
 
@@ -47,9 +50,16 @@ ocdApp.get("/:municipality/organizations/:id{.+}", getOrganization);
 ocdApp.get("/:municipality/people", listPeople);
 ocdApp.get("/:municipality/people/:id{.+}", getPerson);
 
-// Plan 03 will add:
-// - Event routes (GET /:municipality/events, GET /:municipality/events/:id)
-// - Bill routes (GET /:municipality/bills, GET /:municipality/bills/:id)
-// - Vote routes (GET /:municipality/votes, GET /:municipality/votes/:id)
+// Event routes
+ocdApp.get("/:municipality/events", listEvents);
+ocdApp.get("/:municipality/events/:id{.+}", getEvent);
+
+// Bill routes
+ocdApp.get("/:municipality/bills", listBills);
+ocdApp.get("/:municipality/bills/:id{.+}", getBill);
+
+// Vote routes
+ocdApp.get("/:municipality/votes", listVotes);
+ocdApp.get("/:municipality/votes/:id{.+}", getVote);
 
 export default ocdApp;
