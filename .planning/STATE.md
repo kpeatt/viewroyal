@@ -43,8 +43,7 @@ Progress: [███████████████████████
 | 13-notifications | 1 | 2min | 2min |
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
-| 16-core-data-search-api | 3 | 11min | 4min |
-| Phase 16 P03 | 3min | 2 tasks | 10 files |
+| 16-core-data-search-api | 3 | 15min | 5min |
 
 ## Accumulated Context
 
@@ -65,6 +64,8 @@ New for v1.3:
 - [Phase 16]: snake_case for all API field names (matches DB columns and civic API conventions)
 - [Phase 16]: Always include null fields explicitly in responses (never omit empty fields)
 - [Phase 16]: Slug dedup via ranked CTEs + suffixes for people (duplicate names) and bylaws (shared bylaw_numbers)
+- [Phase 16]: People scoped to municipality via memberships -> organizations join (no municipality_id on people table)
+- [Phase 16]: Voting summary aggregates Yes/In Favour as votes_for, No/Opposed as votes_against, Abstain/Recused as abstentions
 - [Phase 16]: Motions scoped to municipality via inner join on meetings (no municipality_id on motions table)
 - [Phase 16]: Mover filter resolves person slug to ID before applying filter (avoids complex join filter)
 - [Phase 16]: Matter detail fetches motions via agenda_item_ids (motions linked to matters through agenda items)
