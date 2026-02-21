@@ -46,8 +46,8 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 - [ ] **OCD-04**: API consumer can list and get OCD Event objects mapped from meetings (with agenda, participants, media)
 - [ ] **OCD-05**: API consumer can list and get OCD Bill objects mapped from matters (with actions, sponsors)
 - [ ] **OCD-06**: API consumer can list and get OCD Vote objects mapped from motions (with roll call)
-- [ ] **OCD-07**: OCD endpoints use page-based pagination matching the OpenStates convention
-- [ ] **OCD-08**: All OCD entities include valid OCD IDs (deterministic for jurisdictions/divisions, UUID-based for others)
+- [x] **OCD-07**: OCD endpoints use page-based pagination matching the OpenStates convention
+- [x] **OCD-08**: All OCD entities include valid OCD IDs (deterministic for jurisdictions/divisions, UUID-based for others)
 
 ### Documentation & Management
 
@@ -113,8 +113,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OCD-04 | Phase 17 | Pending |
 | OCD-05 | Phase 17 | Pending |
 | OCD-06 | Phase 17 | Pending |
-| OCD-07 | Phase 17 | Pending |
-| OCD-08 | Phase 17 | Pending |
+| OCD-07 | Phase 17 | Complete |
+| OCD-08 | Phase 17 | Complete |
 | DOCS-01 | Phase 18 | Pending |
 | DOCS-02 | Phase 18 | Pending |
 | DOCS-03 | Phase 18 | Pending |
