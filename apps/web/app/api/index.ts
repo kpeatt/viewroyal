@@ -20,6 +20,7 @@ import { GetMotion } from "./endpoints/motions/detail";
 import { ListBylaws } from "./endpoints/bylaws/list";
 import { GetBylaw } from "./endpoints/bylaws/detail";
 import { SearchEndpoint } from "./endpoints/search";
+import ocdApp from "./ocd/router";
 
 // Create the base Hono app
 const app = new Hono<ApiEnv>();
@@ -140,5 +141,8 @@ openapi.get("/api/v1/:municipality/bylaws/:slug", GetBylaw);
 // Search
 app.use("/api/v1/:municipality/search", apiKeyAuth, rateLimit, municipality);
 openapi.get("/api/v1/:municipality/search", SearchEndpoint);
+
+// OCD interoperability endpoints (public, no auth/rate-limit)
+app.route("/api/ocd", ocdApp);
 
 export default app;
