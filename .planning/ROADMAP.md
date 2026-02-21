@@ -47,7 +47,7 @@
 **Milestone Goal:** Expose civic data and RAG capabilities through a documented, stable JSON API with API key authentication, rate limiting, and OpenAPI documentation -- plus OCD-standard endpoints for civic tech interoperability.
 
 - [x] **Phase 15: API Foundation** - API key auth, rate limiting, error handling, CORS, and municipality-scoped routing infrastructure (completed 2026-02-20)
-- [ ] **Phase 16: Core Data & Search API** - REST endpoints for meetings, people, matters, motions, bylaws, and hybrid search with cursor pagination
+- [x] **Phase 16: Core Data & Search API** - REST endpoints for meetings, people, matters, motions, bylaws, and hybrid search with cursor pagination (completed 2026-02-21)
 - [ ] **Phase 17: OCD Interoperability** - Open Civic Data standard endpoints mapping existing entities to the OCD spec
 - [ ] **Phase 18: Documentation & Key Management** - OpenAPI 3.1 spec, Swagger UI, and self-service API key management page
 
@@ -139,6 +139,6 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18
 | 13. Notifications | v1.2 | 1/1 | Complete | 2026-02-20 |
 | 14. Scheduled Automation | v1.2 | 2/2 | Complete | 2026-02-20 |
 | 15. API Foundation | 2/2 | Complete    | 2026-02-21 | - |
-| 16. Core Data & Search API | 3/4 | In Progress|  | - |
+| 16. Core Data & Search API | 4/4 | Complete   | 2026-02-21 | - |
 | 17. OCD Interoperability | v1.3 | 0/? | Not started | - |
 | 18. Documentation & Key Management | v1.3 | 0/? | Not started | - |

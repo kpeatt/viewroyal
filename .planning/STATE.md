@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 16 of 18 (Core Data & Search API)
-Plan: 3 of 4 in current phase
-Status: In Progress
-Last activity: 2026-02-21 -- Completed 16-03-PLAN.md (Matters, Motions & Bylaws Endpoints)
+Plan: 4 of 4 in current phase
+Status: Phase Complete
+Last activity: 2026-02-21 -- Completed 16-04-PLAN.md (Search Endpoint)
 
-Progress: [███████████████████████████████░] ~91% overall (41/~45 plans across all milestones)
+Progress: [████████████████████████████████░] ~93% overall (42/~45 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 41 (across v1.0 + v1.1 + v1.2 + v1.3)
+- Total plans completed: 42 (across v1.0 + v1.1 + v1.2 + v1.3)
 - Average duration: 4.5min
 - Total execution time: ~4.8 hours
 
@@ -43,7 +43,7 @@ Progress: [███████████████████████
 | 13-notifications | 1 | 2min | 2min |
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
-| 16-core-data-search-api | 3 | 15min | 5min |
+| 16-core-data-search-api | 4 | 18min | 5min |
 
 ## Accumulated Context
 
@@ -69,6 +69,8 @@ New for v1.3:
 - [Phase 16]: Motions scoped to municipality via inner join on meetings (no municipality_id on motions table)
 - [Phase 16]: Mover filter resolves person slug to ID before applying filter (avoids complex join filter)
 - [Phase 16]: Matter detail fetches motions via agenda_item_ids (motions linked to matters through agenda items)
+- [Phase 16]: Page-based pagination for search (not cursor-based -- merged cross-type results are volatile)
+- [Phase 16]: Position-based relevance scoring for textSearch results (PostgREST ordering as ts_rank proxy)
 
 ### Pending Todos
 
@@ -96,7 +98,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 16-03-PLAN.md (Matters, Motions & Bylaws Endpoints)
+Stopped at: Completed 16-04-PLAN.md (Search Endpoint) -- Phase 16 complete
 Resume file: None
 
 ### Paused Work: Phase 7.1
