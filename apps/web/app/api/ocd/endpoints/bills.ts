@@ -15,6 +15,7 @@ import { ApiError } from "../../lib/api-errors";
 import { ocdIds, ocdOrganizationId } from "../lib/ocd-ids";
 import { parsePaginationParams, computePagination } from "../lib/pagination";
 import { ocdListResponse, ocdDetailResponse } from "../lib/ocd-envelope";
+import { fetchAll } from "../lib/fetch-all";
 import {
   serializeBillSummary,
   serializeBillDetail,
@@ -112,21 +113,20 @@ export async function getBill(c: Context<ApiEnv>) {
   const id = c.req.param("id");
   const supabase = getSupabaseAdminClient();
 
-  // Fetch ALL matters for the municipality to reverse-lookup OCD ID
-  const { data: allMatters, error } = await supabase
-    .from("matters")
-    .select(
+  // Fetch ALL matters for the municipality to reverse-lookup OCD ID.
+  // PostgREST caps at 1000 rows per request, so we paginate in batches.
+  let matters: any[];
+  try {
+    matters = await fetchAll(
+      supabase,
+      "matters",
       "id, title, identifier, description, status, category, first_seen, created_at",
-    )
-    .eq("municipality_id", muni.id)
-    .limit(100000);
-
-  if (error) {
+      (q: any) => q.eq("municipality_id", muni.id),
+    );
+  } catch (error) {
     console.error("[OCD] getBill query error:", error);
     throw new ApiError(500, "QUERY_ERROR", "Failed to fetch matters");
   }
-
-  const matters = allMatters ?? [];
   const matterPks = matters.map((m: any) => m.id);
   const matterOcdIds = await ocdIds("bill", matterPks);
 

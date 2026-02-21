@@ -15,6 +15,7 @@ import { ApiError } from "../../lib/api-errors";
 import { ocdIds, ocdOrganizationId, ocdBillId } from "../lib/ocd-ids";
 import { parsePaginationParams, computePagination } from "../lib/pagination";
 import { ocdListResponse, ocdDetailResponse } from "../lib/ocd-envelope";
+import { fetchAll } from "../lib/fetch-all";
 import {
   serializeVoteSummary,
   serializeVoteDetail,
@@ -116,21 +117,20 @@ export async function getVote(c: Context<ApiEnv>) {
   const id = c.req.param("id");
   const supabase = getSupabaseAdminClient();
 
-  // Fetch ALL motions for the municipality via inner join on meetings
-  const { data: allMotions, error } = await supabase
-    .from("motions")
-    .select(
+  // Fetch ALL motions for the municipality via inner join on meetings.
+  // PostgREST caps at 1000 rows per request, so we paginate in batches.
+  let motions: any[];
+  try {
+    motions = await fetchAll(
+      supabase,
+      "motions",
       "id, text_content, plain_english_summary, result, mover, seconder, yes_votes, no_votes, abstain_votes, created_at, agenda_item_id, meeting:meetings!inner(meeting_date, municipality_id, organization:organizations(name, id))",
-    )
-    .eq("meeting.municipality_id", muni.id)
-    .limit(100000);
-
-  if (error) {
+      (q: any) => q.eq("meeting.municipality_id", muni.id),
+    );
+  } catch (error) {
     console.error("[OCD] getVote query error:", error);
     throw new ApiError(500, "QUERY_ERROR", "Failed to fetch motions");
   }
-
-  const motions = allMotions ?? [];
   const motionPks = motions.map((m: any) => m.id);
   const motionOcdIds = await ocdIds("vote", motionPks);
 
