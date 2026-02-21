@@ -96,12 +96,13 @@ Plans:
   2. All OCD entities include valid OCD IDs -- deterministic division-based IDs for jurisdictions, UUID-based for people, organizations, events, bills, and votes
   3. OCD list endpoints use page-based pagination matching the OpenStates convention (page number + per_page)
   4. OCD entity fields map correctly from existing database models (e.g., meetings become Events with agenda and media, matters become Bills with actions and sponsors)
-**Plans**: 3 plans
+**Plans**: 4 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — Shared OCD infrastructure: UUID v5 ID generation, page-based pagination, OCD envelope, divisions table, fix municipality division ID
-- [ ] 17-02-PLAN.md — Jurisdiction, Organization, and Person serializers + endpoints, OCD router, mount in main app
-- [ ] 17-03-PLAN.md — Event, Bill, and Vote serializers + endpoints with complex nested data mapping
+- [x] 17-01-PLAN.md — Shared OCD infrastructure: UUID v5 ID generation, page-based pagination, OCD envelope, divisions table, fix municipality division ID
+- [x] 17-02-PLAN.md — Jurisdiction, Organization, and Person serializers + endpoints, OCD router, mount in main app
+- [x] 17-03-PLAN.md — Event, Bill, and Vote serializers + endpoints with complex nested data mapping
+- [ ] 17-04-PLAN.md — Gap closure: fix division lookup defect in Jurisdiction/Organization endpoints, update REQUIREMENTS.md
 
 ### Phase 18: Documentation & Key Management
 **Goal**: API consumers can discover endpoints through interactive documentation and manage their own API keys without operator intervention
