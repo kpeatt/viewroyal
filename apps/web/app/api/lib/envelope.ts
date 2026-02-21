@@ -16,6 +16,8 @@ interface PaginationInfo {
   has_more: boolean;
   next_cursor: string | null;
   per_page: number;
+  /** Page number (included for page-based pagination, e.g. search). */
+  page?: number;
 }
 
 /**
