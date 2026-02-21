@@ -98,19 +98,7 @@ export function serializeBillDetail(
     extras: {},
   }));
 
-  // Build documents from matter.document_url
-  const documents: any[] = matter.document_url
-    ? [
-        {
-          note: "Supporting document",
-          date: null as string | null,
-          media_type: "application/pdf",
-          url: matter.document_url,
-          text: "",
-          links: [] as any[],
-        },
-      ]
-    : [];
+  const documents: any[] = [];
 
   return {
     // Summary fields

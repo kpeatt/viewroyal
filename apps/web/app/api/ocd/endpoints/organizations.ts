@@ -40,7 +40,7 @@ export async function listOrganizations(c: Context<ApiEnv>) {
   const offset = (page - 1) * perPage;
   const { data: rows, error, count } = await supabase
     .from("organizations")
-    .select("id, name, classification, parent_organization_id, created_at", {
+    .select("id, name, classification, created_at", {
       count: "exact",
     })
     .eq("municipality_id", muni.id)
@@ -89,7 +89,7 @@ export async function getOrganization(c: Context<ApiEnv>) {
   // Fetch ALL organizations for the municipality (only ~10 rows)
   const { data: allOrgs, error } = await supabase
     .from("organizations")
-    .select("id, name, classification, parent_organization_id, created_at")
+    .select("id, name, classification, created_at")
     .eq("municipality_id", muni.id);
 
   if (error) {

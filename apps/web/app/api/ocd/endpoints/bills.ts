@@ -116,7 +116,7 @@ export async function getBill(c: Context<ApiEnv>) {
   const { data: allMatters, error } = await supabase
     .from("matters")
     .select(
-      "id, title, identifier, description, status, category, first_seen, document_url, created_at",
+      "id, title, identifier, description, status, category, first_seen, created_at",
     )
     .eq("municipality_id", muni.id);
 
