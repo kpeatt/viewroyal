@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.3 Platform APIs -- Phase 16 (Core Data & Search API)
+**Current focus:** v1.3 Platform APIs -- Phase 17 (OCD Interoperability)
 
 ## Current Position
 
-Phase: 16 of 18 (Core Data & Search API)
-Plan: 4 of 4 in current phase
-Status: Phase Complete
-Last activity: 2026-02-21 -- Completed 16-04-PLAN.md (Search Endpoint)
+Phase: 17 of 18 (OCD Interoperability)
+Plan: 1 of 3 in current phase
+Status: Executing
+Last activity: 2026-02-21 -- Completed 17-01-PLAN.md (OCD Infrastructure)
 
-Progress: [████████████████████████████████░] ~93% overall (42/~45 plans across all milestones)
+Progress: [█████████████████████████████████░] ~95% overall (43/~45 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 42 (across v1.0 + v1.1 + v1.2 + v1.3)
+- Total plans completed: 43 (across v1.0 + v1.1 + v1.2 + v1.3)
 - Average duration: 4.5min
 - Total execution time: ~4.8 hours
 
@@ -44,6 +44,7 @@ Progress: [███████████████████████
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
 | 16-core-data-search-api | 4 | 18min | 5min |
+| 17-ocd-interoperability | 1 | 5min | 5min |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ New for v1.3:
 - [Phase 16]: Matter detail fetches motions via agenda_item_ids (motions linked to matters through agenda items)
 - [Phase 16]: Page-based pagination for search (not cursor-based -- merged cross-type results are volatile)
 - [Phase 16]: Position-based relevance scoring for textSearch results (PostgREST ordering as ts_rank proxy)
+- [Phase 17]: Hand-rolled UUID v5 via Web Crypto (no uuid npm dep) with hardcoded namespace UUID for deterministic OCD IDs
+- [Phase 17]: Separate OCD pagination (page-based) and envelope (results+pagination) from v1 API (cursor-based, data+pagination+meta)
 
 ### Pending Todos
 
@@ -81,7 +84,7 @@ New for v1.3:
 - bootstrap.sql is out of date with 30+ applied migrations -- technical debt to track
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
-- OCD division ID for View Royal (`csd:5917034`) needs verification against canonical repo before Phase 17
+- OCD division ID for View Royal corrected to `csd:5917047` (was Victoria `csd:5917034`) -- migration applied in 17-01
 - Rate Limit binding pricing needs verification before production launch
 
 ### Quick Tasks Completed
@@ -98,7 +101,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 16-04-PLAN.md (Search Endpoint) -- Phase 16 complete
+Stopped at: Completed 17-01-PLAN.md (OCD Infrastructure)
 Resume file: None
 
 ### Paused Work: Phase 7.1
