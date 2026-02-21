@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 17 of 18 (OCD Interoperability) -- COMPLETE
-Plan: 5 of 5 in current phase
+Plan: 6 of 6 in current phase
 Status: Phase Complete
-Last activity: 2026-02-21 -- Completed 17-05-PLAN.md (Gap Closure - Workers OCD Routing Fix)
+Last activity: 2026-02-21 -- Completed 17-06-PLAN.md (Gap Closure - UAT Column and Row Limit Fixes)
 
-Progress: [███████████████████████████████████] ~99% overall (47/~48 plans across all milestones)
+Progress: [███████████████████████████████████] ~99% overall (48/~48 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 47 (across v1.0 + v1.1 + v1.2 + v1.3)
-- Average duration: 4.3min
+- Total plans completed: 48 (across v1.0 + v1.1 + v1.2 + v1.3)
+- Average duration: 4.2min
 - Total execution time: ~4.9 hours
 
 **By Phase:**
@@ -44,7 +44,7 @@ Progress: [███████████████████████
 | 14-scheduled-automation | 2 | 4min | 2min |
 | 15-api-foundation | 2 | 11min | 6min |
 | 16-core-data-search-api | 4 | 18min | 5min |
-| 17-ocd-interoperability | 5 | 11min | 2min |
+| 17-ocd-interoperability | 6 | 12min | 2min |
 
 ## Accumulated Context
 
@@ -79,6 +79,7 @@ New for v1.3:
 - [Phase 17]: Wildcard :id{.+} route params to handle OCD IDs containing slashes
 - [Phase 17]: Municipality middleware includes ocd_id in select; OCD endpoints use municipality.ocd_id directly instead of broken ocd_divisions join
 - [Phase 17]: Worker fetch handler extended to route both /api/v1/* and /api/ocd/* to same Hono app (gap closure)
+- [Phase 17]: Explicit .limit(100000) on full-table reverse-lookup queries to bypass PostgREST default row limit
 
 ### Pending Todos
 
@@ -106,7 +107,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 17-05-PLAN.md (Gap Closure - Workers OCD Routing Fix) -- Phase 17 Complete
+Stopped at: Completed 17-06-PLAN.md (Gap Closure - UAT Column and Row Limit Fixes) -- Phase 17 Complete
 Resume file: None
 
 ### Paused Work: Phase 7.1
