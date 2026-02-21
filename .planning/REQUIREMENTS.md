@@ -34,9 +34,9 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 
 ### Search
 
-- [ ] **SRCH-01**: API consumer can search across all content types via `GET /api/v1/search?q=` using existing hybrid vector+keyword search
-- [ ] **SRCH-02**: Search results include content type, relevance score, and text snippets
-- [ ] **SRCH-03**: Search results are paginated and filterable by content type
+- [x] **SRCH-01**: API consumer can search across all content types via `GET /api/v1/search?q=` using existing hybrid vector+keyword search
+- [x] **SRCH-02**: Search results include content type, relevance score, and text snippets
+- [x] **SRCH-03**: Search results are paginated and filterable by content type
 
 ### OCD Endpoints
 
@@ -104,9 +104,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-10 | Phase 16 | Complete |
 | DATA-11 | Phase 16 | Complete |
 | DATA-12 | Phase 16 | Complete |
-| SRCH-01 | Phase 16 | Pending |
-| SRCH-02 | Phase 16 | Pending |
-| SRCH-03 | Phase 16 | Pending |
+| SRCH-01 | Phase 16 | Complete |
+| SRCH-02 | Phase 16 | Complete |
+| SRCH-03 | Phase 16 | Complete |
 | OCD-01 | Phase 17 | Pending |
 | OCD-02 | Phase 17 | Pending |
 | OCD-03 | Phase 17 | Pending |
