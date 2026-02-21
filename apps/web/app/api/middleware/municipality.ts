@@ -19,7 +19,7 @@ export const municipality = createMiddleware<ApiEnv>(async (c, next) => {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("municipalities")
-    .select("id, slug, name, short_name")
+    .select("id, slug, name, short_name, ocd_id")
     .eq("slug", slug)
     .maybeSingle();
 

@@ -37,19 +37,7 @@ export async function listJurisdictions(c: Context<ApiEnv>) {
     throw new ApiError(500, "QUERY_ERROR", "Failed to fetch municipality");
   }
 
-  // Fetch the division ID from the ocd_divisions table
-  const { data: division, error: divError } = await supabase
-    .from("ocd_divisions")
-    .select("division_id")
-    .eq("municipality_id", muni.id)
-    .maybeSingle();
-
-  if (divError) {
-    console.error("[OCD] listJurisdictions division error:", divError);
-    throw new ApiError(500, "QUERY_ERROR", "Failed to fetch division");
-  }
-
-  const divisionId = division?.division_id ?? "";
+  const divisionId = municipality?.ocd_id ?? "";
 
   // Fetch organizations for completeness (reserved for legislative_sessions)
   const { data: organizations } = await supabase
@@ -78,19 +66,19 @@ export async function getJurisdiction(c: Context<ApiEnv>) {
   const id = c.req.param("id");
   const supabase = getSupabaseAdminClient();
 
-  // Fetch the division ID from the ocd_divisions table
-  const { data: division, error: divError } = await supabase
-    .from("ocd_divisions")
-    .select("division_id")
-    .eq("municipality_id", muni.id)
-    .maybeSingle();
+  // Fetch full municipality
+  const { data: municipality, error: muniError } = await supabase
+    .from("municipalities")
+    .select("*")
+    .eq("id", muni.id)
+    .single();
 
-  if (divError) {
-    console.error("[OCD] getJurisdiction division error:", divError);
-    throw new ApiError(500, "QUERY_ERROR", "Failed to fetch division");
+  if (muniError) {
+    console.error("[OCD] getJurisdiction municipality error:", muniError);
+    throw new ApiError(500, "QUERY_ERROR", "Failed to fetch municipality");
   }
 
-  const divisionId = division?.division_id ?? "";
+  const divisionId = municipality?.ocd_id ?? "";
 
   // Compute the expected jurisdiction ID and verify it matches
   const csdMatch = divisionId.match(/csd:(\d+)/);
@@ -103,18 +91,6 @@ export async function getJurisdiction(c: Context<ApiEnv>) {
       "JURISDICTION_NOT_FOUND",
       `Jurisdiction "${id}" not found.`,
     );
-  }
-
-  // Fetch full municipality
-  const { data: municipality, error: muniError } = await supabase
-    .from("municipalities")
-    .select("*")
-    .eq("id", muni.id)
-    .single();
-
-  if (muniError) {
-    console.error("[OCD] getJurisdiction municipality error:", muniError);
-    throw new ApiError(500, "QUERY_ERROR", "Failed to fetch municipality");
   }
 
   // Fetch organizations
