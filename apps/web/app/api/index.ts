@@ -19,6 +19,7 @@ import { ListMotions } from "./endpoints/motions/list";
 import { GetMotion } from "./endpoints/motions/detail";
 import { ListBylaws } from "./endpoints/bylaws/list";
 import { GetBylaw } from "./endpoints/bylaws/detail";
+import { SearchEndpoint } from "./endpoints/search";
 
 // Create the base Hono app
 const app = new Hono<ApiEnv>();
@@ -135,5 +136,9 @@ app.use(
   municipality,
 );
 openapi.get("/api/v1/:municipality/bylaws/:slug", GetBylaw);
+
+// Search
+app.use("/api/v1/:municipality/search", apiKeyAuth, rateLimit, municipality);
+openapi.get("/api/v1/:municipality/search", SearchEndpoint);
 
 export default app;
