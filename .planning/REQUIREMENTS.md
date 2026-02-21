@@ -29,8 +29,8 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 - [ ] **DATA-08**: API consumer can get motion detail including individual roll call votes
 - [ ] **DATA-09**: API consumer can list bylaws with filters (status, category, year)
 - [ ] **DATA-10**: API consumer can get bylaw detail including linked matters
-- [ ] **DATA-11**: All list endpoints use cursor-based pagination with opaque base64 cursors, `per_page` (max 100), and `has_more` indicator
-- [ ] **DATA-12**: All responses use consistent envelope: `{ "data", "pagination", "meta" }` with request ID
+- [x] **DATA-11**: All list endpoints use cursor-based pagination with opaque base64 cursors, `per_page` (max 100), and `has_more` indicator
+- [x] **DATA-12**: All responses use consistent envelope: `{ "data", "pagination", "meta" }` with request ID
 
 ### Search
 
@@ -102,8 +102,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-08 | Phase 16 | Pending |
 | DATA-09 | Phase 16 | Pending |
 | DATA-10 | Phase 16 | Pending |
-| DATA-11 | Phase 16 | Pending |
-| DATA-12 | Phase 16 | Pending |
+| DATA-11 | Phase 16 | Complete |
+| DATA-12 | Phase 16 | Complete |
 | SRCH-01 | Phase 16 | Pending |
 | SRCH-02 | Phase 16 | Pending |
 | SRCH-03 | Phase 16 | Pending |
