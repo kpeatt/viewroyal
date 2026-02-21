@@ -40,9 +40,9 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 
 ### OCD Endpoints
 
-- [ ] **OCD-01**: API consumer can list and get OCD Jurisdiction objects mapped from municipalities
-- [ ] **OCD-02**: API consumer can list and get OCD Organization objects mapped from organizations
-- [ ] **OCD-03**: API consumer can list and get OCD Person objects mapped from people
+- [x] **OCD-01**: API consumer can list and get OCD Jurisdiction objects mapped from municipalities
+- [x] **OCD-02**: API consumer can list and get OCD Organization objects mapped from organizations
+- [x] **OCD-03**: API consumer can list and get OCD Person objects mapped from people
 - [ ] **OCD-04**: API consumer can list and get OCD Event objects mapped from meetings (with agenda, participants, media)
 - [ ] **OCD-05**: API consumer can list and get OCD Bill objects mapped from matters (with actions, sponsors)
 - [ ] **OCD-06**: API consumer can list and get OCD Vote objects mapped from motions (with roll call)
@@ -107,9 +107,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRCH-01 | Phase 16 | Complete |
 | SRCH-02 | Phase 16 | Complete |
 | SRCH-03 | Phase 16 | Complete |
-| OCD-01 | Phase 17 | Pending |
-| OCD-02 | Phase 17 | Pending |
-| OCD-03 | Phase 17 | Pending |
+| OCD-01 | Phase 17 | Complete |
+| OCD-02 | Phase 17 | Complete |
+| OCD-03 | Phase 17 | Complete |
 | OCD-04 | Phase 17 | Pending |
 | OCD-05 | Phase 17 | Pending |
 | OCD-06 | Phase 17 | Pending |
