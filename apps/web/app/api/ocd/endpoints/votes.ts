@@ -122,7 +122,8 @@ export async function getVote(c: Context<ApiEnv>) {
     .select(
       "id, text_content, plain_english_summary, result, mover, seconder, yes_votes, no_votes, abstain_votes, created_at, agenda_item_id, meeting:meetings!inner(meeting_date, municipality_id, organization:organizations(name, id))",
     )
-    .eq("meeting.municipality_id", muni.id);
+    .eq("meeting.municipality_id", muni.id)
+    .limit(100000);
 
   if (error) {
     console.error("[OCD] getVote query error:", error);
