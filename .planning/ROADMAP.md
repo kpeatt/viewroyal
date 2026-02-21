@@ -137,7 +137,7 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18
 | 12. Update Detection | v1.2 | 2/2 | Complete | 2026-02-20 |
 | 13. Notifications | v1.2 | 1/1 | Complete | 2026-02-20 |
 | 14. Scheduled Automation | v1.2 | 2/2 | Complete | 2026-02-20 |
-| 15. API Foundation | 2/2 | Complete   | 2026-02-20 | - |
+| 15. API Foundation | 2/2 | Complete    | 2026-02-21 | - |
 | 16. Core Data & Search API | v1.3 | 0/? | Not started | - |
 | 17. OCD Interoperability | v1.3 | 0/? | Not started | - |
 | 18. Documentation & Key Management | v1.3 | 0/? | Not started | - |
