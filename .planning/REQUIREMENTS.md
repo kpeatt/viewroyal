@@ -19,10 +19,10 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 
 ### Data Endpoints
 
-- [ ] **DATA-01**: API consumer can list meetings with cursor-based pagination and filters (date range, type, has_transcript, organization)
-- [ ] **DATA-02**: API consumer can get meeting detail including agenda items, motions, and attendance
-- [ ] **DATA-03**: API consumer can list people with filters (is_councillor, name search)
-- [ ] **DATA-04**: API consumer can get person detail including memberships and voting summary
+- [x] **DATA-01**: API consumer can list meetings with cursor-based pagination and filters (date range, type, has_transcript, organization)
+- [x] **DATA-02**: API consumer can get meeting detail including agenda items, motions, and attendance
+- [x] **DATA-03**: API consumer can list people with filters (is_councillor, name search)
+- [x] **DATA-04**: API consumer can get person detail including memberships and voting summary
 - [x] **DATA-05**: API consumer can list matters with filters (status, category, date range)
 - [x] **DATA-06**: API consumer can get matter detail including agenda items and timeline
 - [x] **DATA-07**: API consumer can list motions with filters (result, meeting, mover)
@@ -92,10 +92,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-05 | Phase 15 | Complete |
 | INFRA-06 | Phase 15 | Complete |
 | INFRA-07 | Phase 15 | Complete |
-| DATA-01 | Phase 16 | Pending |
-| DATA-02 | Phase 16 | Pending |
-| DATA-03 | Phase 16 | Pending |
-| DATA-04 | Phase 16 | Pending |
+| DATA-01 | Phase 16 | Complete |
+| DATA-02 | Phase 16 | Complete |
+| DATA-03 | Phase 16 | Complete |
+| DATA-04 | Phase 16 | Complete |
 | DATA-05 | Phase 16 | Complete |
 | DATA-06 | Phase 16 | Complete |
 | DATA-07 | Phase 16 | Complete |
