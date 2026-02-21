@@ -25,8 +25,8 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
 
-    // Delegate /api/v1/* requests to the Hono API app
-    if (url.pathname.startsWith("/api/v1/") || url.pathname === "/api/v1") {
+    // Delegate /api/v1/* and /api/ocd/* requests to the Hono API app
+    if (url.pathname.startsWith("/api/v1/") || url.pathname === "/api/v1" || url.pathname.startsWith("/api/ocd/") || url.pathname === "/api/ocd") {
       return apiApp.fetch(request, env, ctx);
     }
 
