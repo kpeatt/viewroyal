@@ -96,13 +96,15 @@ Plans:
   2. All OCD entities include valid OCD IDs -- deterministic division-based IDs for jurisdictions, UUID-based for people, organizations, events, bills, and votes
   3. OCD list endpoints use page-based pagination matching the OpenStates convention (page number + per_page)
   4. OCD entity fields map correctly from existing database models (e.g., meetings become Events with agenda and media, matters become Bills with actions and sponsors)
-**Plans**: 4 plans
+**Plans**: 6 plans
 
 Plans:
 - [x] 17-01-PLAN.md — Shared OCD infrastructure: UUID v5 ID generation, page-based pagination, OCD envelope, divisions table, fix municipality division ID
 - [x] 17-02-PLAN.md — Jurisdiction, Organization, and Person serializers + endpoints, OCD router, mount in main app
 - [x] 17-03-PLAN.md — Event, Bill, and Vote serializers + endpoints with complex nested data mapping
-- [ ] 17-04-PLAN.md — Gap closure: fix division lookup defect in Jurisdiction/Organization endpoints, update REQUIREMENTS.md
+- [x] 17-04-PLAN.md — Gap closure: fix division lookup defect in Jurisdiction/Organization endpoints, update REQUIREMENTS.md
+- [x] 17-05-PLAN.md — Gap closure: fix Workers entry point to route /api/ocd/* to Hono
+- [ ] 17-06-PLAN.md — Gap closure: fix non-existent column selects and PostgREST row limit truncation
 
 ### Phase 18: Documentation & Key Management
 **Goal**: API consumers can discover endpoints through interactive documentation and manage their own API keys without operator intervention
@@ -142,5 +144,5 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18
 | 14. Scheduled Automation | v1.2 | 2/2 | Complete | 2026-02-20 |
 | 15. API Foundation | 2/2 | Complete    | 2026-02-21 | - |
 | 16. Core Data & Search API | 4/4 | Complete    | 2026-02-21 | - |
-| 17. OCD Interoperability | 5/5 | Complete    | 2026-02-21 | - |
+| 17. OCD Interoperability | 5/6 | In Progress | 2026-02-21 | - |
 | 18. Documentation & Key Management | v1.3 | 0/? | Not started | - |
