@@ -114,11 +114,11 @@ Plans:
   1. An OpenAPI 3.1 spec is served at `/api/v1/openapi.json` documenting all public v1 and OCD endpoints with request/response schemas
   2. Interactive Swagger UI at `/api/v1/docs` allows exploring and testing every endpoint with a valid API key
   3. An authenticated user can create, view (prefix + creation date only), and revoke API keys through a self-service management page in the web app
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 18-01: TBD
-- [ ] 18-02: TBD
+- [ ] 18-01-PLAN.md — OpenAPI 3.1 spec enrichment, Swagger UI fix, security scheme, tags, OCD docs
+- [ ] 18-02-PLAN.md — Self-service API key management page (create/view/revoke)
 
 ## Progress
 
