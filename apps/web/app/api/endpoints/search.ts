@@ -57,6 +57,8 @@ function positionScore(index: number, total: number): number {
  */
 export class SearchEndpoint extends OpenAPIRoute {
   schema = {
+    tags: ["Search"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Search across all content types",
     description:
       "Full-text keyword search across motions, matters, agenda items, key statements, and document sections. Returns results ranked by relevance with type, score, and text snippets.",

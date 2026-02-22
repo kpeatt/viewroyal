@@ -13,6 +13,8 @@ import type { Context } from "hono";
  */
 export class TestAuthEndpoint extends OpenAPIRoute {
   schema = {
+    tags: ["System"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Test authenticated endpoint",
     description:
       "Returns API key info and municipality context. Requires valid API key.",

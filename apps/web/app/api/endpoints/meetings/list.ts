@@ -10,6 +10,8 @@ import { ApiError } from "../../lib/api-errors";
 
 export class ListMeetings extends OpenAPIRoute {
   schema = {
+    tags: ["Meetings"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "List meetings",
     description:
       "Returns a paginated list of meetings with optional filters. " +

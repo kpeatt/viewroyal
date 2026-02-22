@@ -9,6 +9,8 @@ import { ApiError } from "../../lib/api-errors";
 
 export class GetPerson extends OpenAPIRoute {
   schema = {
+    tags: ["People"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Get person detail",
     description:
       "Returns a single person with memberships and voting summary.",

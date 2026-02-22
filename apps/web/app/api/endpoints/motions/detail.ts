@@ -18,6 +18,8 @@ import { ApiError } from "../../lib/api-errors";
  */
 export class GetMotion extends OpenAPIRoute {
   schema = {
+    tags: ["Motions"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Get motion detail",
     description:
       "Returns a single motion by slug, including the full text, mover/seconder info, and individual roll call votes.",

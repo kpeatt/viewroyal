@@ -14,6 +14,8 @@ import { ApiError } from "../../lib/api-errors";
  */
 export class GetBylaw extends OpenAPIRoute {
   schema = {
+    tags: ["Bylaws"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Get bylaw detail",
     description:
       "Returns a single bylaw by slug, including its description, summary, and linked matters.",

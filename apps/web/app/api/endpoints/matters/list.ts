@@ -16,6 +16,8 @@ import { ApiError } from "../../lib/api-errors";
  */
 export class ListMatters extends OpenAPIRoute {
   schema = {
+    tags: ["Matters"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "List matters",
     description:
       "Returns a paginated list of matters (council business items) with optional filters for status, category, and date range.",

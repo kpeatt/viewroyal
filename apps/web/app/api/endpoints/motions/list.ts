@@ -17,6 +17,8 @@ import { ApiError } from "../../lib/api-errors";
  */
 export class ListMotions extends OpenAPIRoute {
   schema = {
+    tags: ["Motions"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "List motions",
     description:
       "Returns a paginated list of motions (council votes/decisions) with optional filters for result, meeting, and mover.",
