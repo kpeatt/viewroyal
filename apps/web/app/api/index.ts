@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { fromHono } from "chanfana";
+import { z } from "zod";
 import type { ApiEnv } from "./types";
 import { requestId } from "./middleware/request-id";
 import { errorHandler } from "./middleware/error-handler";
@@ -58,18 +59,79 @@ app.notFound((c) => {
 });
 
 // Initialize chanfana OpenAPI router
+// NOTE: docs_url and openapi_url are relative to `base` -- chanfana prepends base automatically.
+// Using "/docs" and "/openapi.json" produces /api/v1/docs and /api/v1/openapi.json.
 const openapi = fromHono(app, {
   base: "/api/v1",
-  docs_url: "/api/v1/docs",
-  openapi_url: "/api/v1/openapi.json",
+  docs_url: "/docs",
+  openapi_url: "/openapi.json",
   openapiVersion: "3.1",
   schema: {
     info: {
       title: "ViewRoyal.ai API",
       version: "1.0.0",
-      description: "Public API for ViewRoyal.ai civic intelligence platform",
+      description:
+        "Public API for the ViewRoyal.ai civic intelligence platform.\n\n" +
+        "Provides access to council meeting data, people, matters, motions, bylaws, " +
+        "and cross-content search for the Town of View Royal, BC.\n\n" +
+        "**Authentication:** Pass your API key in the `X-API-Key` header or as a `?apikey=` query parameter. " +
+        "Get your key at [/settings/api-keys](/settings/api-keys).\n\n" +
+        "**Open Civic Data:** OCD-standard endpoints are available under the OCD tag for civic tech interoperability.",
+    },
+    tags: [
+      { name: "System", description: "Health checks and API status" },
+      {
+        name: "Meetings",
+        description: "Council meeting agendas, minutes, and attendance",
+      },
+      {
+        name: "People",
+        description: "Council members, staff, and their voting records",
+      },
+      {
+        name: "Matters",
+        description: "Agenda matters, issues, and their lifecycle",
+      },
+      {
+        name: "Motions",
+        description: "Motions, resolutions, and roll call votes",
+      },
+      { name: "Bylaws", description: "Municipal bylaws and their status" },
+      { name: "Search", description: "Cross-content keyword search" },
+      {
+        name: "OCD",
+        description:
+          "Open Civic Data specification endpoints for civic tech interoperability",
+      },
+    ],
+  },
+});
+
+// Register API key security scheme
+openapi.registry.registerComponent("securitySchemes", "ApiKeyAuth", {
+  type: "apiKey",
+  in: "header",
+  name: "X-API-Key",
+  description:
+    "API key for authentication. Get your key at /settings/api-keys. " +
+    "Alternatively, pass as ?apikey= query parameter.",
+});
+
+// Register shared error response schema
+openapi.registry.registerComponent("schemas", "ApiError", {
+  type: "object",
+  properties: {
+    error: {
+      type: "object",
+      properties: {
+        code: { type: "string", example: "NOT_FOUND" },
+        message: { type: "string", example: "Resource not found" },
+        status: { type: "integer", example: 404 },
+      },
+      required: ["code", "message", "status"],
     },
   },
+  required: ["error"],
 });
 
 // Health endpoint (no municipality scope)
@@ -144,5 +206,53 @@ openapi.get("/api/v1/:municipality/search", SearchEndpoint);
 
 // OCD interoperability endpoints (public, no auth/rate-limit)
 app.route("/api/ocd", ocdApp);
+
+// Register OCD endpoints in the OpenAPI spec for documentation.
+// These paths are outside the chanfana base (/api/v1) but registerPath
+// adds them to the spec JSON regardless.
+const ocdEntities = [
+  { name: "jurisdictions", singular: "jurisdiction" },
+  { name: "organizations", singular: "organization" },
+  { name: "people", singular: "person" },
+  { name: "events", singular: "event" },
+  { name: "bills", singular: "bill" },
+  { name: "votes", singular: "vote" },
+] as const;
+
+for (const entity of ocdEntities) {
+  // List endpoint
+  openapi.registry.registerPath({
+    method: "get",
+    path: `/api/ocd/{municipality}/${entity.name}`,
+    tags: ["OCD"],
+    summary: `List OCD ${entity.name}`,
+    description: `Returns a paginated list of OCD ${entity.name} for the given municipality.`,
+    request: {
+      params: z.object({ municipality: z.string() }),
+      query: z.object({
+        page: z.number().int().optional().default(1),
+        per_page: z.number().int().optional().default(20),
+      }),
+    },
+    responses: {
+      "200": { description: `Paginated list of OCD ${entity.name}` },
+    },
+  });
+
+  // Detail endpoint
+  openapi.registry.registerPath({
+    method: "get",
+    path: `/api/ocd/{municipality}/${entity.name}/{id}`,
+    tags: ["OCD"],
+    summary: `Get OCD ${entity.singular} by ID`,
+    description: `Returns a single OCD ${entity.singular} by its OCD identifier.`,
+    request: {
+      params: z.object({ municipality: z.string(), id: z.string() }),
+    },
+    responses: {
+      "200": { description: `OCD ${entity.singular} detail` },
+    },
+  });
+}
 
 export default app;
