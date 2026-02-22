@@ -49,7 +49,7 @@
 - [x] **Phase 15: API Foundation** - API key auth, rate limiting, error handling, CORS, and municipality-scoped routing infrastructure (completed 2026-02-20)
 - [x] **Phase 16: Core Data & Search API** - REST endpoints for meetings, people, matters, motions, bylaws, and hybrid search with cursor pagination (completed 2026-02-21)
 - [x] **Phase 17: OCD Interoperability** - Open Civic Data standard endpoints mapping existing entities to the OCD spec (completed 2026-02-21)
-- [ ] **Phase 18: Documentation & Key Management** - OpenAPI 3.1 spec, Swagger UI, and self-service API key management page
+- [x] **Phase 18: Documentation & Key Management** - OpenAPI 3.1 spec, Swagger UI, and self-service API key management page (completed 2026-02-22)
 
 ## Phase Details
 
@@ -145,4 +145,4 @@ Phases execute in numeric order: 15 -> 16 -> 17 -> 18
 | 15. API Foundation | 2/2 | Complete    | 2026-02-21 | - |
 | 16. Core Data & Search API | 4/4 | Complete    | 2026-02-21 | - |
 | 17. OCD Interoperability | 6/6 | Complete    | 2026-02-21 | - |
-| 18. Documentation & Key Management | v1.3 | 0/? | Not started | - |
+| 18. Documentation & Key Management | 2/2 | Complete   | 2026-02-22 | - |

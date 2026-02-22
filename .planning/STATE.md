@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.3 Platform APIs -- Phase 17 (OCD Interoperability)
+**Current focus:** v1.3 Platform APIs -- Phase 18 (Documentation & Key Management)
 
 ## Current Position
 
-Phase: 17 of 18 (OCD Interoperability) -- COMPLETE
-Plan: 6 of 6 in current phase
+Phase: 18 of 18 (Documentation & Key Management) -- COMPLETE
+Plan: 2 of 2 in current phase
 Status: Phase Complete
-Last activity: 2026-02-21 -- Completed 17-06-PLAN.md (Gap Closure - UAT Column and Row Limit Fixes)
+Last activity: 2026-02-22 -- Completed 18-02-PLAN.md (API Key Management Page)
 
-Progress: [███████████████████████████████████] ~99% overall (48/~48 plans across all milestones)
+Progress: [███████████████████████████████████] 100% overall (50/50 plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 48 (across v1.0 + v1.1 + v1.2 + v1.3)
+- Total plans completed: 50 (across v1.0 + v1.1 + v1.2 + v1.3)
 - Average duration: 4.2min
-- Total execution time: ~4.9 hours
+- Total execution time: ~5.1 hours
 
 **By Phase:**
 
@@ -45,6 +45,7 @@ Progress: [███████████████████████
 | 15-api-foundation | 2 | 11min | 6min |
 | 16-core-data-search-api | 4 | 18min | 5min |
 | 17-ocd-interoperability | 6 | 12min | 2min |
+| 18-documentation-key-management | 2 | 9min | 5min |
 
 ## Accumulated Context
 
@@ -80,6 +81,10 @@ New for v1.3:
 - [Phase 17]: Municipality middleware includes ocd_id in select; OCD endpoints use municipality.ocd_id directly instead of broken ocd_divisions join
 - [Phase 17]: Worker fetch handler extended to route both /api/v1/* and /api/ocd/* to same Hono app (gap closure)
 - [Phase 17]: Explicit .limit(100000) on full-table reverse-lookup queries to bypass PostgREST default row limit
+- [Phase 18]: chanfana docs_url/openapi_url must be relative to base (chanfana prepends base automatically) -- /docs and /openapi.json not /api/v1/docs
+- [Phase 18]: OCD endpoints registered via registerPath() even though outside chanfana base /api/v1 -- registerPath adds to spec JSON regardless of base path
+- [Phase 18]: API key management route registered explicitly in routes.ts (not flat-file auto-discovery) because settings.tsx layout parent would swallow child route
+- [Phase 18]: Per-key dialog state (revokeKeyId: string | null) for revoke confirmation to handle multiple active keys independently
 
 ### Pending Todos
 
@@ -106,8 +111,8 @@ New for v1.3:
 
 ## Session Continuity
 
-Last session: 2026-02-21
-Stopped at: Completed 17-06-PLAN.md (Gap Closure - UAT Column and Row Limit Fixes) -- Phase 17 Complete
+Last session: 2026-02-22
+Stopped at: Completed 18-02-PLAN.md (API Key Management Page) -- Phase 18 Complete
 Resume file: None
 
 ### Paused Work: Phase 7.1
