@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, redirect, useActionData } from "react-router";
+import { Form, redirect, useActionData, Link } from "react-router";
 import type { Route } from "./+types/settings";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import {
@@ -26,6 +26,7 @@ import {
   Plus,
   X,
   Loader2,
+  Key,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type {
@@ -564,6 +565,22 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             {actionData.error}
           </div>
         )}
+
+        {/* Quick Links */}
+        <section className="mb-8">
+          <Link
+            to="/settings/api-keys"
+            className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm hover:border-zinc-300 hover:shadow transition-all group"
+          >
+            <div className="p-2 bg-amber-50 rounded-lg group-hover:bg-amber-100 transition-colors">
+              <Key className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900">API Keys</h3>
+              <p className="text-xs text-zinc-500">Manage API keys for the ViewRoyal.ai API</p>
+            </div>
+          </Link>
+        </section>
 
         {/* Profile Section */}
         <section className="mb-8">

@@ -27,6 +27,7 @@ export default [
   route("signup", "routes/signup.tsx"),
   route("logout", "routes/logout.tsx"),
   route("settings", "routes/settings.tsx"),
+  route("settings/api-keys", "routes/settings.api-keys.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
   route("speaker-alias", "routes/speaker-alias.tsx"),
