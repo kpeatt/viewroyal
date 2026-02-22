@@ -51,10 +51,10 @@ Requirements for the Platform APIs milestone. Each maps to roadmap phases.
 
 ### Documentation & Management
 
-- [ ] **DOCS-01**: OpenAPI 3.1 spec is served at `/api/v1/openapi.json` documenting all public endpoints
-- [ ] **DOCS-02**: Interactive Swagger UI is served at `/api/v1/docs` for API exploration
-- [ ] **DOCS-03**: Authenticated user can create, view, and revoke API keys via a self-service management page
-- [ ] **DOCS-04**: API key management page shows key prefix (not full key) and creation date
+- [x] **DOCS-01**: OpenAPI 3.1 spec is served at `/api/v1/openapi.json` documenting all public endpoints
+- [x] **DOCS-02**: Interactive Swagger UI is served at `/api/v1/docs` for API exploration
+- [x] **DOCS-03**: Authenticated user can create, view, and revoke API keys via a self-service management page
+- [x] **DOCS-04**: API key management page shows key prefix (not full key) and creation date
 
 ## v2 Requirements
 
@@ -115,10 +115,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OCD-06 | Phase 17 | Complete |
 | OCD-07 | Phase 17 | Complete |
 | OCD-08 | Phase 17 | Complete |
-| DOCS-01 | Phase 18 | Pending |
-| DOCS-02 | Phase 18 | Pending |
-| DOCS-03 | Phase 18 | Pending |
-| DOCS-04 | Phase 18 | Pending |
+| DOCS-01 | Phase 18 | Complete |
+| DOCS-02 | Phase 18 | Complete |
+| DOCS-03 | Phase 18 | Complete |
+| DOCS-04 | Phase 18 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 34 total
