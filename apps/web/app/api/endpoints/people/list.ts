@@ -10,6 +10,8 @@ import { ApiError } from "../../lib/api-errors";
 
 export class ListPeople extends OpenAPIRoute {
   schema = {
+    tags: ["People"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "List people",
     description:
       "Returns a paginated list of people associated with the municipality. " +

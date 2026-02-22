@@ -16,6 +16,8 @@ import { ApiError } from "../../lib/api-errors";
  */
 export class ListBylaws extends OpenAPIRoute {
   schema = {
+    tags: ["Bylaws"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "List bylaws",
     description:
       "Returns a paginated list of bylaws with optional filters for status, category, and year.",

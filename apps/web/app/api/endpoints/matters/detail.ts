@@ -14,6 +14,8 @@ import { ApiError } from "../../lib/api-errors";
  */
 export class GetMatter extends OpenAPIRoute {
   schema = {
+    tags: ["Matters"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Get matter detail",
     description:
       "Returns a single matter by slug, including its agenda item timeline and associated motions.",

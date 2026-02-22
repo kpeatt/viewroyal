@@ -5,6 +5,7 @@ import type { Context } from "hono";
 
 export class HealthEndpoint extends OpenAPIRoute {
   schema = {
+    tags: ["System"],
     summary: "Health check",
     description:
       "Returns the current health status of the API. When called with a municipality slug, includes the municipality name.",

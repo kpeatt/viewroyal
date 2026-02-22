@@ -9,6 +9,8 @@ import { ApiError } from "../../lib/api-errors";
 
 export class GetMeeting extends OpenAPIRoute {
   schema = {
+    tags: ["Meetings"],
+    security: [{ ApiKeyAuth: [] }],
     summary: "Get meeting detail",
     description:
       "Returns a single meeting with inline agenda item, motion, and attendance summaries.",
