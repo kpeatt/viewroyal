@@ -73,11 +73,11 @@
   2. Existing apps/web builds and deploys to Cloudflare Workers without regressions after workspace migration
   3. `apps/docs/` contains a fumadocs v16 + Next.js 16 site that builds successfully with `output: 'export'` producing a static `out/` directory
   4. The static build completes with zero errors and the output renders correctly in a local browser (navigation sidebar, dark mode toggle, Orama search input all visible)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 19-01: TBD
-- [ ] 19-02: TBD
+- [ ] 19-01-PLAN.md — pnpm workspace migration and existing app build verification
+- [ ] 19-02-PLAN.md — Fumadocs v16 scaffold with static export build pipeline
 
 ### Phase 20: OpenAPI Integration & API Reference
 **Goal**: Developers can browse complete auto-generated API reference documentation with interactive playground and multi-language code examples for every endpoint
