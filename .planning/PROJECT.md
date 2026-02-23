@@ -60,19 +60,19 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ Daily scheduled pipeline runs via launchd on Mac Mini — v1.2
 - ✓ Moshi push notifications when new content is found and processed — v1.2
 - ✓ Rotating log file and concurrency lock for safe unattended runs — v1.2
+- ✓ API key authentication with SHA-256 hashing, timing-safe comparison, and per-key rate limiting — v1.3
+- ✓ Consistent JSON error shape and CORS headers across all API routes — v1.3
+- ✓ Municipality-scoped REST endpoints for meetings, people, matters, motions, bylaws — v1.3
+- ✓ Cursor-based pagination with opaque base64 cursors and consistent response envelope — v1.3
+- ✓ Cross-content keyword search API with type filtering and relevance scoring — v1.3
+- ✓ Open Civic Data standard endpoints (jurisdictions, organizations, people, events, bills, votes) — v1.3
+- ✓ OCD IDs (UUID v5 deterministic) and page-based pagination matching OpenStates convention — v1.3
+- ✓ OpenAPI 3.1 spec at /api/v1/openapi.json with interactive Swagger UI at /api/v1/docs — v1.3
+- ✓ Self-service API key management page (create, view prefix, revoke with confirmation) — v1.3
 
 ### Active
 
-## Current Milestone: v1.3 Platform APIs
-
-**Goal:** Expose civic data and RAG capabilities through a documented, stable JSON API with API key authentication, rate limiting, and OpenAPI documentation — plus OCD-standard endpoints for civic tech interoperability.
-
-**Target features:**
-- Public API with API key auth, rate limiting, cursor-based pagination, and OpenAPI 3.1 docs
-- Data endpoints: meetings, matters, people, motions, bylaws (per municipality)
-- Search and Ask API endpoints (semantic search + non-streaming RAG)
-- Open Civic Data (OCD) standard endpoints for interoperability
-- OCD entity mapping (jurisdictions, organizations, people, events, bills, votes)
+(No active requirements — define with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -87,15 +87,19 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ## Context
 
-Shipped v1.2 with ~81,500 LOC (TypeScript + Python), 40+ database tables, 357 automated tests.
-Tech stack: React Router 7, Cloudflare Workers, Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed.
-v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. v1.2: 3 phases, 5 plans in 12 minutes.
+Shipped v1.3 with ~94,500 LOC (TypeScript + Python), 40+ database tables, 357 automated tests, 5,042 LOC public API.
+Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed.
+v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. v1.2: 3 phases, 5 plans in 12 minutes. v1.3: 4 phases, 14 plans in 50 minutes.
 
 **Known technical debt:**
 - `bootstrap.sql` is out of date with 30+ applied migrations
 - Phase 7.1 Gemini Batch API extraction paused — backfill waiting on quota
 - `document_chunker.py` and several web modules lack dedicated test coverage
 - Email delivery requires one-time external Resend/SMTP configuration
+- `matters/detail.ts` dead query in Promise.all (wasted DB round-trip)
+- `slugs.ts` utility created but unused (slugs resolved via DB columns)
+- API search is keyword-only; hybrid vector+keyword descoped
+- Rate Limit binding pricing needs verification before production launch
 
 ## Constraints
 
@@ -127,6 +131,15 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | MOSHI_TOKEN as feature toggle | Missing token silently disables notifications, no CLI flag needed | ✓ Good |
 | fcntl.flock for pipeline lock | Auto-releases on crash/kill, no stale pidfile cleanup needed | ✓ Good |
 | launchd over cron | Native macOS, better logging integration, StartCalendarInterval | ✓ Good |
+| Hono alongside React Router in same Worker | URL-prefix split at fetch level (/api/v1/* and /api/ocd/* to Hono, rest to RR7) | ✓ Good |
+| chanfana for OpenAPI generation | Auto-generates spec from Zod schemas, serves Swagger UI, minimal boilerplate | ✓ Good |
+| SHA-256 over bcrypt for API keys | Keys are high-entropy random strings; SHA-256 is fast and sufficient | ✓ Good |
+| CF Workers Rate Limit binding | Durable rate limiting across isolate evictions, per-key scoping | ✓ Good |
+| Cursor-based pagination (v1 API) | Opaque base64 cursors, stable ordering, no offset-skip performance issues | ✓ Good |
+| Page-based pagination (OCD API) | Matches OpenStates convention for civic tech compatibility | ✓ Good |
+| UUID v5 via Web Crypto for OCD IDs | No npm dependency, deterministic IDs from entity PKs, Cloudflare-compatible | ✓ Good |
+| Plain Hono handlers for OCD (not chanfana) | OCD has its own spec; OpenAPI generation unnecessary for those endpoints | ✓ Good |
+| Serializer allowlist pattern | Never spread ...row; explicitly construct output objects to prevent field leakage | ✓ Good |
 
 ---
-*Last updated: 2026-02-19 after v1.3 milestone started*
+*Last updated: 2026-02-22 after v1.3 milestone*

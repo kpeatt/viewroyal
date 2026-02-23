@@ -64,3 +64,30 @@
 
 ---
 
+
+## v1.3 Platform APIs (Shipped: 2026-02-22)
+
+**Phases completed:** 4 phases, 14 plans, 26 tasks
+**Timeline:** 2 days (2026-02-20 → 2026-02-22), ~50 minutes execution
+**Git range:** e00304a1..d723ca3b (95 files changed, +13,025/-101 lines)
+**API source:** 5,042 LOC TypeScript in `apps/web/app/api/`
+
+**Key accomplishments:**
+1. API key authentication with SHA-256 hashing, timing-safe comparison, and per-key Cloudflare Workers rate limiting
+2. 10 REST data endpoints for meetings, people, matters, motions, and bylaws with cursor-based pagination and consistent response envelope
+3. Cross-content keyword search across 5 content types with relevance scoring and type filtering
+4. 12 Open Civic Data standard endpoints with UUID v5 OCD IDs, page-based pagination, and full entity mapping
+5. Interactive OpenAPI 3.1 documentation with Swagger UI at `/api/v1/docs` and security scheme integration
+6. Self-service API key management page with one-time key reveal, copy-to-clipboard, and confirmation-guarded revocation
+
+**Known gaps (tech debt):**
+- `matters/detail.ts` dead query in Promise.all (wasted DB round-trip, no functional impact)
+- `slugs.ts` utility created but unused at runtime (slugs resolved via DB columns)
+- Search is keyword-only; hybrid vector+keyword descoped (needs embedding credentials)
+- Per-endpoint error responses not enumerated in OpenAPI spec (reusable error schema exists)
+- `api_keys.name` column always "Default" (users can't name keys)
+
+**Delivered:** API consumers can authenticate with API keys, browse all civic data through paginated REST endpoints, access Open Civic Data standard endpoints for interoperability, explore the API through interactive Swagger UI documentation, and manage their own API keys through a self-service web page.
+
+---
+
