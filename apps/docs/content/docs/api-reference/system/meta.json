@@ -1,0 +1,7 @@
+{
+  "title": "System",
+  "pages": [
+    "get_HealthEndpoint",
+    "get_TestAuthEndpoint"
+  ]
+}

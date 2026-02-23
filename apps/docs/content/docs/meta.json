@@ -1,4 +1,9 @@
 {
   "root": true,
-  "pages": ["---Getting Started---", "..."]
+  "pages": [
+    "---Getting Started---",
+    "...",
+    "---API Reference---",
+    "api-reference"
+  ]
 }

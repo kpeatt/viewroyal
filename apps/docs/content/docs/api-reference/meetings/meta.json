@@ -1,0 +1,7 @@
+{
+  "title": "Meetings",
+  "pages": [
+    "get_ListMeetings",
+    "get_GetMeeting"
+  ]
+}
