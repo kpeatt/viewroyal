@@ -1,0 +1,101 @@
+# Requirements: ViewRoyal.ai
+
+**Defined:** 2026-02-23
+**Core Value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
+
+## v1.4 Requirements
+
+Requirements for the Developer Documentation Portal milestone. Each maps to roadmap phases.
+
+### Monorepo Infrastructure
+
+- [ ] **MONO-01**: Root pnpm-workspace.yaml configures apps/web, apps/docs, and apps/vimeo-proxy as workspace members
+- [ ] **MONO-02**: Existing apps/web and apps/vimeo-proxy build and deploy correctly after workspace migration
+
+### Framework & Deployment
+
+- [ ] **FWRK-01**: Fumadocs site scaffolded in apps/docs with Next.js 16 and fumadocs v16
+- [ ] **FWRK-02**: Static export builds successfully (output: 'export')
+- [ ] **FWRK-03**: Docs site deployed to docs.viewroyal.ai via Cloudflare
+- [ ] **FWRK-04**: Built-in Orama search indexes all documentation pages
+- [ ] **FWRK-05**: Navigation sidebar auto-generated from content directory structure
+
+### API Reference
+
+- [ ] **AREF-01**: OpenAPI spec fetched at build time from live API with checked-in fallback
+- [ ] **AREF-02**: API reference pages auto-generated from OpenAPI 3.1 spec grouped by tag (Meetings, People, Matters, Motions, Bylaws, Search, OCD, System)
+- [ ] **AREF-03**: Interactive playground on API reference pages for live API requests
+- [ ] **AREF-04**: Multi-language code examples (curl, JavaScript, Python) on reference pages
+
+### Developer Guides
+
+- [ ] **GUID-01**: Getting Started guide: zero to first API call in under 5 minutes
+- [ ] **GUID-02**: Authentication guide: API key usage, headers, error responses, security best practices
+- [ ] **GUID-03**: Pagination and Filtering guide: cursor-based (v1) and page-based (OCD) with working examples
+- [ ] **GUID-04**: Error Handling guide: all error codes, response shapes, retry logic examples
+
+### Reference Content
+
+- [ ] **REFC-01**: Data Model page with entity relationships and Mermaid ER diagram
+- [ ] **REFC-02**: OCD Standard Reference: entity mapping, when to use v1 vs OCD, OCD ID format
+- [ ] **REFC-03**: Changelog page with initial v1.0 API entry
+- [ ] **REFC-04**: Contribution guide: bug reports, feature requests, GitHub links
+
+## Future Requirements
+
+### Automation
+
+- **AUTO-01**: GitHub Actions workflow to auto-rebuild docs when API spec changes
+- **AUTO-02**: Automated OpenAPI spec diff detection and changelog entry generation
+
+### Enhanced Features
+
+- **ENHC-01**: Persistent language selection across all pages (fumadocs Tabs groupId + persist)
+- **ENHC-02**: Hosted Postman/Insomnia collection import instructions
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Auto-generated client SDKs | Developers can generate from OpenAPI spec themselves |
+| Versioned documentation (multi-version) | Only one API version exists (v1) |
+| User accounts / personalized docs | Adds auth complexity; docs should be static and public |
+| Community features (comments, voting) | GitHub Issues is the appropriate channel |
+| AI-powered doc search / chatbot | Main app has RAG search; Orama text search sufficient for docs |
+| Multi-language docs (i18n) | API serves Canadian municipal data in English |
+| Blog / tutorials section | Belongs on main site, not developer docs |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MONO-01 | — | Pending |
+| MONO-02 | — | Pending |
+| FWRK-01 | — | Pending |
+| FWRK-02 | — | Pending |
+| FWRK-03 | — | Pending |
+| FWRK-04 | — | Pending |
+| FWRK-05 | — | Pending |
+| AREF-01 | — | Pending |
+| AREF-02 | — | Pending |
+| AREF-03 | — | Pending |
+| AREF-04 | — | Pending |
+| GUID-01 | — | Pending |
+| GUID-02 | — | Pending |
+| GUID-03 | — | Pending |
+| GUID-04 | — | Pending |
+| REFC-01 | — | Pending |
+| REFC-02 | — | Pending |
+| REFC-03 | — | Pending |
+| REFC-04 | — | Pending |
+
+**Coverage:**
+- v1.4 requirements: 19 total
+- Mapped to phases: 0
+- Unmapped: 19 (pending roadmap creation)
+
+---
+*Requirements defined: 2026-02-23*
+*Last updated: 2026-02-23 after initial definition*
