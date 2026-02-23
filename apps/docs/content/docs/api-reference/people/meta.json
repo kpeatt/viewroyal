@@ -1,0 +1,7 @@
+{
+  "title": "People",
+  "pages": [
+    "get_ListPeople",
+    "get_GetPerson"
+  ]
+}

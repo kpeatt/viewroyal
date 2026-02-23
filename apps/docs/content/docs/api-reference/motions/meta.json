@@ -1,0 +1,7 @@
+{
+  "title": "Motions",
+  "pages": [
+    "get_ListMotions",
+    "get_GetMotion"
+  ]
+}
