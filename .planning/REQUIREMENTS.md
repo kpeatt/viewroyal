@@ -9,8 +9,8 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 ### Monorepo Infrastructure
 
-- [ ] **MONO-01**: Root pnpm-workspace.yaml configures apps/web, apps/docs, and apps/vimeo-proxy as workspace members
-- [ ] **MONO-02**: Existing apps/web and apps/vimeo-proxy build and deploy correctly after workspace migration
+- [x] **MONO-01**: Root pnpm-workspace.yaml configures apps/web, apps/docs, and apps/vimeo-proxy as workspace members
+- [x] **MONO-02**: Existing apps/web and apps/vimeo-proxy build and deploy correctly after workspace migration
 
 ### Framework & Deployment
 
@@ -71,8 +71,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MONO-01 | Phase 19 | Pending |
-| MONO-02 | Phase 19 | Pending |
+| MONO-01 | Phase 19 | Complete |
+| MONO-02 | Phase 19 | Complete |
 | FWRK-01 | Phase 19 | Pending |
 | FWRK-02 | Phase 19 | Pending |
 | FWRK-03 | Phase 22 | Pending |
