@@ -1,315 +1,287 @@
-# Technology Stack: v1.3 Public API + OCD API
+# Technology Stack: v1.4 Developer Documentation Portal
 
-**Project:** ViewRoyal.ai v1.3 Platform APIs
-**Researched:** 2026-02-19
-**Scope:** New dependencies for Public API with API key auth, rate limiting, OpenAPI 3.1 docs, cursor-based pagination, and OCD-standard endpoints on Cloudflare Workers.
-**Out of scope:** Existing stack (React Router 7, Tailwind 4, shadcn/ui, Cloudflare Workers, Supabase, Gemini, fastembed) -- all validated and unchanged.
+**Project:** ViewRoyal.ai v1.4 — fumadocs.dev Documentation Site
+**Researched:** 2026-02-23
+**Scope:** New dependencies for a fumadocs-powered developer documentation portal at docs.viewroyal.ai, deployed as a separate Cloudflare Worker alongside the existing React Router 7 app.
+**Out of scope:** Existing stack (React Router 7, Tailwind 4, Hono + chanfana, Supabase, Cloudflare Workers for apps/web/) -- all validated and unchanged.
 
 ---
 
-## Recommended Stack Additions
+## Deployment Strategy Decision
 
-### 1. API Framework: Hono (alongside React Router 7)
+### Static Export to Cloudflare Workers (RECOMMENDED)
+
+Use Next.js `output: 'export'` to build the docs site as pure static HTML/CSS/JS, deployed as a Cloudflare Worker with static assets. This is the simplest, cheapest, and most reliable path for a documentation site.
+
+**Why static export over OpenNext (@opennextjs/cloudflare):**
+- A documentation site has zero dynamic server-side logic at runtime -- all content is known at build time
+- Static export produces a `./out/` folder of HTML files -- no Worker runtime code, no Node.js compatibility shims, no edge runtime concerns
+- Fumadocs explicitly documents that `output: 'export'` works, including with the OpenAPI integration (pages are pre-rendered via `generateStaticParams`)
+- OpenNext adds complexity (build transforms, `open-next.config.ts`, `WORKER_SELF_REFERENCE` binding, `.open-next/` output) that is unnecessary when the site has no server-side routes
+- Static assets on Cloudflare Workers are free (no billable Worker invocations for asset-only requests)
+
+**Why NOT Cloudflare Pages:** Pages was deprecated by Cloudflare in April 2025. The recommended path for static sites is now Workers with static assets, configured via `[assets]` in `wrangler.toml`.
+
+**Why NOT React Router (fumadocs supports it):** While fumadocs v16 added React Router support, the OpenAPI integration (`fumadocs-openapi`) requires React Server Components. RSC is available in Next.js but not in React Router 7. The OpenAPI auto-generated API reference is a core feature of this milestone, so Next.js is required.
+
+**Confidence:** HIGH -- fumadocs static export docs, Cloudflare Workers static assets docs, Next.js static export docs all confirm this works.
+
+---
+
+## Recommended Stack
+
+### Core Framework
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| hono | ^4.12.0 | API router for `/api/v1/*` endpoints | Cloudflare-native, tiny (12kB), zero dependencies, first-class OpenAPI support via chanfana. React Router handles pages; Hono handles the public API. Avoids shoehorning REST API patterns into React Router's loader/action model. |
+| next | ^16.1.5 | React framework for docs site | fumadocs-ui v16 requires `next: 16.x.x`. Next.js 16 is the current stable release (16.1.6 as of today). Required for RSC support which fumadocs-openapi needs. |
+| react | ^19.2.0 | UI rendering | Required by fumadocs v16 (minimum 19.2.0). |
+| react-dom | ^19.2.0 | DOM rendering | Required by fumadocs v16 (minimum 19.2.0). |
 
-**Integration pattern:** Modify `workers/app.ts` to intercept `/api/v1/*` requests with Hono before passing remaining requests to React Router's `createRequestHandler`. This is a simple fetch-level split -- no adapter library needed.
+**Note on Next.js 16 vs 15:** fumadocs-ui v16.6.x has a hard peer dependency on `next: 16.x.x`. Next.js 15 is not supported. This is a deliberate fumadocs decision tied to React 19.2 features and the removal of Turbopack/SWC compatibility issues.
 
-```typescript
-// workers/app.ts (simplified)
-import { Hono } from "hono";
-import { createRequestHandler } from "react-router";
+**Confidence:** HIGH -- verified via `npm view fumadocs-ui@16.6.5 peerDependencies`.
 
-const api = new Hono().basePath("/api/v1");
-// ... mount API routes on `api` ...
+---
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith("/api/v1")) {
-      return api.fetch(request, env, ctx);
-    }
-    return requestHandler(request, { cloudflare: { env, ctx } });
-  },
+### Documentation Framework
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| fumadocs-core | ^16.6.5 | Core docs engine: source loading, page trees, search indexing, navigation | Framework-agnostic engine. Handles content ingestion, builds the navigation tree from file structure + `meta.json`, provides search via built-in Orama. |
+| fumadocs-ui | ^16.6.5 | Pre-built UI components: DocsLayout, DocsPage, sidebar, TOC, breadcrumbs, code blocks | Beautiful, accessible docs UI out of the box. Uses Radix UI internally. Tailwind CSS v4 native. Includes dark mode via next-themes. |
+| fumadocs-mdx | ^14.2.8 | MDX compilation plugin for Next.js | Compiles MDX content at build time, extracts frontmatter, generates table-of-contents, produces type-safe page collections in `.source/` directory. Integrates via `createMDX()` wrapper in `next.config.mjs`. |
+| fumadocs-openapi | ^10.3.9 | Auto-generates API reference pages from OpenAPI 3.1 spec | Reads the existing `/api/v1/openapi.json` spec (or a local copy), generates MDX page stubs, renders interactive API documentation via `APIPage` RSC component. Includes playground, code samples, schema browser. |
+
+**Confidence:** HIGH -- all versions verified via npm registry on 2026-02-23.
+
+---
+
+### OpenAPI Integration
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| fumadocs-openapi | ^10.3.9 | See above | Renders API reference from the existing chanfana-generated OpenAPI 3.1 spec. |
+| shiki | ^3.22.0 | Syntax highlighting for code blocks and API examples | Required peer dependency of fumadocs-openapi. Also used by fumadocs-core for general code highlighting. Already uses the JS regex engine (not WASM Oniguruma) for Cloudflare compatibility. |
+
+**Integration with existing OpenAPI spec:**
+
+The existing app serves `GET /api/v1/openapi.json` (auto-generated by chanfana). The docs site will consume this spec in one of two ways:
+
+1. **Build-time fetch (recommended):** A pre-build script fetches the live spec and saves it locally:
+   ```bash
+   curl https://viewroyal.ai/api/v1/openapi.json > content/openapi/api-v1.json
+   ```
+   Then `createOpenAPI({ input: ['./content/openapi/api-v1.json'] })` points to the local file.
+
+2. **Direct URL reference:** `createOpenAPI({ input: ['https://viewroyal.ai/api/v1/openapi.json'] })` fetches at build time. Works but couples build to production being up.
+
+Option 1 is better because it makes builds reproducible and allows the spec to be committed to the repo (versioned alongside the docs).
+
+**What fumadocs-openapi generates:**
+- One MDX page per API endpoint (grouped by tag)
+- Interactive request playground (client-side, no server needed)
+- Multi-language code examples (curl, JavaScript, Python)
+- TypeScript type definitions from response schemas
+- Request/response parameter tables from Zod schemas
+
+**Confidence:** HIGH -- verified via fumadocs OpenAPI docs and npm package inspection.
+
+---
+
+### MDX Tooling
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| @types/mdx | ^2.0.13 | TypeScript types for MDX files | Required by fumadocs-mdx for type-safe MDX imports. |
+
+**Content pipeline (how MDX files become pages):**
+
+1. Author writes `.mdx` files in `content/docs/`
+2. `fumadocs-mdx` compiles them at dev/build time via `createMDX()` Next.js plugin
+3. Output goes to `.source/` directory (gitignored) with type-safe collection exports
+4. `lib/source.ts` creates a fumadocs `loader()` that builds the page tree
+5. App Router `[...slug]/page.tsx` catches all routes, looks up the page, renders with `<DocsPage>`
+
+**MDX features available:**
+- GitHub Flavored Markdown (remark-gfm bundled in fumadocs-core)
+- Code blocks with syntax highlighting (shiki, bundled)
+- Callouts/admonitions via fumadocs-ui components
+- Tabs, accordions, cards (fumadocs-ui includes these)
+- Custom MDX components via `mdx-components.tsx`
+- Frontmatter with title, description, icon fields
+
+---
+
+### Styling
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| tailwindcss | ^4.0.0 | CSS framework | Required by fumadocs-ui. Same major version as the existing web app (^4.1.13). |
+| @tailwindcss/vite | N/A | NOT NEEDED | The docs site uses Next.js, not Vite. Tailwind v4 with Next.js uses PostCSS or the `@next/tailwindcss` integration. |
+
+**Tailwind CSS v4 configuration for fumadocs (CSS-first, no tailwind.config.js):**
+
+```css
+/* app/global.css */
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';   /* Color palette */
+@import 'fumadocs-ui/css/preset.css';    /* Required plugins & styles */
+@import 'fumadocs-openapi/css/preset.css'; /* OpenAPI component styles */
+@source '../node_modules/fumadocs-ui/dist/**/*.js';
+```
+
+No `tailwind.config.js` file needed. fumadocs-ui v15+ uses Tailwind v4's CSS-first configuration exclusively.
+
+**Confidence:** HIGH -- verified via fumadocs v15 blog post and `npm view @fumadocs/tailwind peerDependencies`.
+
+---
+
+### Search
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| @orama/orama | (bundled) | Client-side full-text search | Bundled in fumadocs-core. For static export, search indexes are generated at build time as JSON files, downloaded by clients, and queried in-browser. No server needed. |
+
+**Static search configuration:**
+- fumadocs generates search indexes during `next build`
+- Indexes are included in the static `out/` folder
+- Client loads indexes on first search interaction
+- For a docs site of this size (estimated 50-100 pages), client-side search is fast and appropriate
+- No Algolia or Orama Cloud subscription needed
+
+**Confidence:** HIGH -- fumadocs static export docs explicitly describe this workflow.
+
+---
+
+### Deployment
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| wrangler | ^4.65.0 | Deploy static assets to Cloudflare Workers | Same tool used by apps/web/ and apps/vimeo-proxy/. Deploys the `out/` folder as static assets. |
+
+**wrangler.toml for apps/docs/:**
+
+```toml
+name = "viewroyal-docs"
+compatibility_date = "2026-02-23"
+
+[assets]
+directory = "./out"
+not_found_handling = "404-page"
+html_handling = "auto-trailing-slash"
+```
+
+**next.config.mjs for static export:**
+
+```js
+import { createMDX } from 'fumadocs-mdx/next';
+
+const config = {
+  output: 'export',
+  trailingSlash: true,
+  images: { unoptimized: true },
 };
+
+export default createMDX()(config);
 ```
 
-**Why NOT `hono-react-router-adapter`:** The adapter (`yusukebe/hono-react-router-adapter`) is explicitly marked as "currently unstable" with API changes possible without notice, has only 281 GitHub stars and 92 commits. A simple URL-prefix split in the worker entry is stable, trivial, and zero-dependency.
+**Custom domain:** `docs.viewroyal.ai` set via Cloudflare dashboard (wrangler CLI does not support custom domain management). This is a separate Worker from the main `viewroyal-web` Worker.
 
-**Why NOT keep API routes in React Router:** The existing `api.*.tsx` routes (search, subscribe, geocode, etc.) work for internal frontend use, but a public API needs middleware chains (auth, rate limiting, CORS, versioning), OpenAPI spec generation, and structured error responses. Hono provides all of this natively. The internal React Router API routes remain untouched.
-
-**Why NOT itty-router:** itty-router is lighter but Hono has a larger middleware ecosystem, better TypeScript types, and tighter chanfana integration. Both work; Hono is the better investment.
-
-**Confidence:** HIGH -- Hono is Cloudflare's recommended framework, documented in their Workers guides, battle-tested at scale.
-
----
-
-### 2. OpenAPI 3.1: chanfana
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| chanfana | ^3.0.0 | OpenAPI 3.1 schema generation + request validation from Zod schemas | Cloudflare's own library, used in production for Radar 2.0 API. Integrates directly with Hono via `fromHono()`. Auto-generates `/docs` (Swagger UI) and `/openapi.json`. Class-based endpoint definitions keep schema and handler co-located. |
-
-chanfana v3 requires Zod v4 (current stable Zod release). Since the project does not currently use Zod, there is no migration burden -- it is a fresh addition.
-
-**What chanfana provides that manual approaches do not:**
-- Request/response validation from the same schema that generates docs
-- Built-in Swagger UI at `/docs` with zero configuration
-- CLI tool to extract static OpenAPI schema for CI/CD
-- Battle-tested at Cloudflare scale (Radar 2.0 public API)
-
-**Why NOT `@asteasolutions/zod-to-openapi` (v8.4.0):** Works standalone but is spec-generation only. You still need to wire up validation middleware, error formatting, and docs serving yourself. chanfana integrates all three with Hono.
-
-**Why NOT `@hono/zod-openapi`:** Similar capability but chanfana is Cloudflare-maintained, more mature, and already proven in their production APIs.
-
-**Why NOT manual OpenAPI JSON:** Tedious, error-prone, drifts from implementation. Schema-first with chanfana keeps spec and code in sync.
-
-**Confidence:** HIGH -- Cloudflare-maintained, 3.0.0 stable release, production-proven.
-
----
-
-### 3. Schema Validation: Zod v4
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| zod | ^4.3.5 | Request/response schema validation | Required by chanfana v3. Also used to define API response shapes, query parameter parsing, and OCD entity schemas. Zod v4 has better tree-shaking and error messages than v3. |
-
-**Note:** Zod v4 is a fresh dependency. The existing codebase does not use Zod -- all validation is ad-hoc TypeScript types. Zod is added solely for the API layer; no need to retrofit existing code.
-
-**Confidence:** HIGH -- Zod v4 is the current stable release, widely adopted.
-
----
-
-### 4. Rate Limiting: Cloudflare Workers Rate Limit Binding
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Workers Rate Limit Binding | GA (built-in) | Per-key and per-IP rate limiting | Native Cloudflare binding, no external dependency. Configured in `wrangler.toml`. Returns `{ success: boolean }` -- trivial to wrap in Hono middleware. Location-scoped (permissive, not exact-count) which is appropriate for API abuse prevention. |
-
-**wrangler.toml additions:**
-
-```toml
-[[ratelimits]]
-name = "API_RATE_LIMITER"
-namespace_id = "1001"
-[ratelimits.simple]
-limit = 100
-period = 60
-```
-
-**Tiered limits via multiple bindings (future):**
-
-```toml
-[[ratelimits]]
-name = "API_RATE_LIMITER_PAID"
-namespace_id = "1002"
-[ratelimits.simple]
-limit = 1000
-period = 60
-```
-
-**Usage:** `env.API_RATE_LIMITER.limit({ key: apiKeyOrIp })` returns `{ success: boolean }`.
-
-**Pricing:** Appears included in Workers plans (no separate charge documented in pricing page). The rate limit binding went GA in September 2025. Requires Wrangler 4.36.0+ -- project uses ^4.64.0, so compatible.
-
-**Why NOT KV for rate limiting:** KV is eventually consistent -- concurrent requests can race past limits. The rate limit binding is purpose-built for this use case.
-
-**Why NOT Durable Objects:** Overkill for simple token-bucket rate limiting. DOs are for stateful coordination (WebSockets, exact counters). The binding is simpler, cheaper, and sufficient.
-
-**Why NOT the existing in-memory rate limiter:** The current `api.search.tsx` uses an in-memory `Map` (line 16), which resets on every Worker cold start and does not persist across isolates. The binding persists across requests at each Cloudflare location.
-
-**Why NOT upstash/ratelimit:** External dependency, added network latency, additional cost. The built-in binding is free and faster.
-
-**Confidence:** HIGH -- GA announcement, official Cloudflare docs, wrangler.toml configuration documented.
-
----
-
-### 5. API Key Management: SHA-256 Hash in Supabase
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Web Crypto API (SHA-256) | Built-in | Hash API keys for storage and verification | Cloudflare Workers support SHA-256 natively via `crypto.subtle`. API keys are high-entropy random tokens (not user-chosen passwords), so bcrypt's slow-hash protection against dictionary attacks is unnecessary. SHA-256 is sufficient and enables direct indexed lookup. |
-
-**Table schema:**
-
-```sql
-CREATE TABLE api_keys (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  key_prefix VARCHAR(8) NOT NULL,    -- "vr_abcd" for display/identification
-  key_hash TEXT NOT NULL,             -- SHA-256 hex digest
-  scopes TEXT[] NOT NULL DEFAULT '{}', -- e.g. {'read:meetings', 'read:people'}
-  rate_limit_tier TEXT NOT NULL DEFAULT 'free',
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  expires_at TIMESTAMPTZ,
-  last_used_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX idx_api_keys_hash ON api_keys(key_hash);
-CREATE INDEX idx_api_keys_user ON api_keys(user_id);
-```
-
-**Key generation (Worker-side):**
-
-```typescript
-// Generate: 32 random bytes -> base64url -> prefix with "vr_"
-const raw = crypto.getRandomValues(new Uint8Array(32));
-const encoded = btoa(String.fromCharCode(...raw))
-  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-const key = `vr_${encoded}`;
-const prefix = key.substring(0, 8);
-
-// Hash for storage
-const hashBuffer = await crypto.subtle.digest(
-  'SHA-256', new TextEncoder().encode(key)
-);
-const keyHash = [...new Uint8Array(hashBuffer)]
-  .map(b => b.toString(16).padStart(2, '0')).join('');
-
-// Store: INSERT INTO api_keys (key_prefix, key_hash, ...) VALUES ($1, $2, ...)
-// Return `key` to user ONCE. Never stored in plaintext.
-```
-
-**Verification (on each request):**
-
-```typescript
-// Hash the provided key, direct index lookup
-const hash = await sha256(bearerToken);
-const { data } = await supabase
-  .from('api_keys')
-  .select('id, user_id, scopes, rate_limit_tier, is_active, expires_at')
-  .eq('key_hash', hash)
-  .single();
-// Check is_active, expires_at, then proceed
-```
-
-**Why SHA-256 over bcrypt:**
-- API keys are 32+ random bytes -- immune to dictionary attacks (bcrypt's raison d'etre)
-- bcrypt's `crypt()` in PostgreSQL adds ~250ms per verification -- unacceptable for every API request
-- SHA-256 is deterministic, enabling direct `WHERE key_hash = $1` lookups with an index (O(1))
-- bcrypt requires fetching candidate rows by prefix, then comparing -- slower and more complex
-- SHA-256 is natively available via `crypto.subtle` on Workers with zero dependencies
-- This is the standard pattern used by Stripe, GitHub, and other API-key-based services
-
-**Why NOT Supabase Vault:** Vault is for secrets the server needs to read back (decryption). API keys are verified by hash comparison, not decryption.
-
-**Why NOT JWTs as API keys:** JWTs are self-contained tokens with claims. API keys are opaque identifiers looked up in the database. Database lookup gives us instant revocation, usage tracking, and rate limit tier association. JWTs require clock synchronization, short expiry + refresh tokens, and cannot be instantly revoked.
-
-**Confidence:** HIGH -- Web Crypto SHA-256 documented in Cloudflare Workers docs, standard API key pattern.
-
----
-
-### 6. API Documentation UI: chanfana Built-in Swagger UI
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| chanfana built-in Swagger UI | Included | Interactive API documentation at `/api/v1/docs` | Zero-config, comes with chanfana. Serves Swagger UI and raw OpenAPI JSON. No additional dependency needed. |
-
-**Optional future upgrade:** Scalar (`@scalar/hono-api-reference`) provides a more modern UI with better DX. Can be swapped in later by replacing the docs route. Not needed for launch.
-
-**Confidence:** HIGH -- built into chanfana.
-
----
-
-### 7. Cursor-Based Pagination: Manual Keyset Pattern
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Keyset pagination | N/A (code pattern) | Efficient deep pagination for all list endpoints | No library needed. Supabase JS client supports `.gt()`, `.lt()`, `.order()` filters natively. Encode `(sort_value, id)` tuples as opaque base64 cursor strings. |
-
-**Pattern:**
-
-```typescript
-// Cursor = base64(JSON({ d: "2024-01-15", i: 42 }))
-// Decode -> { meeting_date: "2024-01-15", id: 42 }
-
-const query = supabase
-  .from('meetings')
-  .select('id, title, meeting_date, ...')
-  .order('meeting_date', { ascending: false })
-  .order('id', { ascending: false })
-  .limit(pageSize + 1); // +1 to detect "has next page"
-
-if (cursor) {
-  const { d, i } = decodeCursor(cursor);
-  query.or(`meeting_date.lt.${d},and(meeting_date.eq.${d},id.lt.${i})`);
-}
-
-const { data } = await query;
-const hasNext = data.length > pageSize;
-const items = hasNext ? data.slice(0, pageSize) : data;
-const nextCursor = hasNext ? encodeCursor(items[items.length - 1]) : null;
-```
-
-**Response envelope:**
+**Build + deploy scripts (apps/docs/package.json):**
 
 ```json
 {
-  "data": [...],
-  "pagination": {
-    "next_cursor": "eyJkIjoiMjAyNC0wMS0xNSIsImkiOjQyfQ==",
-    "has_more": true,
-    "page_size": 20
+  "scripts": {
+    "dev": "next dev",
+    "prebuild": "node scripts/fetch-openapi.mjs",
+    "build": "next build",
+    "deploy": "next build && wrangler deploy"
   }
 }
 ```
 
-**Why NOT offset pagination:** Performance degrades linearly with depth -- page 10,000 scans 200,000 rows. Cursor pagination is O(1) regardless of depth. For a civic data API where consumers may paginate through hundreds of meetings, this matters.
-
-**Why NOT a pagination library:** The pattern is ~30 lines of code. Libraries add abstraction for no benefit.
-
-**Confidence:** HIGH -- standard pattern, Supabase best practices doc confirms keyset approach.
+**Confidence:** HIGH -- Cloudflare Workers static assets docs, verified configuration options.
 
 ---
 
-### 8. OCD Compliance: Manual Mapping (No Library)
+## Monorepo Configuration
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| OCD ID format | Spec (no lib) | Generate OCD-compliant identifiers and entity responses | The OCD specification is a data format standard, not an API framework. No maintained libraries exist. The spec is simple enough that a utility module suffices. |
+### Current State
 
-**OCD entity mapping to existing tables:**
+The repository has NO root-level `pnpm-workspace.yaml` or `package.json`. Each app (`apps/web/`, `apps/vimeo-proxy/`) manages its own dependencies independently. The `pnpm-workspace.yaml` inside `apps/web/` contains only `packages: ["."]`.
 
-| OCD Type | ViewRoyal Table(s) | OCD ID Format | Notes |
-|----------|-------------------|---------------|-------|
-| Division | municipalities | `ocd-division/country:ca/csd:5917044` | `ocd_id` column already exists on municipalities |
-| Jurisdiction | municipalities | `ocd-jurisdiction/country:ca/csd:5917044/council` | Derived from division ID + org type |
-| Organization | organizations | `ocd-organization/{uuid}` | UUID generated from existing `id` |
-| Person | people | `ocd-person/{uuid}` | UUID generated from existing `id` |
-| Event | meetings | `ocd-event/{uuid}` | Maps to meeting with agenda items |
-| Bill | matters + bylaws | `ocd-bill/{uuid}` | Matters are the closest analog |
-| Vote | motions + votes | `ocd-vote/{uuid}` | Motion + individual vote records |
+### Recommended Approach: Keep Independent
 
-**Implementation approach:** OCD IDs are computed at API response time from existing primary keys (using UUID v5 with a project namespace to make them deterministic). No database migration needed for OCD ID columns on every table.
+Do NOT create a root-level pnpm workspace. Keep `apps/docs/` as a self-contained Next.js project with its own `package.json`, `node_modules/`, and `pnpm-workspace.yaml`.
 
-**UUID v5 for deterministic OCD IDs:**
+**Why:**
+- The existing apps work this way. Consistency matters.
+- Next.js and React Router 7 have different React version pinning strategies (Next.js uses its own React canary channel). Sharing `node_modules` between them causes version conflicts.
+- Independent apps deploy independently -- `apps/docs/` can build and deploy without touching `apps/web/`.
+- No risk of `pnpm install` in one app breaking another.
 
-```typescript
-// Same input always produces same UUID
-const OCD_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"; // or custom
-const personOcdId = `ocd-person/${await uuidv5(`person:${person.id}`, OCD_NAMESPACE)}`;
+**New file structure:**
+
+```
+apps/
+  docs/                    # NEW: fumadocs documentation site
+    app/                   #   Next.js App Router pages
+      layout.tsx           #   Root layout with DocsLayout
+      docs/                #   /docs/* routes
+        [[...slug]]/       #   Catch-all for docs pages
+          page.tsx         #   Page component
+      api-reference/       #   /api-reference/* routes
+        [[...slug]]/       #   Catch-all for OpenAPI pages
+          page.tsx
+    content/               #   MDX content
+      docs/                #   Hand-written docs (guides, data model, etc.)
+        index.mdx          #   Landing page
+        getting-started/
+        authentication/
+        data-model/
+        changelog.mdx
+      openapi/             #   OpenAPI spec (fetched at build time)
+        api-v1.json
+    components/            #   Custom components
+      api-page.tsx         #   OpenAPI page wrapper (RSC)
+      api-page.client.tsx  #   OpenAPI client config
+    lib/                   #   Source loaders
+      source.ts            #   Fumadocs source configuration
+      openapi.ts           #   OpenAPI instance
+    scripts/               #   Build scripts
+      fetch-openapi.mjs    #   Pre-build: fetch latest OpenAPI spec
+    public/                #   Static assets (favicon, etc.)
+    source.config.ts       #   Fumadocs MDX collection config
+    next.config.mjs        #   Next.js config with fumadocs-mdx plugin
+    wrangler.toml          #   Cloudflare Workers deployment config
+    tsconfig.json
+    package.json
+    pnpm-workspace.yaml    #   packages: ["."]
+    .gitignore             #   .source/, .next/, out/, node_modules/
+  web/                     # EXISTING: React Router 7 app (unchanged)
+  vimeo-proxy/             # EXISTING: Cloudflare Worker (unchanged)
+  pipeline/                # EXISTING: Python ETL (unchanged)
 ```
 
-**OCD specification status:** The official OCD API (by Open States/Sunlight Foundation) is no longer maintained. But the data format remains the de facto standard for civic data interoperability in North America. The spec is stable and will not change.
-
-**OCD response format:** Follow the Popolo standard for Person/Organization, with OCD-specific extensions for Bills, Votes, Events. The shapes are documented at `open-civic-data.readthedocs.io`.
-
-**Confidence:** MEDIUM -- Spec is stable but dormant. No community has updated it since ~2020. Implementation based on reading the spec docs directly, not from any reference implementation.
+**Confidence:** HIGH -- matches existing monorepo pattern.
 
 ---
 
-## Supporting Libraries
+## Alternatives Considered
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| hono (built-in cors) | included | CORS middleware for API | Always -- public API needs `Access-Control-Allow-Origin` headers |
-| hono (built-in bearer-auth) | included | Bearer token extraction from Authorization header | API key auth middleware |
-
-These are built into Hono -- no additional packages.
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Docs framework | fumadocs | Nextra | Nextra v4 is beta; fumadocs is stable, has better OpenAPI integration, and is actively maintained |
+| Docs framework | fumadocs | Docusaurus | React 19 support unclear; no built-in OpenAPI rendering; heavier bundle |
+| Docs framework | fumadocs | Starlight (Astro) | Would introduce Astro as a third framework. Excellent but adds ecosystem complexity. fumadocs stays in the React/Next.js family. |
+| Docs framework | fumadocs | VitePress | Vue-based. The existing codebase is 100% React/TypeScript. |
+| Deployment | Static export + Workers | OpenNext | OpenNext adds runtime complexity unnecessary for a static docs site. Reserve for apps with server-side logic. |
+| Deployment | Static export + Workers | Vercel | Adds another hosting provider. Cloudflare is already the deployment target for everything else. |
+| Deployment | Static export + Workers | Cloudflare Pages | Deprecated April 2025. Workers with static assets is the replacement. |
+| OpenAPI rendering | fumadocs-openapi | Scalar standalone | Scalar is excellent standalone but fumadocs-openapi integrates natively -- same sidebar, search, navigation. No iframe or separate app. |
+| OpenAPI rendering | fumadocs-openapi | Swagger UI standalone | Already served at /api/v1/docs. The fumadocs integration is richer (playground, code samples, schema browser). |
+| Monorepo | Independent apps | Root pnpm workspace | Risk of React version conflicts between Next.js 16 and React Router 7. Not worth the coupling. |
 
 ---
 
@@ -317,77 +289,76 @@ These are built into Hono -- no additional packages.
 
 | Technology | Why Not |
 |------------|---------|
-| express / fastify | Not compatible with Cloudflare Workers runtime |
-| jsonwebtoken / jose | API keys are opaque bearer tokens, not JWTs |
-| passport.js | Node.js auth framework, not Workers-compatible |
-| redis / upstash | External rate limiting when a free built-in binding exists |
-| swagger-jsdoc | JSDoc-based OpenAPI gen is fragile and drifts; chanfana is schema-first |
-| hono-react-router-adapter | Marked "unstable" by author; URL-prefix split is simpler |
-| @hono/zod-openapi | chanfana is Cloudflare-maintained and more mature for this use case |
-| any OCD npm package | None exist that are maintained |
-| bcrypt / bcryptjs | Slow-hash unnecessary for high-entropy API keys; SHA-256 is correct |
-| graphql / apollo | REST with OpenAPI is simpler, better tooling for civic data consumers |
-| trpc | Designed for full-stack TypeScript apps, not public APIs with external consumers |
-| Cloudflare KV (for rate limiting) | Eventually consistent -- unsuitable for rate limiting |
-| Durable Objects (for rate limiting) | Overkill when the rate limit binding exists |
+| @opennextjs/cloudflare | Unnecessary for a static export docs site. Adds build complexity with no benefit. |
+| Vercel | Extra hosting provider. Cloudflare already handles everything. |
+| Algolia / Orama Cloud | Overkill for a docs site with ~50-100 pages. Built-in static Orama search is sufficient and free. |
+| @next/bundle-analyzer | Premature optimization. Add later if bundle size becomes an issue. |
+| next-sitemap | Static export can include a sitemap via `generateStaticParams`. Or add later with a simple build script. |
+| contentlayer | Deprecated. fumadocs-mdx is the content layer. |
+| mdx-bundler | fumadocs-mdx handles MDX compilation. |
+| nextra | Different framework. fumadocs was chosen for its OpenAPI integration. |
+| turbopack | Next.js 16 includes it by default for dev. No explicit dependency needed. |
+| Any database dependencies | The docs site is 100% static. No Supabase client needed. |
+| Any auth dependencies | Public documentation. No login required. |
 
 ---
 
 ## Installation Summary
 
 ```bash
-# From apps/web/
-pnpm add hono chanfana zod
+# Create the docs app directory
+mkdir -p apps/docs && cd apps/docs
+
+# Initialize
+pnpm init
+
+# Core framework
+pnpm add next@^16.1.5 react@^19.2.0 react-dom@^19.2.0
+
+# Fumadocs
+pnpm add fumadocs-core@^16.6.5 fumadocs-ui@^16.6.5 fumadocs-mdx@^14.2.8 fumadocs-openapi@^10.3.9
+
+# Required peer dependencies
+pnpm add shiki@^3.22.0
+
+# Dev dependencies
+pnpm add -D @types/react@^19.2.0 @types/react-dom@^19.2.0 @types/mdx@^2.0.13 typescript@^5.9.2 wrangler@^4.65.0 tailwindcss@^4.0.0
 ```
 
-**Three new production dependencies. No new dev dependencies** -- chanfana, Hono, and Zod all include their own TypeScript types.
-
-**wrangler.toml additions:**
-
-```toml
-# Rate limiting binding
-[[ratelimits]]
-name = "API_RATE_LIMITER"
-namespace_id = "1001"
-[ratelimits.simple]
-limit = 100
-period = 60
-```
-
-**Env type update (`workers/app.ts`):**
-
-```typescript
-interface Env {
-  API_RATE_LIMITER: RateLimit;
-  [key: string]: unknown;
-}
-```
+**Total: 7 production dependencies, 6 dev dependencies.** No overlap with `apps/web/` -- fully independent.
 
 ---
 
 ## Version Compatibility Matrix
 
-| Dependency | Version | Requires | Compatible With |
-|------------|---------|----------|-----------------|
-| chanfana | ^3.0.0 | zod ^4.3.5 | hono ^4.x |
-| hono | ^4.12.0 | none | Cloudflare Workers, Wrangler ^4.x |
-| zod | ^4.3.5 | none | chanfana ^3.0.0 |
-| Rate Limit Binding | GA (Sept 2025) | Wrangler ^4.36.0 | Project uses ^4.64.0 |
-| Web Crypto (SHA-256) | Built-in | nodejs_compat flag | Already enabled in wrangler.toml |
+| Dependency | Version | Requires | Verified |
+|------------|---------|----------|----------|
+| fumadocs-core | ^16.6.5 | react >=19.2.0, next 16.x.x | Yes (npm view) |
+| fumadocs-ui | ^16.6.5 | react >=19.2.0, next 16.x.x, fumadocs-core 16.6.5 | Yes (npm view) |
+| fumadocs-mdx | ^14.2.8 | fumadocs-core >=15.0.0, next >=15.3.0 | Yes (npm view) |
+| fumadocs-openapi | ^10.3.9 | fumadocs-core >=16.5.0, fumadocs-ui >=16.5.0, react >=19.2.0 | Yes (npm view) |
+| next | ^16.1.5 | react >=19.0.0, node >=20.9.0 | Yes (npm view) |
+| shiki | ^3.22.0 | none (standalone) | Yes |
+| tailwindcss | ^4.0.0 | none (standalone) | Yes |
+| wrangler | ^4.65.0 | none | Yes |
+| typescript | ^5.9.2 | none | Yes (same as apps/web/) |
+| Node.js | >=20.9.0 | -- | Yes (system has v25.3.0) |
 
 ---
 
-## New Database Objects
+## Configuration Files Summary
 
-### Tables
-
-| Table | Purpose |
-|-------|---------|
-| `api_keys` | Hashed API keys with scopes, rate limit tier, expiry |
-
-### No New RPC Functions Required
-
-Cursor pagination and OCD ID generation are handled in application code, not database functions.
+| File | Purpose |
+|------|---------|
+| `source.config.ts` | Define MDX content collections (docs dir, frontmatter schema) |
+| `next.config.mjs` | Static export + fumadocs-mdx plugin |
+| `tsconfig.json` | TypeScript config with fumadocs-mdx path alias |
+| `wrangler.toml` | Cloudflare Workers static asset deployment |
+| `app/global.css` | Tailwind v4 imports + fumadocs presets |
+| `lib/source.ts` | Fumadocs source loader (page tree builder) |
+| `lib/openapi.ts` | OpenAPI instance pointing to local spec file |
+| `mdx-components.tsx` | MDX component overrides (APIPage, custom components) |
+| `pnpm-workspace.yaml` | `packages: ["."]` (self-contained workspace) |
 
 ---
 
@@ -395,38 +366,41 @@ Cursor pagination and OCD ID generation are handled in application code, not dat
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| chanfana v3 breaking changes (Zod v4 churn) | Low | Medium | Pin to ^3.0.0, chanfana is Cloudflare-maintained with stability commitment |
-| Rate limit binding pricing surprise | Low | Low | Appears free; worst case is nominal per-request cost on Workers Paid plan |
-| OCD spec ambiguity (dormant project) | Medium | Low | Implement the subset that maps cleanly to our data; document deviations |
-| Hono + React Router in same Worker conflicts | Low | Medium | URL-prefix split is clean; no shared middleware. Test thoroughly. |
-| SHA-256 key hash collision | Negligible | High | SHA-256 collision probability is astronomically low (~10^-77 for 32-byte keys) |
+| fumadocs v16 peer dep on Next.js 16 breaks with Next.js 16.2+ | Low | Medium | Pin to `^16.1.5` (tilde range in fumadocs ensures compatibility). fumadocs releases track Next.js closely. |
+| OpenAPI APIPage fails with `output: 'export'` | Low | High | APIPage uses RSC which renders at build time with static export. `generateStaticParams` ensures all pages are pre-rendered. If issues arise, fall back to `generateFiles()` MDX-only approach. |
+| Static search indexes too large for client download | Low | Low | ~50-100 pages will produce small indexes. If needed, switch to Orama Cloud later. |
+| Tailwind v4 style conflicts between fumadocs and custom styles | Low | Low | fumadocs uses its own CSS custom properties (`--fd-*`). Isolated by CSS specificity. |
+| Build-time OpenAPI spec fetch fails (production down) | Medium | Low | Commit the spec to the repo. `prebuild` script updates it; build still works with stale copy. |
+| wrangler static assets config quirks (404 handling, trailing slashes) | Low | Medium | `html_handling: auto-trailing-slash` + `not_found_handling: 404-page` matches Next.js static export conventions. Test in preview before production deploy. |
 
 ---
 
 ## Sources
 
-### HIGH Confidence (Official docs, first-party)
-- [Cloudflare Workers Rate Limit Binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) -- GA API, configuration, usage
-- [Rate Limiting GA announcement (Sept 2025)](https://developers.cloudflare.com/changelog/2025-09-19-ratelimit-workers-ga/) -- Production-ready
-- [chanfana GitHub](https://github.com/cloudflare/chanfana) -- v3.0.0, Zod v4, Hono adapter
-- [chanfana docs: router adapters](https://chanfana.pages.dev/router-adapters) -- Hono and itty-router support
-- [chanfana v2->v3 migration](https://chanfana.pages.dev/migration-to-chanfana-3) -- Zod v4 breaking changes
-- [OCD specification](https://open-civic-data.readthedocs.io/en/latest/data/index.html) -- Entity types
-- [OCD Identifiers](https://open-civic-data.readthedocs.io/en/latest/ocdids.html) -- ID format spec
-- [Cloudflare Web Crypto API](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/) -- SHA-256 support
-- [Hono on Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers) -- Official guide
-- [Hono Swagger UI middleware](https://hono.dev/examples/swagger-ui) -- Docs serving
-- [Cloudflare Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) -- Plan structure
+### HIGH Confidence (Official docs, first-party, npm registry)
+- [fumadocs.dev - OpenAPI integration](https://www.fumadocs.dev/docs/integrations/openapi) -- Setup, APIPage, generateFiles
+- [fumadocs.dev - Static Build](https://www.fumadocs.dev/docs/deploying/static) -- output: 'export' configuration
+- [fumadocs.dev - Deployment](https://www.fumadocs.dev/docs/deploying) -- "Use opennext.js.org/cloudflare, Fumadocs doesn't work on Edge runtime"
+- [fumadocs.dev - v16 blog post](https://www.fumadocs.dev/blog/v16) -- Breaking changes, Next.js 16 requirement, Cloudflare JS engine default
+- [fumadocs.dev - MDX setup for Next.js](https://www.fumadocs.dev/docs/mdx/next) -- source.config.ts, next.config.mjs, lib/source.ts
+- [npm: fumadocs-core@16.6.5](https://www.npmjs.com/package/fumadocs-core) -- Peer deps verified via `npm view`
+- [npm: fumadocs-ui@16.6.5](https://www.npmjs.com/package/fumadocs-ui) -- Peer deps: next 16.x.x, react >=19.2.0
+- [npm: fumadocs-openapi@10.3.9](https://www.npmjs.com/package/fumadocs-openapi) -- Dependencies, peer deps
+- [npm: fumadocs-mdx@14.2.8](https://www.npmjs.com/package/fumadocs-mdx) -- Peer deps: next >=15.3.0, vite 6-7
+- [npm: next@16.1.6](https://www.npmjs.com/package/next) -- Peer deps, engine requirements
+- [Cloudflare Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/) -- Configuration, deployment
+- [Cloudflare Workers SSG routing](https://developers.cloudflare.com/workers/static-assets/routing/static-site-generation/) -- html_handling, not_found_handling
+- [OpenNext Cloudflare - Get Started](https://opennext.js.org/cloudflare/get-started) -- Configuration reference (evaluated but NOT recommended for this use case)
+- [GitHub: fuma-nama/fumadocs](https://github.com/fuma-nama/fumadocs) -- 1,505 releases, actively maintained
 
-### MEDIUM Confidence (Multiple sources, community-verified)
-- [Supabase API key management (MakerKit)](https://makerkit.dev/blog/tutorials/supabase-api-key-management) -- Table schema, bcrypt/SHA-256 patterns
-- [Supabase pagination best practices](https://github.com/supabase/agent-skills/blob/main/skills/supabase-postgres-best-practices/references/data-pagination.md) -- Keyset pagination
-- [hono-react-router-adapter](https://github.com/yusukebe/hono-react-router-adapter) -- Stability warning confirmed
-- [zod-to-openapi](https://github.com/asteasolutions/zod-to-openapi) -- v8.4.0, alternative considered
+### MEDIUM Confidence (Multiple credible sources agree)
+- [Deploy Next.js 16 + Fumadocs to GitHub Pages](https://zephinax.com/blog/deploy-nextjs-fumadocs-github-pages) -- Confirms static export workflow with trailingSlash, images.unoptimized
+- [DeepWiki: fumadocs architecture](https://deepwiki.com/fuma-nama/fumadocs) -- Build pipeline description, layered architecture
+- [fumadocs Tailwind v4 discussion](https://github.com/fuma-nama/fumadocs/discussions/1338) -- Community confirms CSS-first config
 
-### LOW Confidence (Needs validation)
-- Rate limit binding pricing (appears free/included but not explicitly stated on pricing page)
-- chanfana custom router adapter extensibility (docs mention it, no examples found)
+### LOW Confidence (Single source, needs validation during implementation)
+- Cloudflare Pages deprecation date (April 2025) -- referenced in community posts but not in official deprecation announcement
+- Static search performance for OpenAPI-generated pages -- untested at scale with API reference content
 
 ---
-*Last updated: 2026-02-19*
+*Last updated: 2026-02-23*
