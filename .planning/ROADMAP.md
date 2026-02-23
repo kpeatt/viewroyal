@@ -88,11 +88,11 @@ Plans:
   2. API reference pages are auto-generated and grouped by tag (Meetings, People, Matters, Motions, Bylaws, Search, OCD, System) with all endpoints visible in the sidebar
   3. Each API reference page includes an interactive playground where a developer can enter parameters and execute live requests against the API
   4. Each API reference page shows code examples in curl, JavaScript, and Python that a developer can copy and run
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 20-01: TBD
-- [ ] 20-02: TBD
+- [ ] 20-01-PLAN.md — OpenAPI infrastructure: prebuild script, spec fetch with fallback, generateFiles, multi-language code samples
+- [ ] 20-02-PLAN.md — API page rendering: components, MDX registration, CSS, sidebar navigation, build verification
 
 ### Phase 21: Developer Guides
 **Goal**: A new developer can go from zero to a successful API call in under 5 minutes by following the documentation guides
