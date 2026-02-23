@@ -1,192 +1,203 @@
 # Project Research Summary
 
-**Project:** ViewRoyal.ai v1.3 Platform APIs
-**Domain:** Public REST API + OCD-standard civic data API on Cloudflare Workers
-**Researched:** 2026-02-19
-**Confidence:** HIGH (stack/architecture/pitfalls), MEDIUM (OCD spec compliance)
+**Project:** ViewRoyal.ai v1.4 — Developer Documentation Portal
+**Domain:** Static documentation site with auto-generated API reference (fumadocs + Next.js + Cloudflare)
+**Researched:** 2026-02-23
+**Confidence:** HIGH
 
 ## Executive Summary
 
-ViewRoyal.ai v1.3 adds a public-facing REST API and OCD-compliant civic data endpoints to an existing Cloudflare Workers web app. The core challenge is not the data layer — it already exists and is well-structured — but building the API infrastructure correctly: durable rate limiting, timing-safe API key authentication, clean route segregation from existing internal routes, and an OCD serialization layer that maps existing database entities to a dormant-but-stable civic data standard. The recommended approach uses Hono as a dedicated API router mounted alongside React Router 7 in the same Worker, with chanfana for schema-first OpenAPI 3.1 generation. All new dependencies are Cloudflare-native (Hono, chanfana, Workers Rate Limit binding), minimizing external surface area.
+This milestone adds a developer documentation portal at `docs.viewroyal.ai` for the ViewRoyal.ai civic data API. The research is unusually clear-cut: fumadocs is the right tool, static export is the right deployment model, and all the core technical decisions are backed by npm-verified peer dependencies and official documentation. The existing platform (React Router 7 on Cloudflare Workers) already handles the API — the docs site is a net-new, fully independent `apps/docs/` directory that consumes the existing OpenAPI 3.1 spec and builds ~33 documentation pages, roughly 25 of which are auto-generated from that spec.
 
-The biggest architectural decision — same Worker or separate Worker — resolves clearly to same Worker. The existing service layer, Supabase client setup, and env var inlining are all valuable shared infrastructure. A separate Worker would duplicate this for no benefit at current scale. The URL-prefix split (Hono handles `/api/v1/*`, React Router handles everything else) is clean and battle-tested. OCD compliance is achievable using deterministic ID generation from existing primary keys; no database schema changes are needed for OCD IDs themselves, though a `scopes` column on `api_keys` should be added from day one to enable endpoint-level permission control.
+The recommended approach is fumadocs v16 + Next.js 16 with `output: 'export'`, deployed as static assets on Cloudflare Workers via the `[assets]` `wrangler.toml` directive. The docs site has zero runtime requirements: all content is known at build time, search runs client-side via Orama, and the API playground runs client-side against the existing API. This means no OpenNext adapter, no Worker runtime complexity, no Node.js compatibility shims, and no billable Worker invocations for serving documentation pages.
 
-The primary risks are security-related and must be addressed in Phase 1: timing attacks on API key comparison (use `crypto.subtle.timingSafeEqual()`), weak key generation (use `crypto.getRandomValues()`), routing collisions between the new public API and existing internal routes (strict `api/v1/*` prefix, never shared), and the existing in-memory rate limiter being eviction-unsafe (replace with Cloudflare Workers Rate Limit binding). OCD spec compliance carries medium confidence due to the spec being community-maintained and dormant since ~2020; implement the well-documented entity types and document any deviations explicitly.
+The principal risks concentrate in scaffolding (Phase 1): fumadocs configuration has changed significantly across versions, stale tutorials cause cryptic errors, and the wrong deployment target (OpenNext/Workers runtime instead of static export) poisons everything downstream. The mitigation is simple — use the `create-fumadocs-app` CLI to scaffold, pin all fumadocs packages to matching versions, and validate the build locally before wiring any deployment. The one open technical question is the exact `generateFiles()` invocation for the OpenAPI integration with static export; both researchers agree it is the correct approach but the exact script setup needs to be confirmed at implementation time.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Three new production packages cover the entire API layer: `hono` (^4.12.0), `chanfana` (^3.0.0), and `zod` (^4.3.5). Hono is Cloudflare's recommended API framework — 12kB, zero dependencies, first-class Workers support. chanfana is Cloudflare's own OpenAPI 3.1 generator, used in production for Radar 2.0. Zod v4 is required by chanfana and provides schema validation for request params and response shapes. Rate limiting uses the native Workers Rate Limit binding (GA as of Sept 2025) — no Redis, no Upstash, no Durable Objects needed. API keys use SHA-256 hashing via the built-in Web Crypto API — bcrypt is explicitly wrong here because API keys are high-entropy random tokens, not passwords.
+The docs site is a self-contained Next.js 16 application using fumadocs v16 for documentation infrastructure. fumadocs was chosen over alternatives (Nextra v4 beta, Docusaurus, Starlight/Astro, VitePress) because it has the best OpenAPI integration in the React ecosystem, is actively maintained, and stays within the existing TypeScript/React family. It must be Next.js (not React Router 7) because `fumadocs-openapi` requires React Server Components for API reference rendering, which React Router 7 does not support.
+
+The `apps/docs/` directory is kept fully independent (its own `package.json`, `node_modules/`, `pnpm-workspace.yaml`) to avoid dependency conflicts with `apps/web/`'s React Router 7 + Vite 7 stack. This matches the existing monorepo pattern — no root workspace, no shared `node_modules`.
 
 **Core technologies:**
-- **hono ^4.12.0**: API router for `/api/v1/*` and `/api/ocd/*` — Cloudflare-native, cleaner than shoehorning REST middleware chains into React Router loaders/actions
-- **chanfana ^3.0.0**: OpenAPI 3.1 schema generation + Swagger UI — Cloudflare-maintained, battle-tested at Radar 2.0 scale
-- **zod ^4.3.5**: Request/response schema validation — required by chanfana, covers query param parsing and OCD entity shapes
-- **Workers Rate Limit Binding**: Per-key durable rate limiting — GA, built-in, near-zero latency, survives isolate eviction
-- **Web Crypto SHA-256**: API key hashing — built-in `crypto.subtle`, O(1) index lookup, correct pattern for high-entropy tokens
-- **Manual keyset pagination**: Cursor-based pagination — ~30 lines of code, Supabase `.gt()`/`.lt()` handles it natively
+- `next@^16.1.5`: Required by fumadocs-ui v16; verified via `npm view fumadocs-ui@16.6.5 peerDependencies` — hard constraint, not negotiable
+- `fumadocs-core@^16.6.5` + `fumadocs-ui@^16.6.5`: Documentation engine and pre-built UI (sidebar, TOC, breadcrumbs, dark mode, responsive layout)
+- `fumadocs-mdx@^14.2.8`: MDX compilation plugin; generates `.source/` build artifacts from `content/docs/`
+- `fumadocs-openapi@^10.3.9`: Auto-generates API reference pages from the existing OpenAPI 3.1 spec; includes interactive playground, multi-language code samples, schema browser
+- `shiki@^3.22.0`: Syntax highlighting; required peer dep of fumadocs-openapi; uses JS regex engine (not WASM) for Cloudflare compatibility
+- `tailwindcss@^4.0.0`: Required by fumadocs-ui; configured CSS-first via `@import` directives, no `tailwind.config.js` needed
+- `wrangler@^4.65.0`: Static asset deployment to Cloudflare Workers via `[assets]` directive pointing to the `./out/` directory
+
+**Deployment decision (resolved):** Cloudflare Workers static assets — NOT Cloudflare Pages. The Architecture and Pitfalls researchers both recommended Cloudflare Pages, but the Stack researcher identified that Pages was deprecated in April 2025. Workers with the `[assets]` `wrangler.toml` directive is the current Cloudflare recommendation for static sites. This also eliminates routing ambiguity: `docs.viewroyal.ai` is simply a separate named Worker (`viewroyal-docs`) from the main `viewroyal-web` Worker, with no CNAME or Pages dashboard required.
+
+**Next.js version decision (resolved):** Next.js 16 is correct. fumadocs-ui v16.6.x has a verified hard peer dependency on `next: 16.x.x` per npm registry. The Pitfalls researcher's suggestion to pin Next.js 15 (Pitfall 9) was motivated by OpenNext/Workers runtime concerns that are entirely irrelevant for a static export deployment. Since the docs site uses `output: 'export'` and no Worker runtime features, none of the Next.js 16 / OpenNext incompatibilities apply.
+
+See `.planning/research/STACK.md` for the full version compatibility matrix, configuration file templates, and installation commands.
 
 ### Expected Features
 
-All feature research is benchmarked against OpenStates v3, Google Civic Info, and Councilmatic. The civic data API landscape at the municipal level is thin, especially in Canada — ViewRoyal.ai can be among the first well-documented, OCD-compliant Canadian municipal APIs.
+API developer documentation portals have a well-understood hierarchy. The ~25 auto-generated API reference pages come for free from the existing OpenAPI spec. The real work is ~8-9 hand-written guide pages. Total estimated content: 33-34 pages.
 
 **Must have (table stakes):**
-- API key authentication via `Authorization: Bearer` header — every serious civic data API requires this
-- Per-key rate limiting with standard `X-RateLimit-*` headers and 429 responses — expected by all API consumers
-- Cursor-based pagination on all list endpoints — offset pagination degrades at depth; cursor is O(1)
-- Core data endpoints for 5 entity types (meetings, people, matters, motions, bylaws) — 10 REST endpoints total
-- Consistent JSON error responses using RFC 7807-inspired shape — inconsistency is the most common complaint against government APIs
-- OpenAPI 3.1 spec at `/api/v1/openapi.json` with Swagger UI at `/api/v1/docs`
-- Municipality scoping on all endpoints — multi-tenancy is already in the data layer
+- Auto-generated API reference from OpenAPI spec (TS-1) — without it the docs are useless; fumadocs-openapi generates these from the existing chanfana spec
+- Getting Started / Quickstart guide (TS-2) — time-to-first-API-call is the key onboarding metric; the Twilio "5-minute quickstart" pattern is now universal
+- Authentication guide (TS-3) — first hurdle every developer hits; covers X-API-Key header, rate limits, error shapes
+- Code examples in curl, JavaScript, Python (TS-4) — most-used section of any API docs; fumadocs Tabs with `persist` for language selection
+- Full-text search via Orama (TS-5) — built-in to fumadocs; client-side, no external service, zero configuration for ~100 pages
+- Navigation sidebar (TS-6) — auto-generated from content directory structure by fumadocs
+- Responsive design (TS-7) — automatic from fumadocs-ui; no work needed
 
-**Should have (competitive differentiators):**
-- Search API endpoint exposing existing hybrid vector+keyword search — no other civic data API offers semantic search
-- Ask API endpoint (non-streaming RAG) for programmatic Q&A — unique capability; lower rate limit needed due to Gemini costs
-- OCD-standard endpoints at `/api/ocd/*` for civic tech ecosystem interoperability — Canadian municipal coverage is nearly nonexistent
-- Self-service API key management page — eliminates email-for-access friction that plagues government APIs
-- Response envelope with metadata, pagination cursors, and request ID for traceability
+**Should have (differentiators):**
+- Interactive API playground / "Try It" (D-1) — included in fumadocs-openapi at no extra cost; more polished than the existing Swagger UI
+- Data model documentation with Mermaid ER diagram (D-2) — explains domain concepts (Matter vs Motion vs Bylaw) the spec alone cannot convey
+- Pagination and filtering guide (D-3) — documents the two pagination systems (cursor-based v1, page-based OCD) with full working examples
+- Error handling guide (D-5) — all error codes with retry logic examples; reduces support burden
+- OCD Standard reference (D-7) — explains the Open Civic Data endpoints and when to use v1 vs OCD API
+- Changelog (D-4) — simple MDX page; establishes the pattern for future API evolution communication
 
 **Defer (v2+):**
-- GraphQL API — REST maps naturally to the data model; OpenStates actually moved from GraphQL to REST
-- Webhooks and event streaming — batch pipeline runs daily, no real-time value to push
-- Write API — read-only platform, pipeline is the single source of truth
-- OAuth2/OIDC — inappropriate for read-only public data; API keys are the correct auth mechanism
-- Client SDKs — the OpenAPI spec enables auto-generation; build only on demonstrated consumer demand
+- Auto-generated client SDKs (AF-1) — maintenance burden; developers can generate from the spec themselves with openapi-generator
+- Versioned documentation (AF-2) — only one API version exists; add when v2 ships
+- Personalized docs with API key pre-population (AF-3) — requires auth integration between docs and main app; significant complexity for limited benefit
+- AI-powered search (AF-5) — Orama is sufficient for <100 pages; revisit if docs grow substantially
+- Blog/tutorials (AF-8) — belongs on the main site, not developer docs
+
+See `.planning/research/FEATURES.md` for the full feature dependency graph and build order implications.
 
 ### Architecture Approach
 
-The public API lives in the same Cloudflare Worker as the React Router 7 app, with a fetch-level URL-prefix split. The Worker entry point (`workers/app.ts`) routes `/api/v1/*` and `/api/ocd/*` to a Hono instance; everything else passes to React Router's `createRequestHandler`. No adapter library needed — this is a clean fetch-level conditional, zero coupling between Hono and React Router. Existing internal API routes (`/api/ask`, `/api/search`, etc.) remain untouched on their current paths. A shared `app/lib/api.server.ts` module provides authentication, rate limiting, CORS, and error formatting utilities called explicitly at the top of every public API handler — a wrapper function pattern that matches existing codebase conventions and avoids requiring a React Router 7.13+ upgrade for middleware support. The OCD layer is a pure serialization transformation over existing service functions — no new database queries, just entity mapping.
+The docs site sits alongside existing apps as a fully independent deployment. The key architectural decision is OpenAPI spec synchronization: chanfana generates the spec dynamically at runtime, so the docs build uses a `prebuild` script that fetches the live spec from `viewroyal.ai/api/v1/openapi.json` and saves it locally as `openapi.json` (committed to git as a fallback). `generateFiles()` then converts that JSON into MDX files before `next build` runs. This build-time fetch + checked-in fallback pattern ensures docs builds never fail due to network issues, and the committed spec serves as a diff-able record of API changes.
 
 **Major components:**
-1. **`workers/app.ts` (modified)**: URL-prefix router — Hono for `/api/v1/*` + `/api/ocd/*`, React Router for everything else. Adds `RateLimit` to Env interface.
-2. **`app/lib/api.server.ts` (new)**: `authenticateApiRequest()` wrapper — SHA-256 key hash lookup, CF Rate Limit binding check, CORS headers, RFC 7807 error formatting
-3. **`app/lib/pagination.ts` (new)**: Cursor encoding/decoding, pagination param parsing, `PaginatedResponse<T>` generic type
-4. **`app/routes/api.v1.*.ts` (new, ~12 files)**: Public REST endpoints calling existing service layer
-5. **`app/lib/ocd/` (new)**: `serializers.ts`, `types.ts`, `ids.ts` — OCD entity transformation from existing data models
-6. **`app/routes/api.ocd.*.ts` (new, ~12 files)**: OCD endpoints using existing queries + OCD serializers
-7. **`app/lib/openapi-spec.ts` (new)**: Static OpenAPI 3.1 object (hand-crafted; ~15 endpoints is manageable without code-gen)
-8. **`api_keys` table (new)**: `key_hash` (SHA-256, indexed), `key_prefix` (display), `scopes[]`, `rate_limit_tier`, `is_active`, `expires_at`
+1. `apps/docs/` — Self-contained Next.js 16 app deployed to Cloudflare Workers static assets at `docs.viewroyal.ai`
+2. `apps/docs/scripts/fetch-openapi.mjs` — Pre-build script; fetches live OpenAPI spec; falls back to committed `openapi.json` if unreachable
+3. `content/docs/` — Hand-written MDX guides (~8-9 pages: getting started, auth, pagination, data model, error handling, OCD, changelog, contributing)
+4. Generated API reference MDX — Created at build time by `generateFiles()` from the OpenAPI spec; gitignored, never committed
+5. `lib/source.ts` + `lib/openapi.ts` — fumadocs loader configuration that builds the sidebar page tree from both hand-written and generated content
+
+**OpenAPI approach flag (needs implementation validation):** Both researchers agree `generateFiles()` is required for static export — virtual files (`openapiSource()`) require an RSC server that doesn't exist in a static export. The Stack researcher notes APIPage renders at build time via `generateStaticParams`, which is consistent with `generateFiles()` output. However, the exact script invocation, whether `generateFiles()` auto-generates `meta.json` for the API reference sidebar section, and whether generated MDX files should be gitignored all need to be confirmed against the actual fumadocs CLI output during Phase 2.
+
+See `.planning/research/ARCHITECTURE.md` for the full directory structure, configuration file content, deployment pipeline, and build order dependencies.
 
 ### Critical Pitfalls
 
-1. **In-memory rate limiting resets on isolate eviction** — The existing `Map`-based rate limiter in `api.ask.tsx` and `api.search.tsx` resets on every isolate eviction and is not shared across Cloudflare edge locations. Use the Workers Rate Limit binding exclusively for the public API. The in-memory Map is acceptable for internal use only.
+1. **Deploying via OpenNext/Workers runtime instead of static export** (Critical) — Use `output: 'export'` in `next.config.mjs` and Cloudflare Workers static assets from day one. OpenNext adds complexity (3 MiB worker size limits, Node.js compat shims, cold starts, FinalizationRegistry errors) that is unnecessary for a static docs site. Wrong deployment target must be caught in Phase 1 — it poisons everything else.
 
-2. **Timing attacks on API key comparison** — Never compare API keys with `===`. Use `crypto.subtle.timingSafeEqual()` on SHA-256 hashes (always equal-length buffers). This is Cloudflare's own documented security pattern. SHA-256 hashing also means a database breach does not expose raw keys.
+2. **OpenAPI spec not available at build time** (Critical) — The spec is generated dynamically by chanfana at runtime, not a static file. Add a `prebuild` script that fetches it and saves to `openapi.json`. Commit that file as a fallback. Use `generateFiles()` (not `openapiSource()`) since static export has no RSC server. Address in Phase 1 (script) and Phase 2 (integration).
 
-3. **Routing collision with existing internal `api/*` routes** — The 8 existing React Router API routes use session-cookie auth. The new public API uses API-key auth. Mixing these prefix spaces causes the web UI to break or public endpoints to accept wrong auth. Use `api/v1/*` exclusively for the public API; leave `/api/*` untouched. Apply CORS headers only to `api/v1/*` routes.
+3. **Introducing pnpm workspaces and breaking existing apps** (Critical) — Do NOT create a root `pnpm-workspace.yaml`. Keep `apps/docs/` fully independent. Cloudflare's build system installs all workspace packages when building any single app (workers-sdk issue #10941), which breaks existing `apps/web/` deployments. Lock this in Phase 1 scaffolding.
 
-4. **OCD ID format inconsistencies** — The OCD spec is dormant and some ID format details are ambiguous. View Royal's canonical division ID is `ocd-division/country:ca/csd:5917034`. Use UUID v1 (not v4) for person/org OCD IDs per spec. Verify against the `opencivicdata/ocd-division-ids` GitHub repository before generating any IDs.
+4. **Stale fumadocs configuration from outdated tutorials** (Critical) — Use `npx create-fumadocs-app` to scaffold; do not manually configure. Pin all fumadocs packages to matching versions. Configuration API changed significantly between v15 and v16 (`source.config.ts` replaced earlier patterns, import paths changed, `mdx-components.tsx` is no longer the component registration mechanism). Address in Phase 1.
 
-5. **Internal fields leaking into public API responses** — The existing service layer returns full database rows. Build explicit response serializer functions for every entity type. Never pass raw Supabase results to `Response.json()`. Fields exposed in v1 become part of the API contract — removing them later is a breaking change.
+5. **Static export breaks default fumadocs search** (Moderate) — Default search uses server-side route handlers. For static export, client-side Orama search must be explicitly configured during setup. It appears to work in `next dev` but silently fails in production static builds. Configure and verify in Phase 1.
+
+6. **Generated MDX files going stale** (Moderate) — Do not commit generated API reference MDX to git. Add the generated directory to `.gitignore`. Run `generateFiles()` as part of `prebuild` so it regenerates automatically on every build. Address in Phase 2.
+
+See `.planning/research/PITFALLS.md` for 14 documented pitfalls with phase-specific warnings, error messages, and Cloudflare issue numbers.
 
 ## Implications for Roadmap
 
-Research across all four files converges on a clear 4-phase build order driven by dependency chains. Auth gates everything. Core data gates the OCD layer (which is a pure transformation). Documentation is written after the endpoints it documents.
+The FEATURES.md MVP recommendation maps cleanly to four phases with a clear dependency order. The framework must exist before content can be created; the API reference must be generated before guides that cross-reference specific endpoints can be written.
 
-### Phase 1: API Foundation
+### Phase 1: Framework Scaffolding and Deployment
 
-**Rationale:** All other phases depend on this. The security pitfalls (timing attacks, weak key generation, routing collisions, eviction-unsafe rate limiting) must be resolved before any endpoint is exposed. Building the auth/rate limit/error infrastructure first means every subsequent phase inherits correct security primitives automatically.
+**Rationale:** Every subsequent phase depends on this. The wrong deployment target (OpenNext vs static export) or wrong scaffolding (manual config vs CLI) is expensive to fix later. This phase locks the architectural decisions that research flagged as highest-risk.
+**Delivers:** Working fumadocs site deployed at `docs.viewroyal.ai` with navigation, dark mode, search, and responsive layout — no content yet, but the full build and deploy pipeline is validated
+**Addresses:** TS-5 (search), TS-6 (navigation), TS-7 (responsive design) — all automatic from fumadocs scaffolding
+**Avoids:** Pitfalls 1 (OpenNext), 3 (pnpm workspaces), 4 (stale config), 5 (Tailwind conflicts)
+**Key tasks:** `create-fumadocs-app` scaffold, `wrangler.toml` with `[assets]` directive pointing to `./out/`, `output: 'export'` in `next.config.mjs`, prebuild spec fetch script, independent `pnpm-workspace.yaml`, client-side Orama search configuration
 
-**Delivers:** `api_keys` table migration, Hono router wired into `workers/app.ts`, `api.server.ts` with `authenticateApiRequest()`, `pagination.ts` cursor utilities, API key generation tooling, CORS handling, `[[ratelimits]]` binding in `wrangler.toml`
+### Phase 2: OpenAPI Integration and API Reference
 
-**Addresses features:** TS-1 (API key auth), TS-2 (rate limiting), TS-5 (error responses), TS-7 (municipality scoping)
+**Rationale:** The OpenAPI spec integration is the highest-complexity technical task. It must come before content guides because guides link to specific endpoints. Getting `generateFiles()` working correctly validates the entire build pipeline and delivers ~25 pages automatically.
+**Delivers:** Complete auto-generated API reference at `docs.viewroyal.ai/api-reference/` with interactive playground and multi-language code examples; covers all API endpoints grouped by tag (Meetings, People, Matters, Motions, Bylaws, Search, OCD, System)
+**Addresses:** TS-1 (API reference), D-1 (interactive playground)
+**Uses:** `fumadocs-openapi@^10.3.9`, `shiki@^3.22.0`, prebuild fetch script from Phase 1
+**Avoids:** Pitfalls 2 (spec sync), 7 (stale generated files), 12 (wrong server URLs in playground), 14 (missing fumadocs-openapi CSS preset)
+**Key tasks:** `generateFiles()` integration in prebuild, spec `servers` array validation, `fumadocs-openapi/css/preset.css` CSS import, meta.json for API reference sidebar section, CORS verification for playground requests
 
-**Avoids:** P1 (in-memory rate limit eviction), P2 (timing attacks), P3 (route collision), P4 (Math.random key generation)
+### Phase 3: Core Developer Guides
 
-### Phase 2: Core Data API
+**Rationale:** The guides depend on the API reference existing so cross-links to specific endpoints are valid. This is the editorial phase — content, not infrastructure. Time-to-first-API-call reduction is the primary metric.
+**Delivers:** Complete developer onboarding path: getting started quickstart, authentication guide, code examples in curl/JS/Python with persistent language selection
+**Addresses:** TS-2 (getting started), TS-3 (authentication), TS-4 (code examples)
+**Avoids:** Pitfall 10 (missing `meta.json` breaks sidebar — plan the full content directory structure before writing any pages)
+**Key tasks:** Quickstart guide with curl/JS/Python examples, auth guide with error shape documentation, fumadocs Tabs with `groupId` + `persist` for language selection, cross-links to `/developers` API key management page
 
-**Rationale:** The data already exists and the service layer already queries it. This phase exposes existing data through a clean REST interface. Starting with meetings validates the full auth-to-response-with-pagination flow before implementing the remaining 4 entity types. Explicit serializers are written here, establishing the pattern that Phase 4's OCD layer will reuse.
+### Phase 4: Reference Content and Production Deployment
 
-**Delivers:** 10 REST endpoints (meetings, people, matters, motions, bylaws — list + detail for each), keyset cursor pagination on all list endpoints, explicit response serializer functions, `data`/`pagination`/`meta` response envelope
-
-**Addresses features:** TS-3 (cursor pagination), TS-4 (core data endpoints), D-5 (response envelope)
-
-**Avoids:** P7 (cursor pagination edge cases — composite sort key, opaque cursors), P9 (internal field leakage via serializers)
-
-**Uses:** Existing `app/services/*.ts` service functions unchanged
-
-### Phase 3: Intelligence Endpoints
-
-**Rationale:** Search and Ask endpoints wrap existing infrastructure (`hybridSearchAll()`, `runQuestionAgent()`). The primary new work is converting the streaming SSE Ask response to a synchronous JSON response and applying per-endpoint scope enforcement. These are the differentiating capabilities of the platform; they depend on Phase 1 auth but not on Phase 2 data endpoints.
-
-**Delivers:** `GET /api/v1/search` exposing hybrid search, `POST /api/v1/ask` returning synchronous JSON RAG response, `ask` scope requirement on RAG endpoint, stricter rate limit tier for AI-backed endpoints
-
-**Addresses features:** D-1 (search API), D-2 (ask API)
-
-**Avoids:** P12 (streaming SSE unusable by REST clients), P14 (no scope enforcement)
-
-### Phase 4: OCD Layer + Documentation
-
-**Rationale:** OCD endpoints are a serialization layer over the same queries used in Phase 2 — no new database work. They are last because the serializers require the Phase 2 response shapes to be stable before building transformations on top of them. Documentation (OpenAPI spec) is written after endpoints exist because the spec documents implementation, not intention. API key management UI is included here as a polish deliverable.
-
-**Delivers:** `app/lib/ocd/` serializers for all 6 entity types (jurisdiction, org, person, event, bill, vote), 12 OCD endpoints at `/api/ocd/*`, OpenAPI 3.1 spec, Swagger UI at `/api/v1/docs`, self-service API key management page
-
-**Addresses features:** D-3 (OCD endpoints), TS-6 (OpenAPI docs), D-4 (key management UI)
-
-**Avoids:** P5 (OCD ID format errors — verify canonical division ID first), P6 (OpenAPI spec drift — write spec from working endpoints, not ahead of them)
+**Rationale:** Reference content guides are independent of each other and lower priority than the core onboarding path. Deployment setup completes the milestone and validates all prior phases end-to-end.
+**Delivers:** Data model docs with Mermaid ER diagram, pagination guide, error handling guide with error code index, OCD standard reference, changelog, contribution guide, production deployment at `docs.viewroyal.ai` with custom domain
+**Addresses:** D-2, D-3, D-5, D-7, D-4, D-6
+**Avoids:** Pitfall 8 (DNS routing conflict — verify existing Worker route pattern `viewroyal.ai/*` does not wildcard subdomains before pointing custom domain), Pitfall 11 (unoptimized images — use SVG for all diagrams), Pitfall 13 (wrong build output directory — Cloudflare Workers `[assets] directory` must be `./out`)
+**Key tasks:** Mermaid ER diagram for entities, error code index (NOT_FOUND, UNAUTHORIZED, RATE_LIMITED, etc.), OCD entity mapping table, wrangler deployment with `docs.viewroyal.ai` custom domain, cross-links from main app footer and `/developers` page to docs
 
 ### Phase Ordering Rationale
 
-- Auth and rate limiting precede every endpoint — this is a hard security dependency, not a preference
-- Core data before OCD because OCD is a transformation of the same underlying queries; building OCD before Phase 2 response shapes are stable means rewriting serializers
-- Intelligence endpoints can run in parallel with or after Phase 2 since they depend only on Phase 1 foundation; they are sequenced third for simplicity
-- Documentation after all endpoints because an accurate OpenAPI spec requires working, stable endpoints to document
+- Phase 1 must be first — the deployment target and scaffolding decisions are the most dangerous pitfalls; wrong choices here affect every subsequent phase
+- Phase 2 must precede Phase 3 — guides cross-reference specific API endpoints; having the reference generated first ensures links are valid and developers can verify
+- Phase 3 must precede Phase 4 — getting started and authentication guides are higher priority than reference content; most developers will hit quickstart before data model docs
+- Phase 4 is naturally last — production deployment validates all prior phases; reference content is independent and lower priority than the core onboarding path
 
 ### Research Flags
 
 Phases needing deeper research during planning:
-- **Phase 4 (OCD Layer):** Medium confidence on spec compliance. The OCD spec is dormant since ~2020 and some entity field requirements have ambiguity. Recommend verifying View Royal's canonical division ID (`csd:5917034`) against the `opencivicdata/ocd-division-ids` repository before starting implementation. UUID v1 vs v4 requirement for person/org IDs should be confirmed against actual civic tech interoperability expectations.
 
-Phases with standard, well-documented patterns (skip deeper research):
-- **Phase 1 (Foundation):** All patterns are in official Cloudflare documentation. SHA-256 key hashing, `timingSafeEqual`, and the Rate Limit binding have comprehensive official guides.
-- **Phase 2 (Core Data):** Keyset pagination is a documented Supabase pattern. REST endpoint structure follows established conventions with no ambiguity.
-- **Phase 3 (Intelligence):** Wraps existing `hybridSearchAll()` and `runQuestionAgent()` functions. Main work is response format conversion, not new infrastructure.
+- **Phase 2 (OpenAPI integration):** The `generateFiles()` exact invocation, whether generated MDX files should be gitignored, and how `meta.json` is handled for the API reference sidebar section are not fully resolved in the research. Recommend running a spike (`npx create-fumadocs-app --openapi`) and examining the generated scaffold before planning Phase 2 tasks in detail.
+
+Phases with standard well-documented patterns (skip `/gsd:research-phase`):
+
+- **Phase 1 (Scaffolding):** `create-fumadocs-app` produces a working scaffold. Static export + Cloudflare Workers static assets is thoroughly documented by both Cloudflare and fumadocs.
+- **Phase 3 (Guides):** Pure editorial content with fumadocs MDX components. Tabs, code blocks, copy buttons, and heading anchors are all built-in fumadocs-ui features with clear documentation.
+- **Phase 4 (Reference content and deployment):** Mermaid in MDX, wrangler deployment with static assets, and custom domain setup are all standard patterns with official documentation.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Hono, chanfana, and Zod are Cloudflare-maintained or officially recommended. Rate Limit binding is GA with full documentation. SHA-256 key hashing is the explicit Cloudflare-documented pattern for API keys. |
-| Features | HIGH | Benchmarked against OpenStates v3, Google Civic Info, and Councilmatic with full API specs. Feature tier classifications are grounded in actual civic data API ecosystem behavior, not inference. |
-| Architecture | HIGH | URL-prefix split pattern is simple and precedented. Service layer reuse is straightforward — no new database queries needed for Phases 1-3. The wrapper-function-over-middleware decision is the right call for RR 7.12.0. |
-| Pitfalls | HIGH | All 5 critical pitfalls sourced from Cloudflare's own security documentation or widely-documented API design anti-patterns. OCD ID format (P5) is the only item with meaningful implementation uncertainty. |
+| Stack | HIGH | All versions npm-verified on 2026-02-23. Peer dependency chain confirmed. Next.js 16 requirement is a hard constraint from fumadocs-ui peer deps, not a suggestion. Deployment target (Workers static assets) is documented by Cloudflare. |
+| Features | HIGH | Well-established API documentation patterns from Stripe, Twilio, Supabase, and OpenAI. Feature tier classifications are grounded in industry consensus and explicit "why expected" rationale per feature. |
+| Architecture | HIGH | Core pattern (static export + independent app) is definitively correct. The one open question (`generateFiles()` exact invocation) is a well-scoped implementation detail, not an architectural uncertainty. |
+| Pitfalls | HIGH | 14 pitfalls documented with specific error messages, Cloudflare issue numbers (workers-sdk #10941), and fumadocs GitHub issues (#1875, #2456). Most are based on official docs confirming behaviors, not inference. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **OCD canonical division ID for View Royal**: Research specifies `ocd-division/country:ca/csd:5917034` but this should be verified against the `opencivicdata/ocd-division-ids` GitHub repository before Phase 4. The CSD (Census Subdivision) code needs confirmation — if it does not exist in the canonical repo, the process for adding it requires community discussion.
+- **`generateFiles()` exact integration:** Both researchers agree this is the right mechanism for static export. The exact script invocation, whether `generateFiles()` also generates `meta.json` for the API sidebar, and whether generated MDX files should be committed or gitignored need to be confirmed by running `create-fumadocs-app --openapi` and reading the generated output. Address as a spike at the start of Phase 2.
 
-- **`X-RateLimit-Remaining` header**: The Cloudflare Rate Limit binding returns only `{ success: boolean }` — remaining request count is not available. Either accept omitting this header in v1 (document the omission in the OpenAPI spec) or implement a separate per-key counter (adds meaningful complexity). Recommend omitting for v1.
+- **Interactive playground CORS:** The playground makes client-side requests from `docs.viewroyal.ai` to `viewroyal.ai/api/v1/*`. FEATURES.md notes the API already allows `*` origin. Verify this is still true by checking the chanfana/Hono CORS middleware configuration in `apps/web/app/api/` before completing Phase 2.
 
-- **Supabase admin client vs RLS for public API**: The current service layer uses `getSupabaseAdminClient()` which bypasses row-level security. PITFALLS.md flags this as a risk. Determine before Phase 2 whether the platform's data is intentionally fully public (admin client is acceptable) or whether new RLS policies should gate the public API path.
+- **Cloudflare Pages deprecation date:** The Stack researcher cites April 2025 deprecation from community posts but no official Cloudflare deprecation announcement was found. Workers static assets is clearly the recommended direction regardless — Cloudflare has invested heavily in the `[assets]` directive documentation. If Pages still works at implementation time, it is also acceptable, but Workers static assets is the safer, future-proof choice.
 
-- **Rate limit binding pricing**: Documented as GA but the Cloudflare pricing page does not explicitly state whether the Rate Limit binding is included in Workers Paid or has per-request costs. Verify before production launch to avoid surprise charges.
+- **Node.js 25 fumadocs compatibility:** The system runs Node.js v25.3.0. fumadocs GitHub issue #2456 documents potential Node.js 25 compatibility issues. If `create-fumadocs-app` scaffold fails with Node 25, switch to Node 22 LTS for the docs build environment only.
 
 ## Sources
 
-### Primary (HIGH confidence)
-- [Cloudflare Workers Rate Limit Binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/) — binding API, GA announcement, wrangler.toml configuration
-- [Cloudflare Workers Timing-Safe Comparison](https://developers.cloudflare.com/workers/examples/protect-against-timing-attacks/) — `timingSafeEqual` pattern
-- [chanfana GitHub](https://github.com/cloudflare/chanfana) — v3.0.0 release, Zod v4 requirement, Hono adapter docs
-- [Hono on Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers) — official integration guide
-- [OCD Identifiers specification](https://open-civic-data.readthedocs.io/en/latest/ocdids.html) — ID format requirements
-- [OCD Entity specifications](https://open-civic-data.readthedocs.io/en/latest/data/index.html) — field requirements per entity type
-- [OpenStates API v3](https://docs.openstates.org/api-v3/) — benchmark for endpoint design, auth, rate limits, pagination
-- [Cloudflare Workers Best Practices](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/) — security patterns, crypto APIs
+### Primary (HIGH confidence — official docs, npm registry)
+- [fumadocs.dev OpenAPI integration](https://www.fumadocs.dev/docs/integrations/openapi) — generateFiles(), APIPage, playground configuration
+- [fumadocs.dev static build guide](https://www.fumadocs.dev/docs/deploying/static) — output: 'export', client-side search configuration
+- [fumadocs.dev v16 blog post](https://www.fumadocs.dev/blog/v16) — Next.js 16 requirement, breaking changes, Cloudflare JS engine default
+- [npm: fumadocs-ui@16.6.5](https://www.npmjs.com/package/fumadocs-ui) — peer deps: `next: 16.x.x`, `react >= 19.2.0` (npm-verified)
+- [npm: fumadocs-openapi@10.3.9](https://www.npmjs.com/package/fumadocs-openapi) — peer deps: fumadocs-core/ui >= 16.5 (npm-verified)
+- [npm: next@16.1.6](https://www.npmjs.com/package/next) — engine requirements: node >= 20.9.0 (npm-verified)
+- [Cloudflare Workers static assets](https://developers.cloudflare.com/workers/static-assets/) — `[assets]` wrangler.toml config, not_found_handling, html_handling
+- [Cloudflare workers-sdk issue #10941](https://github.com/cloudflare/workers-sdk/issues/10941) — pnpm monorepo installs all workspaces (confirmed blocker)
+- [fumadocs GitHub issue #1875](https://github.com/fuma-nama/fumadocs/issues/1875) — version mismatch type errors when packages are mismatched
 
-### Secondary (MEDIUM confidence)
-- [OCD Division IDs repository](https://github.com/opencivicdata/ocd-division-ids) — canonical division IDs for Canadian municipalities
-- [Supabase pagination best practices](https://github.com/supabase/agent-skills/blob/main/skills/supabase-postgres-best-practices/references/data-pagination.md) — keyset pagination patterns
-- [Supabase API key management (MakerKit)](https://makerkit.dev/blog/tutorials/supabase-api-key-management) — table schema, hashing pattern
-- [OpenAPI spec pitfalls (liblab)](https://liblab.com/blog/why-your-open-api-spec-sucks) — common drift and nullable field issues
-- [Google Civic Info API](https://developers.google.com/civic-information/docs/v2) — benchmark comparison, auth model
+### Secondary (MEDIUM confidence — multiple sources agree)
+- [fumadocs GitHub issue #2456](https://github.com/fuma-nama/fumadocs/issues/2456) — Node.js 25 compatibility concerns
+- [fumadocs static search / Orama](https://www.fumadocs.dev/docs/headless/search/orama) — client-side search configuration for static mode
+- [Deploy Next.js + fumadocs to GitHub Pages](https://zephinax.com/blog/deploy-nextjs-fumadocs-github-pages) — static export workflow validation (confirms trailingSlash, images.unoptimized)
+- [OpenNext troubleshooting](https://opennext.js.org/cloudflare/troubleshooting) — worker size limits, FinalizationRegistry errors, Next.js 16 instrumentation hook issues
+- [Stripe API docs patterns](https://apidog.com/blog/stripe-docs/) — three-panel layout, persistent language selection, copy buttons
 
-### Tertiary (LOW confidence)
-- Rate limit binding pricing (appears included in Workers Paid, not explicitly stated on pricing page)
-- chanfana custom router extensibility (mentioned in docs, no example implementations found)
+### Tertiary (LOW confidence — single source or inference)
+- Cloudflare Pages deprecation date (April 2025) — referenced in community posts, no official Cloudflare deprecation announcement found; Workers static assets is the replacement regardless
+- Static search performance with OpenAPI-generated pages — untested at scale with API reference content (estimated fine for <100 pages)
 
 ---
-*Research completed: 2026-02-19*
+*Research completed: 2026-02-23*
 *Ready for roadmap: yes*

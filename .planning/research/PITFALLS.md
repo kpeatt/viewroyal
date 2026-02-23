@@ -1,151 +1,140 @@
-# Domain Pitfalls: v1.3 Platform APIs
+# Domain Pitfalls: v1.4 Developer Documentation Portal
 
-**Domain:** Public API with auth, rate limiting, OpenAPI docs, and OCD-standard endpoints added to existing Cloudflare Workers web app
-**Researched:** 2026-02-19
+**Domain:** Adding fumadocs/Next.js documentation site to existing Cloudflare-deployed monorepo
+**Researched:** 2026-02-23
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, security vulnerabilities, or major architectural issues.
+Mistakes that cause rewrites, deployment failures, or major integration breakage.
 
 ---
 
-### Pitfall 1: In-Memory Rate Limiting Resets on Isolate Eviction
+### Pitfall 1: Deploying fumadocs via OpenNext/Workers Instead of Static Export
 
-**What goes wrong:** The existing `api.ask.tsx` and `api.search.tsx` both use `new Map<string, number[]>()` at module scope for rate limiting. On Cloudflare Workers, isolates are evicted unpredictably (runtime updates several times per week, memory pressure at 128MB, low traffic periods). When an isolate evicts, the entire Map is lost and rate limits reset to zero. Across multiple edge locations, each location maintains its own isolate with its own Map -- a user hitting Sydney and London gets separate rate limit counters.
+**What goes wrong:** Attempting to run fumadocs as a server-rendered Next.js app on Cloudflare Workers via `@opennextjs/cloudflare`. This introduces massive complexity (worker size limits, Edge runtime incompatibility, Node.js compatibility shims, I/O context errors) for what is fundamentally a static content site. Fumadocs official docs explicitly state: "Use https://opennext.js.org/cloudflare, Fumadocs doesn't work on Edge runtime." This warning steers people toward OpenNext, but the far better path for a docs site is static export entirely.
 
-**Why it happens:** Workers are stateless by design. Global variables persist across requests within the same isolate instance, but Cloudflare provides zero guarantees about isolate lifetime. The current code works "well enough" for the internal web UI where abuse is low-stakes, but a public API with issued keys is a different threat model.
+**Why it happens:** The existing web app deploys to Cloudflare Workers, so the natural instinct is to deploy the docs site the same way. OpenNext's marketing makes it seem straightforward. But a documentation site has zero dynamic server requirements -- all content is known at build time.
 
 **Consequences:**
-- API abusers can bypass rate limits by waiting for isolate eviction or hitting different edge locations
-- Legitimate API consumers see inconsistent rate limit behavior (sometimes 100 requests work, sometimes 50, depending on isolate state)
-- No visibility into actual rate limit state -- no dashboard, no metrics, no alerts
+- Worker compressed size limit: 3 MiB (free) / 10 MiB (paid). Next.js + fumadocs + shiki syntax highlighter can easily exceed 3 MiB compressed.
+- `@opennextjs/cloudflare` drops Edge runtime support -- must use Node.js runtime with `nodejs_compat` flag and compatibility date >= 2024-09-23.
+- Runtime I/O context errors ("Cannot perform I/O on behalf of a different request") if any module-level state persists across requests.
+- FinalizationRegistry errors require compatibility_date >= 2025-05-05.
+- Cold starts on every request for a docs site that should be instant.
+- Next.js 16 has known OpenNext instrumentation hook errors; workaround is downgrading to 15.3.
 
-**Prevention:**
-- Use the Cloudflare Workers Rate Limiting binding (`[[ratelimits]]` in wrangler.toml) which is now GA as of September 2025. It uses a backing store per Cloudflare location with locally cached counters -- near-zero latency and survives isolate eviction
-- Key on API key (not IP address) for authenticated endpoints. IP-based keys are unreliable on mobile/corporate networks where many users share an IP
-- Accept that the rate limiter is "permissive and eventually consistent" by design -- it is not an accurate accounting system. Don't use it for billing or hard quotas. Over-provision slightly (e.g., set limit to 110 if you advertise 100/min)
-- The binding only supports period values of 10 or 60 seconds. Plan rate limit tiers around these constraints
+**Prevention:** Deploy fumadocs as a static site (`output: 'export'` in next.config.mjs) to Cloudflare Pages. A documentation site is 100% static content. Cloudflare Pages serves static assets from their CDN with zero cold starts, no worker size limits, and free unlimited bandwidth. Assign `docs.viewroyal.ai` as a custom domain on the Pages project.
 
-**Detection:**
-- Rate limit counters appear to reset randomly (isolate eviction)
-- Different rate limit behavior from different geographic locations
-- Abuse spikes that should have been caught by rate limiting
+**Detection:** Worker deployment fails with size errors, or succeeds but has 200-500ms cold starts on doc pages that should be instant.
+
+**Phase:** Address in Phase 1 (project setup). Wrong deployment target poisons every subsequent phase.
+
+**Confidence:** HIGH -- fumadocs official docs confirm static export support and note "doesn't work on Edge runtime"; Cloudflare Pages is the standard static hosting platform.
 
 **Sources:**
-- [Cloudflare Workers Rate Limiting Binding docs](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
-- [Rate Limiting in Workers is now GA](https://developers.cloudflare.com/changelog/2025-09-19-ratelimit-workers-ga/)
+- [fumadocs Deployment Docs](https://www.fumadocs.dev/docs/deploying) -- "Use https://opennext.js.org/cloudflare, Fumadocs doesn't work on Edge runtime"
+- [fumadocs Static Build Guide](https://www.fumadocs.dev/docs/deploying/static)
+- [OpenNext Cloudflare Troubleshooting](https://opennext.js.org/cloudflare/troubleshooting) -- worker size limits, FinalizationRegistry errors
+- [Cloudflare Pages Static Next.js](https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-nextjs-site/)
 
 ---
 
-### Pitfall 2: API Key Comparison Vulnerable to Timing Attacks
+### Pitfall 2: OpenAPI Spec Synchronization -- Runtime vs Build-Time Mismatch
 
-**What goes wrong:** Comparing API keys with `===` allows timing side-channel attacks. JavaScript's strict equality operator short-circuits at the first mismatched character, so an attacker can statistically determine the key one character at a time by measuring response latency differences.
+**What goes wrong:** The existing API generates its OpenAPI 3.1 spec at runtime via chanfana (Hono middleware) at `/api/v1/openapi.json`. It is NOT a static file -- chanfana builds it dynamically from Zod schemas registered in `apps/web/app/api/index.ts`. fumadocs-openapi needs to consume this spec to generate API reference pages, but the spec only exists when the Worker is running.
 
-**Why it happens:** Developers use `===` instinctively. On a local server the timing difference (~nanoseconds) is noise. But on Cloudflare Workers where the code runs close to the user with minimal network jitter, the timing signal is amplified. Additionally, naive implementations return early on key-length mismatch, leaking the secret's length.
+**Why it happens:** fumadocs-openapi offers two approaches: `generateFiles()` (build-time MDX generation from a spec file) and `openapiSource()` (runtime server-side generation via RSC). Both expect a spec file or URL. But if you point `generateFiles()` at the production URL, the docs build depends on the production API being up and having the latest spec. If you point it at a local file, the file goes stale whenever API endpoints change. And `openapiSource()` requires a running Next.js server with RSC context, which contradicts static export (`output: 'export'`).
 
 **Consequences:**
-- API keys can be brute-forced character by character
-- Key length is leaked if the comparison returns early on length mismatch
-- A compromised API key gives full access to all API endpoints under that key's permissions
+- API reference pages show outdated endpoints, missing parameters, or wrong response schemas.
+- Build failures when production API is unreachable during docs CI build.
+- Circular dependency: API changes deploy first, then docs must rebuild, creating a window where docs are wrong.
+- Using `openapiSource()` forces server-side rendering, which contradicts the static export strategy from Pitfall 1.
 
 **Prevention:**
-- Use `crypto.subtle.timingSafeEqual()` for all API key comparisons. This is a non-standard Web Crypto extension that Cloudflare Workers supports natively
-- Do NOT return early on length mismatch -- compare against the key itself instead and negate the result. Both buffers passed to `timingSafeEqual` must be the same length (throws otherwise)
-- Hash API keys with SHA-256 before storage. Compare hashes, not raw keys. This way a database leak doesn't expose keys, and the hash comparison via `timingSafeEqual` is always the same length
-- Use a key prefix (first 8 chars, unhashed) for fast database lookup, then compare the full hash
+1. Add a spec extraction script to `apps/docs/scripts/` that programmatically generates the OpenAPI JSON without starting the full Worker. chanfana's `fromHono()` builds the spec in-memory -- the registry can be imported and serialized to JSON in a Node.js script.
+2. Simpler alternative: run `wrangler dev` for the web app, `curl http://localhost:8787/api/v1/openapi.json > apps/docs/content/openapi.json`, then kill wrangler. Wire this as a `prebuild` script.
+3. Use `generateFiles()` (NOT `openapiSource()`) since static export cannot use RSC server-side APIs at runtime.
+4. Commit the spec JSON file to version control. Treat it as a build artifact that gets regenerated when API endpoints change.
+5. Add a CI step that regenerates and diffs -- warn if the committed spec is stale.
 
-**Detection:**
-- Security audit flags `===` comparison on secrets
-- Timing analysis of API responses shows character-by-character correlation
+**Detection:** API reference pages don't match actual API behavior. New endpoints missing from docs after API deployment.
+
+**Phase:** Address in Phase 1 (spec extraction script) and Phase 2 (OpenAPI integration). This is foundational -- get it wrong and every API reference page is unreliable.
+
+**Confidence:** HIGH -- verified that chanfana generates spec at runtime from `apps/web/app/api/index.ts`; fumadocs-openapi docs confirm the two approaches and their tradeoffs.
 
 **Sources:**
-- [Cloudflare Workers timingSafeEqual docs](https://developers.cloudflare.com/workers/examples/protect-against-timing-attacks/)
-- [Cloudflare Workers Best Practices - Secure comparison](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/)
+- [fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi)
+- [fumadocs OpenAPI generateFiles()](https://fumadocs.dev/docs/ui/openapi/generate-files)
+- [fumadocs OpenAPI v10 Blog](https://www.fumadocs.dev/blog/openapi-v10) -- comparison of approaches
 
 ---
 
-### Pitfall 3: Routing Collision Between Existing Internal API and New Public API
+### Pitfall 3: Breaking Existing Apps by Introducing pnpm Workspaces
 
-**What goes wrong:** The existing app has 10 routes under `api/*` (api/ask, api/search, api/subscribe, etc.) that serve the web UI. Adding a public API at `api/v1/*` creates ambiguity: which routes are internal (require Supabase auth cookies) and which are public (require API keys)? Authentication middleware applied to `api/*` glob patterns can break existing internal routes or accidentally expose internal endpoints without API key auth.
+**What goes wrong:** The current repo has `apps/web/`, `apps/pipeline/`, and `apps/vimeo-proxy/` as fully independent apps. There is NO root `package.json` and NO `pnpm-workspace.yaml`. Each app has its own `node_modules` and lockfile. Adding `pnpm-workspace.yaml` to enable shared packages would fundamentally change how dependencies are resolved for ALL existing apps, breaking their builds.
 
-**Why it happens:** React Router 7's route config in `routes.ts` treats all routes as peers. There is no built-in middleware concept -- auth checks happen inside each route handler. Adding a new auth layer (API keys) alongside the existing auth (Supabase session cookies) requires careful route segregation.
-
-**Consequences:**
-- Internal API routes accidentally require API keys (breaks the web UI)
-- Public API routes accidentally accept session cookies instead of API keys (wrong auth model)
-- CORS headers applied to public API leak onto internal routes or vice versa
-- Route naming conflicts when `api/search` (internal) and `api/v1/search` (public) have different behaviors
-
-**Prevention:**
-- Use a completely separate route prefix: `api/v1/*` for public API, leave existing `api/*` untouched. Never share a prefix
-- Use React Router 7's `prefix()` helper in `routes.ts` to group all public API routes cleanly
-- Create a shared API key auth middleware function that is called explicitly at the top of every `api/v1/*` handler -- do not try to create a catch-all middleware pattern
-- Set CORS headers (`Access-Control-Allow-Origin: *`) only on `api/v1/*` routes. Internal `api/*` routes should remain same-origin only
-- Handle OPTIONS preflight requests explicitly in every public API route (or in a shared utility). Cloudflare Workers do not automatically handle CORS preflight
-
-**Detection:**
-- Web UI breaks after deploying public API (internal routes now require API key)
-- Public API rejects requests despite valid API key (wrong auth path)
-- Browser console shows CORS errors on the web app
-
----
-
-### Pitfall 4: API Key Generation with Math.random()
-
-**What goes wrong:** Using `Math.random()` to generate API keys produces predictable, low-entropy tokens. `Math.random()` is not cryptographically secure -- its output can be predicted if an attacker observes enough values.
-
-**Why it happens:** `Math.random()` is the instinctive choice in JavaScript. Node.js has `crypto.randomBytes()` but that is not available in Cloudflare Workers (no Node.js APIs). The correct Workers API is `crypto.getRandomValues()` or `crypto.randomUUID()`.
+**Why it happens:** Sharing the OpenAPI spec or a Tailwind config between `apps/web/` and `apps/docs/` seems like it needs workspaces. The "proper monorepo" instinct leads to adding workspace configuration. But Cloudflare's build system installs ALL workspace packages even when building a single app (workers-sdk issue #10941), causing builds to fail when unrelated workspaces have incompatible dependencies. Adding workspaces retroactively also changes pnpm's hoisting behavior, which can break existing `pnpm install` for `apps/web/` and `apps/vimeo-proxy/`.
 
 **Consequences:**
-- API keys can be predicted by attackers who observe a few valid keys
-- Key collisions are possible with low-entropy generation
+- `pnpm install` in `apps/web/` starts resolving packages from other workspaces, finding conflicting versions.
+- Cloudflare Workers build for `apps/web/` fails because pnpm tries to install `apps/docs/`'s Next.js dependencies.
+- Build cache invalidation -- pnpm monorepo build cache on Cloudflare is broken for pnpm workspaces (community report).
+- The Python pipeline in `apps/pipeline/` is unaffected (uses `uv`, not pnpm), but the Node apps are not isolated anymore.
 
 **Prevention:**
-- Use `crypto.randomUUID()` for unique identifiers
-- Use `crypto.getRandomValues()` with a Uint8Array for high-entropy random bytes, then encode to hex or base64
-- Recommended key format: prefix + random bytes, e.g., `vr_` + 32 random hex chars = `vr_a1b2c3d4...` (prefix enables quick identification and lookup)
-- Store only the SHA-256 hash of the key in the database. Show the full key to the user exactly once at creation time
+1. Keep `apps/docs/` as a fully independent app with its own `package.json`, `pnpm-lock.yaml`, and deployment pipeline. Do NOT introduce pnpm workspaces.
+2. Share the OpenAPI spec via a simple file copy in a build script, not via workspace package imports.
+3. Deploy `apps/docs/` to Cloudflare Pages as a separate project from the Workers deployment of `apps/web/`.
+4. If workspaces become necessary later, that is a separate refactoring milestone with full testing of all existing deployment pipelines.
 
-**Detection:**
-- Security audit flags `Math.random()` usage in key generation
-- Key format lacks sufficient entropy (short, predictable patterns)
+**Detection:** `pnpm install` in one app directory starts pulling dependencies from other apps. Build times spike. Cloudflare Workers build fails with module resolution errors.
+
+**Phase:** Address in Phase 1 (project scaffolding). This decision must be locked before any code is written.
+
+**Confidence:** HIGH -- verified repo has no root package.json or workspace config; Cloudflare monorepo issues documented in workers-sdk issue #10941 and community forum reports.
 
 **Sources:**
-- [Cloudflare Workers Best Practices - Random values](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/)
+- [Cloudflare workers-sdk Issue #10941](https://github.com/cloudflare/workers-sdk/issues/10941) -- pnpm monorepo installs all workspaces
+- [Cloudflare Workers Build Cache + pnpm issues](https://community.cloudflare.com/t/workers-build-cache-not-working-as-expected-in-monorepos-pnpm/803213)
+- [Cloudflare Pages Monorepo Docs](https://developers.cloudflare.com/pages/configuration/monorepos/)
 
 ---
 
-### Pitfall 5: OCD ID Format Inconsistencies and Stale Spec
+### Pitfall 4: fumadocs-mdx ESM-Only Requirement and Configuration Churn
 
-**What goes wrong:** The Open Civic Data specification underwent a "large refactor as of mid-2014" and some documentation is outdated. The jurisdiction ID format "isn't fully formalized yet" per the official docs. Implementing OCD endpoints against stale docs produces IDs that don't interoperate with other civic data systems.
+**What goes wrong:** fumadocs-mdx is ESM-only. It requires `next.config.mjs` (not `.js` or `.ts` with CommonJS). The configuration API has changed significantly across recent versions: `source.config.ts` replaced earlier patterns, the import path changed from `fumadocs-mdx/config` to `fumadocs-mdx/next`, and `mdx-components.tsx` is no longer used -- MDX components must be passed via the `components` prop explicitly. Blog posts and tutorials from even 6 months ago show outdated patterns.
 
-**Why it happens:** The OCD project is community-maintained with no formal governance body. The canonical OCD division ID repository on GitHub has the authoritative list but Canadian municipal-level IDs may not exist. Creating new division IDs for View Royal requires community consensus via the mailing list to prevent collisions.
+**Why it happens:** fumadocs has evolved rapidly. The project releases frequently (MDX v10, v14; fumadocs v15, v16). Each major version changes configuration patterns. Developers following tutorials or AI-generated code get stale patterns that produce cryptic errors.
 
 **Consequences:**
-- OCD IDs generated for View Royal entities don't match what other civic tech tools expect
-- IDs use wrong character encoding (OCD requires lowercase UTF-8, hyphen, underscore only)
-- Jurisdiction IDs follow a format that changes between OCD spec versions
-- Person/Organization UUIDs generated with wrong UUID version (OCD spec says uuid1, not uuid4)
+- Build errors: "Cannot use require() in ES module" if using `.js` config.
+- Runtime errors: "Unexpected FunctionDeclaration in code: only import/exports are supported" if MDX config is wrong.
+- Type errors: `tree={source.pageTree}` type mismatches if fumadocs-core version doesn't match fumadocs-mdx version.
+- The `.source` directory must be auto-generated during `next dev` or `next build` -- if missing, pages fail silently.
+- TypeScript path alias `"fumadocs-mdx:collections/*": [".source/*"]` must be in `tsconfig.json` or imports break.
+- Collections are defined in `source.config.ts`, not in the Next.js config -- putting them in the wrong file produces no error but no content.
 
 **Prevention:**
-- Check the [ocd-division-ids repository](https://github.com/opencivicdata/ocd-division-ids) for existing Canadian municipal divisions before creating new ones. View Royal's division ID should be: `ocd-division/country:ca/csd:5917034` (Census Subdivision code)
-- Use UUID v1 for person and organization OCD IDs (per spec), not UUID v4. This is a niche but important compatibility detail
-- The existing `ocd_id` column on the `municipalities` table is a good start. Extend to `people`, `organizations`, and `meetings` tables
-- Store OCD IDs as-is (strings), never parse or modify them programmatically after generation
-- The OCD API itself is no longer maintained -- focus on the data format standard, not the reference API implementation
-- Map OCD entity types to existing tables: Division -> Municipality, Jurisdiction -> Municipality (with legislative context), Person -> people, Organization -> organizations, Event -> meetings, Bill -> matters/bylaws, Vote -> motions
+- Use the official fumadocs CLI (`npx create-fumadocs-app`) to scaffold. This generates correct config for the current version. Do NOT manually set up the project.
+- Pin ALL fumadocs packages to the exact same version: fumadocs-core, fumadocs-mdx, fumadocs-ui, fumadocs-openapi. Mixed versions cause type mismatches (GitHub issue #1875).
+- Add `.source/` to `.gitignore` -- it is a build artifact regenerated on every build.
+- Verify the build works locally (`pnpm build`) before setting up any CI/CD.
 
-**Detection:**
-- Civic tech tools reject or fail to match OCD IDs from the API
-- IDs contain uppercase characters, spaces, or invalid separators
-- UUID version mismatch (v4 instead of v1)
+**Detection:** Build fails immediately with import errors or type errors. Easy to catch early if you build before deploying.
+
+**Phase:** Address in Phase 1 (scaffolding). Use the CLI, do not manually configure.
+
+**Confidence:** HIGH -- verified from fumadocs official docs, MDX v10 blog post, and GitHub issues (#1875, #2456).
 
 **Sources:**
-- [OCD Identifiers specification](https://open-civic-data.readthedocs.io/en/latest/ocdids.html)
-- [OCD Division IDs repository](https://github.com/opencivicdata/ocd-division-ids)
-- [OCD Adoption Guide (warning about refactor)](https://open-civic-data.readthedocs.io/en/latest/data/introduction.html)
+- [fumadocs MDX Getting Started](https://www.fumadocs.dev/docs/mdx)
+- [fumadocs MDX Next.js Setup](https://www.fumadocs.dev/docs/mdx/next) -- ESM requirement, source.config.ts
+- [fumadocs MDX v10 Summary](https://www.fumadocs.dev/blog/mdx-v10-summary) -- configuration changes
+- [fumadocs GitHub Issue #1875](https://github.com/fuma-nama/fumadocs/issues/1875) -- version mismatch type errors
 
 ---
 
@@ -153,138 +142,127 @@ Mistakes that cause rewrites, security vulnerabilities, or major architectural i
 
 ---
 
-### Pitfall 6: OpenAPI Spec Drift from Implementation
+### Pitfall 5: Tailwind CSS 4 Configuration Collision Between Apps
 
-**What goes wrong:** The OpenAPI spec says one thing, the actual API does another. Fields marked required are actually optional. Nullable fields aren't marked nullable. Response schemas omit fields that actually appear in responses. The spec becomes a lie that misleads API consumers.
+**What goes wrong:** The existing web app uses Tailwind CSS 4 with `@tailwindcss/vite`, `tw-animate-css`, and shadcn/ui presets. fumadocs v15+ also uses Tailwind CSS 4 but with its own CSS presets (`fumadocs-ui/css/neutral.css`, `fumadocs-ui/css/preset.css`). Copying Tailwind configuration from the existing web app into the docs app causes style conflicts because both use different Tailwind plugin configurations and different CSS variable naming conventions.
 
-**Why it happens:** Two approaches to OpenAPI: code-first (generate spec from code) and spec-first (write spec, then implement). Both drift. Code-first generators miss edge cases. Spec-first implementations diverge during development. Without automated validation, drift is invisible until consumers report bugs.
-
-**Consequences:**
-- Auto-generated client SDKs crash on unexpected null values
-- Consumers build against the spec and discover runtime surprises
-- API consumers lose trust in the documentation
-- Inconsistent error response shapes across endpoints (some return `{error: string}`, others `{message: string, code: number}`)
+**Why it happens:** Both apps use Tailwind 4 but configure it differently. The web app has custom theme colors, shadcn/ui component styles, and animation utilities. fumadocs has its own design system built on Tailwind that must not be mixed. Since fumadocs v15, it no longer uses `--fd-<color>` CSS variables -- it directly defines colors in `@theme` using `hsl()`.
 
 **Prevention:**
-- Define a standard error response schema in OpenAPI `components` and reference it everywhere via `$ref`. Never inline error schemas per-endpoint
-- Mark nullable fields explicitly. OpenAPI 3.1 uses `type: ['string', 'null']` -- do not use the deprecated `nullable: true` from 3.0
-- Include realistic `example` values for every field -- this catches schema mistakes during doc review
-- Add format specifiers: `format: date-time` for ISO dates, `format: uuid` for UUIDs, `format: uri` for URLs
-- Use `components/schemas` for all reusable types (Meeting, Person, Motion, etc.). Inline schemas are a maintenance nightmare
-- Write integration tests that validate API responses against the OpenAPI schema. Libraries like `openapi-response-validator` can automate this
+- Do NOT copy the web app's Tailwind configuration to the docs app. Start fresh.
+- Follow the fumadocs v15 migration guide exactly for CSS setup.
+- Required CSS imports in the docs app's global stylesheet:
+  ```css
+  @import 'tailwindcss';
+  @import 'fumadocs-ui/css/neutral.css';
+  @import 'fumadocs-ui/css/preset.css';
+  @source '../node_modules/fumadocs-ui/dist/**/*.js';
+  ```
+- Do NOT use fumadocs-ui's pre-built `style.css` alongside custom Tailwind -- they conflict.
+- The docs app's Tailwind config is completely independent from the web app's. No sharing.
 
-**Detection:**
-- API consumer reports that a field documented as required is sometimes missing
-- Auto-generated SDK throws type errors on valid API responses
-- Different endpoints return different error shapes
+**Phase:** Address in Phase 1 (scaffolding, theme setup).
+
+**Confidence:** HIGH -- fumadocs v15 blog post documents the Tailwind 4 migration explicitly.
 
 **Sources:**
-- [Why your OpenAPI spec sucks (liblab)](https://liblab.com/blog/why-your-open-api-spec-sucks)
+- [fumadocs v15 Blog Post](https://www.fumadocs.dev/blog/v15) -- Tailwind CSS 4 support details
 
 ---
 
-### Pitfall 7: Cursor-Based Pagination Done Wrong
+### Pitfall 6: Static Export Breaks Default fumadocs Search
 
-**What goes wrong:** Cursor pagination looks simple but has subtle implementation bugs. Common mistakes: using offset-based pagination disguised as cursors (just base64-encoding the offset), using mutable sort fields (created_at without tie-breaking on id), or exposing internal database IDs in the cursor value.
+**What goes wrong:** fumadocs defaults to a "server-first approach which always requires a running server." When using `output: 'export'` for static deployment, the built-in search functionality requires explicit reconfiguration for client-side operation. Without this, search appears to work in `next dev` but returns nothing or errors in the production static build.
 
-**Why it happens:** Cursor pagination is harder to implement than offset pagination. The cursor must encode a stable sort position that works with database indexes. Most tutorials show the happy path without addressing edge cases.
+**Why it happens:** Default fumadocs search uses server-side route handlers or React Server Components. Static export has no server -- route handlers cannot execute.
 
-**Consequences:**
-- Duplicate results when records are inserted during pagination (cursor skips or repeats)
-- Missing results when records are deleted during pagination
-- Cursors break after database migrations that change column types or names
-- Consumers construct cursors manually and send invalid values that crash the API
-- Off-by-one errors at page boundaries
+**Consequences:** Search field renders but silently fails in production. Users type queries and get nothing. The developer thinks search is broken and wastes hours debugging.
 
 **Prevention:**
-- Use opaque cursors: base64-encode a JSON payload containing the sort field value(s) and the row ID. Never expose raw database IDs
-- Sort on a stable, unique composite key: `(created_at, id)` not just `created_at` alone. Two meetings on the same date need tie-breaking
-- Validate cursors on decode -- return 400 with a clear error for invalid/expired cursors, never crash
-- Always return `next_cursor` (null if no more results) and `has_more` boolean in every paginated response
-- Set a maximum page size (e.g., 100) and a default (e.g., 20). Reject requests for more than the maximum
-- Use `WHERE (created_at, id) < ($cursor_date, $cursor_id) ORDER BY created_at DESC, id DESC LIMIT $limit` -- composite comparison operators work efficiently with composite indexes in PostgreSQL
+1. During initial setup, configure fumadocs Search Server for static export mode -- this generates a search index at build time.
+2. Configure Search UI/Client for static mode (client-side index).
+3. After setup, search indexes are stored statically and computed client-side in the browser.
+4. Alternative: use Orama Cloud or Algolia which use remote servers and work without configuration changes.
+5. For a developer docs site with fewer than 100 pages, client-side search (built-in Orama) is more than sufficient.
 
-**Detection:**
-- Consumers report duplicate or missing items when paginating through large result sets
-- Changing page size produces different total items
-- Cursors from one endpoint accidentally work on another endpoint (shared encoding)
+**Phase:** Address in Phase 1 (static export configuration) or Phase 3 (polish/search).
+
+**Confidence:** MEDIUM -- fumadocs static build docs confirm the requirement exists but exact configuration steps should be verified against the current version at build time.
+
+**Sources:**
+- [fumadocs Static Build Guide](https://www.fumadocs.dev/docs/deploying/static) -- search configuration for static mode
 
 ---
 
-### Pitfall 8: CORS Misconfiguration on Public API
+### Pitfall 7: `generateFiles()` Output Goes Stale as API Evolves
 
-**What goes wrong:** Public APIs need CORS headers (`Access-Control-Allow-Origin: *`) for browser-based consumers. But applying CORS too broadly exposes internal endpoints. Applying it too narrowly breaks legitimate cross-origin API calls. Forgetting OPTIONS preflight handling causes all cross-origin requests to fail.
+**What goes wrong:** Using fumadocs-openapi's `generateFiles()` to produce MDX files from the OpenAPI spec creates files like `content/docs/api/list-meetings.mdx`. These files get committed to git. When the API changes (new endpoint, renamed parameter, changed response schema), the generated MDX files remain unchanged until someone manually reruns the generation script. Documentation silently drifts from the actual API.
 
-**Why it happens:** Cloudflare Workers do not automatically handle CORS. Unlike Express.js where `cors()` middleware handles everything, in Workers you must manually respond to OPTIONS preflight requests and set headers on actual responses. React Router 7's loader/action pattern doesn't have a natural middleware hook for this.
+**Why it happens:** There is no automatic mechanism to detect API spec changes and regenerate docs. The generation script is manual. Developers update the API, deploy, and forget to regenerate docs.
 
-**Consequences:**
-- Browser-based API consumers get "No 'Access-Control-Allow-Origin' header present" errors
-- OPTIONS preflight requests hit your route handlers and return unexpected responses (or 405 errors)
-- Internal web app routes accidentally get `Access-Control-Allow-Origin: *`, weakening CSRF protection
-- Preflight responses are not cached, causing double the request volume
+**Consequences:** API reference documentation shows outdated information. Users encounter endpoints that behave differently than documented. Trust in documentation erodes, and the docs site becomes counterproductive.
 
 **Prevention:**
-- Create a `corsHeaders()` utility that returns the standard CORS headers. Apply it only to `api/v1/*` responses
-- Handle OPTIONS method explicitly in every public API route (or better, in a shared handler)
-- Set `Access-Control-Max-Age: 86400` on preflight responses to cache them for 24 hours
-- For the public API, `Access-Control-Allow-Origin: *` is correct since API key auth is the access control, not CORS
-- Never apply CORS headers to internal `api/*` routes -- the web app uses same-origin requests
+1. Add the generation script to the docs app's `prebuild` npm script so it runs automatically before every build.
+2. Do NOT commit generated MDX files to git. Add the generated API reference directory to `.gitignore`. Only commit the source OpenAPI spec JSON.
+3. The build pipeline should: (a) copy/fetch the latest spec, (b) run `generateFiles()`, (c) run `next build`.
+4. For local dev, run the generation as part of the `dev` script.
+5. Optionally add a CI check that regenerates and diffs, failing if the spec is stale relative to the source of truth.
 
-**Detection:**
-- Browser console CORS errors when calling the public API from a different domain
-- OPTIONS requests return 404 or 405 instead of 204 with CORS headers
-- Network tab shows preflight requests before every API call (missing `Access-Control-Max-Age`)
+**Phase:** Address in Phase 2 (OpenAPI integration).
+
+**Confidence:** HIGH -- this is a universal documentation drift problem.
+
+**Sources:**
+- [fumadocs generateFiles()](https://fumadocs.dev/docs/ui/openapi/generate-files)
 
 ---
 
-### Pitfall 9: Exposing Internal Fields in Public API Responses
+### Pitfall 8: Cloudflare DNS Routing Conflict Between Workers and Pages
 
-**What goes wrong:** Internal database fields leak into public API responses: internal numeric IDs, Supabase UUIDs, internal metadata JSON blobs, soft-delete flags, or admin-only fields. Once exposed in a public API response, removing them is a breaking change.
+**What goes wrong:** Setting up `docs.viewroyal.ai` as a custom domain on a Cloudflare Pages project requires a CNAME record. The existing web app's `wrangler.toml` has `routes = [{ pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" }]`. If the route pattern were broadened to a wildcard subdomain pattern (e.g., `*.viewroyal.ai/*`), it would intercept requests to `docs.viewroyal.ai` and route them to the main Worker instead of the Pages project.
 
-**Why it happens:** The path of least resistance is to pass Supabase query results directly to `Response.json()`. The existing service layer (`app/services/*.ts`) returns full database rows. Reusing these services for the public API without a mapping layer exposes everything.
+**Why it happens:** Route pattern editing or copy-paste errors. The current pattern `viewroyal.ai/*` correctly matches only the apex domain, but during a Cloudflare dashboard session, it could accidentally be changed. Additionally, Cloudflare requires DNS records to exist before a custom domain is active -- forgetting the CNAME results in `ERR_NAME_NOT_RESOLVED`.
 
-**Consequences:**
-- Internal auto-increment IDs expose database enumeration (attacker knows there are exactly N meetings)
-- Internal metadata fields become part of the API contract -- removing them later is a breaking change
-- Inconsistent field naming between internal camelCase TypeScript and public snake_case API
-- Large response payloads with fields consumers don't need
+**Consequences:** Requests to `docs.viewroyal.ai` serve the main web app or return a 404. The docs site is unreachable but the main site works fine, making the issue confusing to diagnose.
 
 **Prevention:**
-- Create explicit response serializer functions for every public API entity. Never pass raw database rows to the response
-- Use OCD IDs as the public identifier, not internal numeric IDs. If OCD IDs aren't ready, use stable slugs or UUIDs
-- Define the public API schema in OpenAPI first, then build serializers that produce exactly that shape
-- Exclude: `created_at`/`updated_at` (use `last_modified` if needed), `meta` JSON blobs, internal flags, embedding vectors
-- Include: fields explicitly listed in the OpenAPI spec and nothing else
+1. Verify the existing Worker route pattern does NOT include a wildcard subdomain before adding the Pages custom domain.
+2. Add CNAME record: `docs` -> `<pages-project>.pages.dev`.
+3. Use Cloudflare Pages custom domain configuration (not Worker routes) for the docs subdomain.
+4. Test subdomain resolution independently: `curl -I https://docs.viewroyal.ai` before and after Pages setup.
+5. The current route `viewroyal.ai/*` is correct as-is. Do not modify it.
 
-**Detection:**
-- API responses contain fields not documented in the OpenAPI spec
-- Response payloads are unexpectedly large
-- Consumers start depending on undocumented internal fields
+**Phase:** Address in the deployment phase (final phase).
+
+**Confidence:** HIGH -- existing wrangler.toml verified; Cloudflare routing precedence well-documented.
+
+**Sources:**
+- [Cloudflare Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/)
+- [Cloudflare Pages Custom Domains](https://developers.cloudflare.com/pages/configuration/custom-domains/)
 
 ---
 
-### Pitfall 10: No API Versioning Strategy Leads to Breaking Changes
+### Pitfall 9: Next.js Version Incompatibility Chain
 
-**What goes wrong:** The API launches at v1 but there is no plan for what constitutes a breaking change, how deprecation works, or when v2 would be warranted. A "quick fix" renames a field, removes an endpoint, or changes a response shape -- breaking all existing consumers.
+**What goes wrong:** Next.js, fumadocs, and (if used) OpenNext all evolve independently with tight coupling. Next.js 16 has known issues with `@opennextjs/cloudflare` (instrumentation hook loading error). fumadocs packages are tightly coupled to specific Next.js versions. Even for static export, a Next.js minor version bump can break fumadocs-mdx's build plugin.
 
-**Why it happens:** Versioning feels like over-engineering for a v1. But without a clear policy, every API change is a potential breaking change. The temptation to "just fix it" without versioning is strong when there are few consumers.
-
-**Consequences:**
-- Consumer integrations break silently when fields are renamed or removed
-- No deprecation period -- changes are immediate and destructive
-- Multiple inconsistent versioning approaches creep in (some in URL, some in headers)
+**Why it happens:** fumadocs-mdx hooks deeply into Next.js's build pipeline via `createMDX()`. Each fumadocs release targets specific Next.js versions. Using `^` ranges in package.json allows silent upgrades that break the build.
 
 **Prevention:**
-- Use URL path versioning (`/api/v1/`) -- it is explicit, visible, easy to test, and widely understood. Header versioning adds complexity for no benefit at this scale
-- Define what is a breaking change: removing fields, renaming fields, changing types, removing endpoints, changing auth requirements. Adding new fields or new endpoints is NOT breaking
-- Commit to keeping v1 stable for at least 6 months after any v2 launch
-- Document the versioning policy in the API docs. Even a simple statement like "we use semantic versioning on the URL path and will not make breaking changes within a version" is valuable
-- Do not version individual endpoints differently -- the entire API moves together
+- Use Next.js 15.x LTS for the docs site. It is stable, well-tested with fumadocs, and avoids Next.js 16 edge cases.
+- Pin the exact Next.js version in `package.json` (e.g., `"next": "15.3.2"`, not `"^15.3.2"`). Next.js minor/patch versions can introduce changes that break fumadocs.
+- Check fumadocs release notes for supported Next.js versions before upgrading either.
+- Use `pnpm --frozen-lockfile` in CI to prevent version drift.
+- Node.js version matters too: fumadocs has reported issues with Node.js 25 (#2456). Use Node.js 22 LTS.
 
-**Detection:**
-- Consumer reports "this field used to be called X, now it's Y"
-- No deprecation warnings before changes
-- Mix of v1 and unversioned endpoints
+**Phase:** Address in Phase 1 (scaffolding, dependency decisions).
+
+**Confidence:** MEDIUM -- Next.js 16 issues documented in OpenNext troubleshooting; fumadocs #2456 documents Node.js version sensitivity. Exact compatibility matrix needs verification at scaffold time.
+
+**Sources:**
+- [OpenNext Cloudflare Troubleshooting](https://opennext.js.org/cloudflare/troubleshooting) -- Next.js 16 issues
+- [fumadocs GitHub Issue #2456](https://github.com/fuma-nama/fumadocs/issues/2456) -- Node.js 25 compatibility
 
 ---
 
@@ -292,62 +270,110 @@ Mistakes that cause rewrites, security vulnerabilities, or major architectural i
 
 ---
 
-### Pitfall 11: Rate Limit Headers Missing from Responses
+### Pitfall 10: Content Directory Missing meta.json Breaks Sidebar
 
-**What goes wrong:** The API returns 429 when rate limited but doesn't tell the consumer how many requests remain, when the limit resets, or what the limit is. Consumers have no way to implement backoff or budgeting.
+**What goes wrong:** fumadocs uses `meta.json` files in each content directory to control sidebar ordering and page titles. When mixing hand-written MDX guides with auto-generated OpenAPI reference pages, every directory and subdirectory needs its own `meta.json`. Missing `meta.json` in any directory causes pages to appear in alphabetical order or not appear in the sidebar at all.
+
+**Why it happens:** It's easy to add a new directory (e.g., `content/docs/data-model/`) and forget the `meta.json`. fumadocs does not warn about missing `meta.json` files -- it silently falls back to alphabetical ordering. Developers don't notice until they check the sidebar.
 
 **Prevention:**
-- Return standard rate limit headers on every response: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` (Unix timestamp)
-- Return `Retry-After` header (in seconds) on 429 responses
-- The Cloudflare Rate Limiting binding returns a `success` boolean but not remaining counts. You will need to track remaining counts yourself or accept that `X-RateLimit-Remaining` is approximate
-- Document rate limits in the OpenAPI spec and in a dedicated section of the API docs
+- Plan the content directory structure before writing any content:
+  ```
+  content/docs/
+    meta.json              (top-level section ordering)
+    index.mdx              (docs home)
+    getting-started/
+      meta.json
+      index.mdx
+      authentication.mdx
+    guides/
+      meta.json
+      ...
+    api/                   (generated from OpenAPI)
+      meta.json            (may be auto-generated by generateFiles())
+      ...
+    data-model/
+      meta.json
+      ...
+  ```
+- Include `meta.json` in every content directory from the start.
+- Test sidebar navigation after adding each new directory.
+
+**Phase:** Address in Phase 2 (content organization planning).
+
+**Confidence:** MEDIUM -- based on fumadocs GitHub discussion reports about directory renaming breaking meta.json resolution.
 
 ---
 
-### Pitfall 12: Non-Streaming RAG Response for Public API
+### Pitfall 11: Image Optimization Disabled in Static Export
 
-**What goes wrong:** The existing `/api/ask` endpoint returns Server-Sent Events (streaming). Public API consumers expect a standard JSON response. If the public API Search/Ask endpoint also streams, consumers need SSE client libraries, which many platforms don't support well.
+**What goes wrong:** Next.js static export requires `images: { unoptimized: true }` in `next.config.mjs`. This means no automatic image resizing, WebP conversion, or lazy loading optimization from the `next/image` component.
+
+**Why it happens:** Next.js Image Optimization requires a server-side component unavailable in static export mode.
 
 **Prevention:**
-- The public API Ask endpoint should return a complete JSON response with `answer`, `sources`, and `confidence` fields -- no streaming
-- This means the Worker must buffer the full Gemini response before sending it back, which increases latency but simplifies the consumer experience
-- Set a reasonable timeout (30 seconds) and return a partial answer if Gemini takes too long
-- Consider offering both: synchronous JSON (default) and streaming SSE (opt-in via `Accept: text/event-stream` header)
+- Pre-optimize all images before committing (sharp CLI, imagemin, or Squoosh).
+- Use SVGs for architecture diagrams and illustrations.
+- Use standard `<img>` tags or fumadocs's image handling instead of `next/image`.
+- For a developer docs site, this is low-impact -- content is primarily text and code.
+
+**Phase:** Minor concern, address during content creation phases.
+
+**Confidence:** HIGH -- Next.js static export limitation is deterministic and well-documented.
 
 ---
 
-### Pitfall 13: Supabase RLS Bypass with Admin Client
+### Pitfall 12: OpenAPI Spec Server URLs Point to Wrong Origin
 
-**What goes wrong:** The existing service layer uses both `createSupabaseServerClient(request)` (respects RLS) and `getSupabaseAdminClient()` (bypasses RLS). Public API endpoints using the admin client bypass all row-level security policies, potentially exposing data that should be restricted.
+**What goes wrong:** The OpenAPI spec generated by chanfana at `/api/v1/openapi.json` may not include an explicit `servers` array, or it may use relative paths. When fumadocs renders API reference pages on `docs.viewroyal.ai`, the "Try it" playground (if enabled) attempts to send requests to the docs domain, not the API domain. Code examples may show incorrect base URLs.
+
+**Why it happens:** chanfana generates the spec based on the request context. When extracted to a static JSON file for the docs build, server context is lost. The spec may default to relative URLs.
 
 **Prevention:**
-- Public API endpoints should use a dedicated Supabase client with the anon/publishable key, not the admin service role key
-- If RLS policies don't cover all access patterns needed by the public API, add new policies rather than bypassing RLS
-- Audit every Supabase query in the public API path to ensure it goes through RLS
+1. Ensure the extracted OpenAPI spec includes an explicit `servers` array: `[{ "url": "https://viewroyal.ai" }]`. Add this post-extraction if chanfana doesn't generate it.
+2. Configure fumadocs-openapi to use the correct API base URL for code examples.
+3. If the interactive playground causes CORS issues (docs domain calling API domain), either add `docs.viewroyal.ai` to the API's CORS allowed origins or disable the playground in favor of static code examples (curl, JavaScript, Python).
+
+**Phase:** Address in Phase 2 (OpenAPI integration).
+
+**Confidence:** MEDIUM -- depends on how chanfana populates the servers array; fumadocs-openapi playground configuration needs testing.
 
 ---
 
-### Pitfall 14: Forgetting to Validate API Key Scope Per Endpoint
+### Pitfall 13: Build Output Directory Misconfigured for Cloudflare Pages
 
-**What goes wrong:** All API keys have the same permissions. A key issued for "read meetings" can also call the RAG Ask endpoint (which costs Gemini API tokens). No way to issue limited keys.
+**What goes wrong:** Next.js static export outputs to `out/` by default (not `.next/` or `build/`). Configuring Cloudflare Pages with the wrong build output directory produces a 404 site with no obvious error message.
+
+**Why it happens:** Confusion between Next.js output modes: `output: 'export'` -> `out/`, `output: 'standalone'` -> `.next/standalone/`, default -> `.next/`. Each mode outputs to a different directory.
 
 **Prevention:**
-- Design the `api_keys` table with a `scopes` column from day one (e.g., `['read', 'search', 'ask']`)
-- Check scopes in every endpoint handler, not just key validity
-- The Ask/RAG endpoint should require an explicit `ask` scope since it has real per-call costs (Gemini tokens)
-- Default new keys to read-only scope. Require explicit upgrade for AI-powered endpoints
+- Set Cloudflare Pages build output directory to `out/`.
+- Add `out/` to `.gitignore`.
+- Verify locally after `next build` that HTML files are present in `out/` before configuring CI.
+- If using `trailingSlash: true` (recommended for Cloudflare Pages), routes like `/docs` become `/docs/index.html`.
+
+**Phase:** Address in deployment phase.
+
+**Confidence:** HIGH -- deterministic Next.js behavior.
 
 ---
 
-### Pitfall 15: OpenAPI Spec Served from Same Worker Increases Bundle Size
+### Pitfall 14: fumadocs-openapi CSS Preset Not Imported
 
-**What goes wrong:** Embedding a large OpenAPI YAML/JSON spec in the Worker source increases the deployed bundle size. The Workers bundle limit is 10MB (paid plan) or 1MB (free plan). A comprehensive OpenAPI spec with examples can be 50-200KB, and if combined with other static assets, can contribute to hitting limits.
+**What goes wrong:** The OpenAPI integration has its own CSS styles (`fumadocs-openapi/css/preset.css`) that must be imported separately from the main fumadocs-ui styles. Without this import, API reference pages render without proper styling -- request/response sections look broken, parameter tables are unstyled, and the interactive playground is unusable.
+
+**Why it happens:** The OpenAPI CSS is a separate package import, not bundled with fumadocs-ui. It's easy to miss because the main docs pages look fine without it.
 
 **Prevention:**
-- Serve the OpenAPI spec from R2 or a static asset, not inline in the Worker code
-- Or generate the spec at build time and include it as a static import -- this is fine for reasonable spec sizes
-- Use Cloudflare Workers Static Assets for hosting the spec and Swagger UI / Scalar docs page
-- Monitor bundle size with `wrangler deploy --dry-run`
+- Add `@import 'fumadocs-openapi/css/preset.css';` to the docs app's global CSS file alongside the fumadocs-ui imports.
+- Check the API reference pages visually after initial setup, not just the hand-written docs pages.
+
+**Phase:** Address in Phase 2 (OpenAPI integration setup).
+
+**Confidence:** HIGH -- documented in fumadocs OpenAPI integration guide.
+
+**Sources:**
+- [fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi) -- CSS import requirement
 
 ---
 
@@ -355,32 +381,45 @@ Mistakes that cause rewrites, security vulnerabilities, or major architectural i
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| API Key Auth | Timing attack on key comparison (P2), Math.random() keys (P4) | Use `crypto.subtle.timingSafeEqual()`, `crypto.getRandomValues()` |
-| Rate Limiting | In-memory Map resets on eviction (P1) | Use Cloudflare Rate Limiting binding, not in-memory Map |
-| Route Setup | Collision with existing `api/*` routes (P3) | Use `api/v1/*` prefix, never overlap with internal routes |
-| CORS | Missing OPTIONS handling, headers on wrong routes (P8) | Explicit OPTIONS handler, CORS only on `api/v1/*` |
-| Data Endpoints | Internal fields leaked (P9), no pagination (P7) | Response serializers, opaque cursors, composite sort keys |
-| OpenAPI Docs | Spec drift from implementation (P6) | Spec-first design, automated response validation in tests |
-| OCD Endpoints | Wrong ID format (P5), stale spec (P5) | Check canonical division ID repo, use UUID v1 for people/orgs |
-| RAG API | Streaming response unusable by REST clients (P12) | Synchronous JSON response for public API |
-| Versioning | No breaking change policy (P10) | URL path versioning, define breaking change criteria upfront |
-| Security | Admin client bypass (P13), no scope checks (P14) | RLS-respecting client, scopes column from day one |
+| Project scaffolding | Using OpenNext Workers instead of static export (#1) | Static export to Cloudflare Pages from day one |
+| Project scaffolding | Introducing pnpm workspaces, breaking existing apps (#3) | Keep apps independent, no workspace config |
+| Project scaffolding | Wrong fumadocs config from stale tutorials (#4) | Use `create-fumadocs-app` CLI, pin versions |
+| Project scaffolding | Tailwind CSS 4 style conflicts (#5) | Independent Tailwind config per app |
+| Project scaffolding | Next.js version breaks fumadocs (#9) | Pin Next.js 15.x LTS, Node.js 22 LTS |
+| OpenAPI integration | Runtime spec not available at build time (#2) | Prebuild spec extraction script |
+| OpenAPI integration | Generated MDX files go stale (#7) | Prebuild generation, don't commit generated files |
+| OpenAPI integration | Server URLs point to wrong origin (#12) | Explicit servers array in extracted spec |
+| OpenAPI integration | Missing OpenAPI CSS (#14) | Import fumadocs-openapi/css/preset.css |
+| Content organization | Missing meta.json breaks sidebar (#10) | Plan directory structure upfront, meta.json everywhere |
+| Search setup | Static search not configured (#6) | Client-side search setup for static export |
+| Deployment | DNS routing conflict (#8) | Verify Worker route patterns, add CNAME |
+| Deployment | Wrong build output directory (#13) | Set Pages output to `out/` |
+| Content creation | Unoptimized images (#11) | Pre-optimize, prefer SVG |
 
 ---
 
 ## Sources
 
-- [Cloudflare Workers Rate Limiting Binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
-- [Cloudflare Workers Best Practices](https://developers.cloudflare.com/workers/best-practices/workers-best-practices/)
-- [Cloudflare Workers Timing-Safe Comparison](https://developers.cloudflare.com/workers/examples/protect-against-timing-attacks/)
-- [Cloudflare Workers Secrets Management](https://developers.cloudflare.com/workers/configuration/secrets/)
-- [OCD Identifiers Specification](https://open-civic-data.readthedocs.io/en/latest/ocdids.html)
-- [OCD Data Formats](https://open-civic-data.readthedocs.io/en/latest/data/index.html)
-- [OCD Division IDs Repository](https://github.com/opencivicdata/ocd-division-ids)
-- [OpenAPI Spec Common Pitfalls (liblab)](https://liblab.com/blog/why-your-open-api-spec-sucks)
-- [API Versioning Strategies (Speakeasy)](https://www.speakeasy.com/api-design/versioning)
-- [Cloudflare Workers CORS Example](https://developers.cloudflare.com/workers/examples/cors-header-proxy/)
-- [React Router 7 Resource Routes](https://reactrouter.com/how-to/resource-routes)
-- [Supabase API Key Management Guide (MakerKit)](https://makerkit.dev/blog/tutorials/supabase-api-key-management)
+- [fumadocs Official Documentation](https://www.fumadocs.dev/)
+- [fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi)
+- [fumadocs Static Build Guide](https://www.fumadocs.dev/docs/deploying/static)
+- [fumadocs Deployment Docs](https://www.fumadocs.dev/docs/deploying) -- "Fumadocs doesn't work on Edge runtime"
+- [fumadocs v15 Blog (Tailwind CSS 4)](https://www.fumadocs.dev/blog/v15)
+- [fumadocs MDX v10 Summary](https://www.fumadocs.dev/blog/mdx-v10-summary)
+- [fumadocs MDX Next.js Setup](https://www.fumadocs.dev/docs/mdx/next)
+- [fumadocs OpenAPI v10 Blog](https://www.fumadocs.dev/blog/openapi-v10)
+- [fumadocs generateFiles()](https://fumadocs.dev/docs/ui/openapi/generate-files)
+- [fumadocs GitHub Issue #1875](https://github.com/fuma-nama/fumadocs/issues/1875) -- version mismatch type errors
+- [fumadocs GitHub Issue #2456](https://github.com/fuma-nama/fumadocs/issues/2456) -- Node.js 25 compatibility
+- [OpenNext Cloudflare Get Started](https://opennext.js.org/cloudflare/get-started)
+- [OpenNext Cloudflare Troubleshooting](https://opennext.js.org/cloudflare/troubleshooting)
+- [Cloudflare Workers Next.js Guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)
+- [Cloudflare Pages Static Next.js](https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-nextjs-site/)
+- [Cloudflare Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/)
+- [Cloudflare workers-sdk Issue #10941](https://github.com/cloudflare/workers-sdk/issues/10941) -- pnpm monorepo installs all workspaces
+- [Cloudflare Workers Build Cache + pnpm](https://community.cloudflare.com/t/workers-build-cache-not-working-as-expected-in-monorepos-pnpm/803213)
+- [Deploy Next.js fumadocs to GitHub Pages](https://zephinax.com/blog/deploy-nextjs-fumadocs-github-pages) -- static export pitfalls
+- [Deploying Next.js on Cloudflare Troubleshooting](https://devinvinson.com/2025/11/deploying-fullstack-next-js-on-cloudflare-my-troubleshooting-guide/)
+- [Cloudflare OpenNext Size Optimization](https://developers.cloudflare.com/changelog/2025-06-05-open-next-size/)
 
-*Last updated: 2026-02-19*
+*Last updated: 2026-02-23*
