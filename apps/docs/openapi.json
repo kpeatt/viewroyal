@@ -1,0 +1,1308 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ViewRoyal.ai API",
+    "version": "1.0.0",
+    "description": "Public API for the ViewRoyal.ai civic intelligence platform.\n\nProvides access to council meeting data, people, matters, motions, bylaws, and cross-content search for the Town of View Royal, BC.\n\n**Authentication:** Pass your API key in the `X-API-Key` header or as a `?apikey=` query parameter. Get your key at [/settings/api-keys](https://viewroyal.ai/settings/api-keys)."
+  },
+  "components": {
+    "schemas": {},
+    "parameters": {},
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key for authentication. Get your key at /settings/api-keys."
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Returns the current health status of the API. When called with a municipality slug, includes the municipality name.",
+        "operationId": "get_HealthEndpoint",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "municipality": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "municipality",
+                    "timestamp"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Returns the current health status of the API. When called with a municipality slug, includes the municipality name.",
+        "operationId": "get_HealthEndpoint",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "municipality": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "municipality",
+                    "timestamp"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/test": {
+      "get": {
+        "summary": "Test authenticated endpoint",
+        "description": "Returns API key info and municipality context. Requires valid API key.",
+        "operationId": "get_TestAuthEndpoint",
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "apiKeyId": {
+                      "type": "string"
+                    },
+                    "municipality": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authenticated",
+                    "apiKeyId",
+                    "municipality",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/meetings": {
+      "get": {
+        "summary": "List meetings",
+        "description": "Returns a paginated list of meetings with optional filters. Sorted by meeting date descending (most recent first).",
+        "operationId": "get_ListMeetings",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor from previous response"
+            },
+            "required": false,
+            "description": "Pagination cursor from previous response",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of results per page (max 100)"
+            },
+            "required": false,
+            "description": "Number of results per page (max 100)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by meeting type"
+            },
+            "required": false,
+            "description": "Filter by meeting type",
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter meetings on or after this date (YYYY-MM-DD)"
+            },
+            "required": false,
+            "description": "Filter meetings on or after this date (YYYY-MM-DD)",
+            "name": "date_from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter meetings on or before this date (YYYY-MM-DD)"
+            },
+            "required": false,
+            "description": "Filter meetings on or before this date (YYYY-MM-DD)",
+            "name": "date_to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Filter by transcript availability"
+            },
+            "required": false,
+            "description": "Filter by transcript availability",
+            "name": "has_transcript",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by organization slug"
+            },
+            "required": false,
+            "description": "Filter by organization slug",
+            "name": "organization",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of meetings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "type": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "has_agenda": {
+                            "type": "boolean"
+                          },
+                          "has_minutes": {
+                            "type": "boolean"
+                          },
+                          "has_transcript": {
+                            "type": "boolean"
+                          },
+                          "organization": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "summary": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "slug",
+                          "title",
+                          "date",
+                          "type",
+                          "has_agenda",
+                          "has_minutes",
+                          "has_transcript",
+                          "organization",
+                          "summary"
+                        ]
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "has_more": {
+                          "type": "boolean"
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "per_page": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "has_more",
+                        "next_cursor",
+                        "per_page"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "request_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "pagination",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Meetings"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/meetings/{slug}": {
+      "get": {
+        "summary": "Get meeting detail",
+        "description": "Returns a single meeting with inline agenda item, motion, and attendance summaries.",
+        "operationId": "get_GetMeeting",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Meeting slug"
+            },
+            "required": true,
+            "description": "Meeting slug",
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Municipality slug"
+            },
+            "required": true,
+            "description": "Municipality slug",
+            "name": "municipality",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Meeting detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "slug": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "date": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "type": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "has_agenda": {
+                          "type": "boolean"
+                        },
+                        "has_minutes": {
+                          "type": "boolean"
+                        },
+                        "has_transcript": {
+                          "type": "boolean"
+                        },
+                        "organization": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "summary": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "video_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "minutes_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "agenda_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "video_duration_seconds": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "chair": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "slug": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "name": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "slug",
+                            "name"
+                          ]
+                        },
+                        "agenda_items": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "motions": {
+                          "type": "array",
+                          "items": {}
+                        },
+                        "attendance": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      },
+                      "required": [
+                        "slug",
+                        "title",
+                        "date",
+                        "type",
+                        "has_agenda",
+                        "has_minutes",
+                        "has_transcript",
+                        "organization",
+                        "summary",
+                        "video_url",
+                        "minutes_url",
+                        "agenda_url",
+                        "video_duration_seconds",
+                        "chair",
+                        "agenda_items",
+                        "motions",
+                        "attendance"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "request_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Meeting not found"
+          }
+        },
+        "tags": [
+          "Meetings"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/people": {
+      "get": {
+        "summary": "List people",
+        "description": "Returns a paginated list of people associated with the municipality. Sorted alphabetically by name.",
+        "operationId": "get_ListPeople",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor from previous response"
+            },
+            "required": false,
+            "description": "Pagination cursor from previous response",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of results per page (max 100)"
+            },
+            "required": false,
+            "description": "Number of results per page (max 100)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Filter by current councillor status"
+            },
+            "required": false,
+            "description": "Filter by current councillor status",
+            "name": "is_councillor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Partial name search (case-insensitive)"
+            },
+            "required": false,
+            "description": "Partial name search (case-insensitive)",
+            "name": "name",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of people",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slug": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "is_current_councillor": {
+                            "type": "boolean"
+                          },
+                          "party": {
+                            "type": "null"
+                          },
+                          "image_url": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "slug",
+                          "name",
+                          "is_current_councillor",
+                          "party",
+                          "image_url"
+                        ]
+                      }
+                    },
+                    "pagination": {
+                      "type": "object",
+                      "properties": {
+                        "has_more": {
+                          "type": "boolean"
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "per_page": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "has_more",
+                        "next_cursor",
+                        "per_page"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "request_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "pagination",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/people/{slug}": {
+      "get": {
+        "summary": "Get person detail",
+        "description": "Returns a single person with memberships and voting summary.",
+        "operationId": "get_GetPerson",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Person slug"
+            },
+            "required": true,
+            "description": "Person slug",
+            "name": "slug",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Municipality slug"
+            },
+            "required": true,
+            "description": "Municipality slug",
+            "name": "municipality",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Person detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "slug": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "is_current_councillor": {
+                          "type": "boolean"
+                        },
+                        "party": {
+                          "type": "null"
+                        },
+                        "image_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "memberships": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "organization_name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "role": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "start_date": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "end_date": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "organization_name",
+                              "role",
+                              "start_date",
+                              "end_date"
+                            ]
+                          }
+                        },
+                        "voting_summary": {
+                          "type": "object",
+                          "properties": {
+                            "total_votes": {
+                              "type": "number"
+                            },
+                            "votes_for": {
+                              "type": "number"
+                            },
+                            "votes_against": {
+                              "type": "number"
+                            },
+                            "abstentions": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "total_votes",
+                            "votes_for",
+                            "votes_against",
+                            "abstentions"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "slug",
+                        "name",
+                        "is_current_councillor",
+                        "party",
+                        "image_url",
+                        "memberships",
+                        "voting_summary"
+                      ]
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "request_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Person not found"
+          }
+        },
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/matters": {
+      "get": {
+        "summary": "List matters",
+        "description": "Returns a paginated list of matters (council business items) with optional filters for status, category, and date range.",
+        "operationId": "get_ListMatters",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor from previous response"
+            },
+            "required": false,
+            "description": "Pagination cursor from previous response",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of results per page (max 100)"
+            },
+            "required": false,
+            "description": "Number of results per page (max 100)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by matter status (e.g. Active, Complete)"
+            },
+            "required": false,
+            "description": "Filter by matter status (e.g. Active, Complete)",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by category"
+            },
+            "required": false,
+            "description": "Filter by category",
+            "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter matters last seen on or after this date (YYYY-MM-DD)"
+            },
+            "required": false,
+            "description": "Filter matters last seen on or after this date (YYYY-MM-DD)",
+            "name": "date_from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter matters last seen on or before this date (YYYY-MM-DD)"
+            },
+            "required": false,
+            "description": "Filter matters last seen on or before this date (YYYY-MM-DD)",
+            "name": "date_to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of matters"
+          }
+        },
+        "tags": [
+          "Matters"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/matters/{slug}": {
+      "get": {
+        "summary": "Get matter detail",
+        "description": "Returns a single matter by slug, including its agenda item timeline and associated motions.",
+        "operationId": "get_GetMatter",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "municipality",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matter detail with timeline"
+          },
+          "404": {
+            "description": "Matter not found"
+          }
+        },
+        "tags": [
+          "Matters"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/motions": {
+      "get": {
+        "summary": "List motions",
+        "description": "Returns a paginated list of motions (council votes/decisions) with optional filters for result, meeting, and mover.",
+        "operationId": "get_ListMotions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor from previous response"
+            },
+            "required": false,
+            "description": "Pagination cursor from previous response",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of results per page (max 100)"
+            },
+            "required": false,
+            "description": "Number of results per page (max 100)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by vote result (e.g. \"Carried\", \"Defeated\")"
+            },
+            "required": false,
+            "description": "Filter by vote result (e.g. \"Carried\", \"Defeated\")",
+            "name": "result",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by meeting slug"
+            },
+            "required": false,
+            "description": "Filter by meeting slug",
+            "name": "meeting",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by mover person slug"
+            },
+            "required": false,
+            "description": "Filter by mover person slug",
+            "name": "mover",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of motions"
+          }
+        },
+        "tags": [
+          "Motions"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/motions/{slug}": {
+      "get": {
+        "summary": "Get motion detail",
+        "description": "Returns a single motion by slug, including the full text, mover/seconder info, and individual roll call votes.",
+        "operationId": "get_GetMotion",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "municipality",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Motion detail with roll call votes"
+          },
+          "404": {
+            "description": "Motion not found"
+          }
+        },
+        "tags": [
+          "Motions"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/bylaws": {
+      "get": {
+        "summary": "List bylaws",
+        "description": "Returns a paginated list of bylaws with optional filters for status, category, and year.",
+        "operationId": "get_ListBylaws",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination cursor from previous response"
+            },
+            "required": false,
+            "description": "Pagination cursor from previous response",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of results per page (max 100)"
+            },
+            "required": false,
+            "description": "Number of results per page (max 100)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by bylaw status"
+            },
+            "required": false,
+            "description": "Filter by bylaw status",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by category"
+            },
+            "required": false,
+            "description": "Filter by category",
+            "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Filter by bylaw year"
+            },
+            "required": false,
+            "description": "Filter by bylaw year",
+            "name": "year",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of bylaws"
+          }
+        },
+        "tags": [
+          "Bylaws"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/bylaws/{slug}": {
+      "get": {
+        "summary": "Get bylaw detail",
+        "description": "Returns a single bylaw by slug, including its description, summary, and linked matters.",
+        "operationId": "get_GetBylaw",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "municipality",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "slug",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bylaw detail with linked matters"
+          },
+          "404": {
+            "description": "Bylaw not found"
+          }
+        },
+        "tags": [
+          "Bylaws"
+        ]
+      }
+    },
+    "/api/v1/{municipality}/search": {
+      "get": {
+        "summary": "Search across all content types",
+        "description": "Full-text keyword search across motions, matters, agenda items, key statements, and document sections. Returns results ranked by relevance with type, score, and text snippets.",
+        "operationId": "get_SearchEndpoint",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Search query text"
+            },
+            "required": true,
+            "description": "Search query text",
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated content type filter. Valid: motions, matters, agenda_items, key_statements, document_sections"
+            },
+            "required": false,
+            "description": "Comma-separated content type filter. Valid: motions, matters, agenda_items, key_statements, document_sections",
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "description": "Number of results per page (max 100)"
+            },
+            "required": false,
+            "description": "Number of results per page (max 100)",
+            "name": "per_page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Page number (1-based)"
+            },
+            "required": false,
+            "description": "Page number (1-based)",
+            "name": "page",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated search results ranked by relevance"
+          }
+        },
+        "tags": [
+          "Search"
+        ]
+      }
+    }
+  },
+  "webhooks": {},
+  "tags": [
+    {
+      "name": "System",
+      "description": "Health checks and API status"
+    },
+    {
+      "name": "Meetings",
+      "description": "Council meeting agendas, minutes, and attendance"
+    },
+    {
+      "name": "People",
+      "description": "Council members, staff, and their voting records"
+    },
+    {
+      "name": "Matters",
+      "description": "Agenda matters, issues, and their lifecycle"
+    },
+    {
+      "name": "Motions",
+      "description": "Motions, resolutions, and roll call votes"
+    },
+    {
+      "name": "Bylaws",
+      "description": "Municipal bylaws and their status"
+    },
+    {
+      "name": "Search",
+      "description": "Cross-content keyword search"
+    },
+    {
+      "name": "OCD",
+      "description": "Open Civic Data specification endpoints for civic tech interoperability"
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://viewroyal.ai",
+      "description": "Production"
+    }
+  ]
+}
