@@ -3,23 +3,26 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/generate-openapi.mjs",
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "node scripts/generate-openapi.mjs && next build",
     "start": "next start"
   },
   "dependencies": {
-    "fumadocs-ui": "^16.6.5",
+    "@types/mdx": "^2.0.13",
     "fumadocs-core": "^16.6.5",
     "fumadocs-mdx": "^14.2.8",
+    "fumadocs-openapi": "^10.3.9",
+    "fumadocs-ui": "^16.6.5",
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@types/mdx": "^2.0.13"
+    "shiki": "^3.22.0"
   },
   "devDependencies": {
-    "tailwindcss": "^4.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "tailwindcss": "^4.0.0",
     "typescript": "^5.9.0"
   }
 }
