@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.4 Developer Documentation Portal
+**Current focus:** v1.4 Developer Documentation Portal -- Phase 19 Infrastructure & Scaffolding
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-23 — Milestone v1.4 started
+Phase: 19 of 22 (Infrastructure & Scaffolding)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-23 -- Roadmap created for v1.4
 
 Progress: [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0% (v1.4)
 
@@ -51,40 +51,14 @@ Progress: [░░░░░░░░░░░░░░░░░░░░░░░
 
 ### Decisions
 
-All v1.0-v1.2 decisions archived -- see PROJECT.md Key Decisions table.
+All v1.0-v1.3 decisions archived -- see PROJECT.md Key Decisions table.
 
-New for v1.3:
-- Hono router mounted in same Worker alongside React Router 7 (URL-prefix split at fetch level)
-- chanfana for OpenAPI 3.1 generation, Zod v4 for schema validation
-- SHA-256 key hashing with timing-safe comparison (not bcrypt -- keys are high-entropy)
-- Cloudflare Workers Rate Limit binding for durable per-key rate limiting
-- `/api/v1/*` prefix for public API; existing `/api/*` internal routes untouched
-- [Phase 15]: Per-route municipality middleware pattern instead of wildcard catch-all to preserve NOT_FOUND for unregistered paths
-- [Phase 15]: wrangler.toml [[ratelimits]] uses name field (not binding) per wrangler v4 schema
-- [Phase 15]: Per-route auth middleware chaining (apiKeyAuth, rateLimit, municipality) for authenticated routes
-- [Phase 15]: timingSafeEqual typed via inline SubtleCrypto extension (CF Workers types don't merge with DOM global)
-- [Phase 16]: snake_case for all API field names (matches DB columns and civic API conventions)
-- [Phase 16]: Always include null fields explicitly in responses (never omit empty fields)
-- [Phase 16]: Slug dedup via ranked CTEs + suffixes for people (duplicate names) and bylaws (shared bylaw_numbers)
-- [Phase 16]: People scoped to municipality via memberships -> organizations join (no municipality_id on people table)
-- [Phase 16]: Voting summary aggregates Yes/In Favour as votes_for, No/Opposed as votes_against, Abstain/Recused as abstentions
-- [Phase 16]: Motions scoped to municipality via inner join on meetings (no municipality_id on motions table)
-- [Phase 16]: Mover filter resolves person slug to ID before applying filter (avoids complex join filter)
-- [Phase 16]: Matter detail fetches motions via agenda_item_ids (motions linked to matters through agenda items)
-- [Phase 16]: Page-based pagination for search (not cursor-based -- merged cross-type results are volatile)
-- [Phase 16]: Position-based relevance scoring for textSearch results (PostgREST ordering as ts_rank proxy)
-- [Phase 17]: Hand-rolled UUID v5 via Web Crypto (no uuid npm dep) with hardcoded namespace UUID for deterministic OCD IDs
-- [Phase 17]: Separate OCD pagination (page-based) and envelope (results+pagination) from v1 API (cursor-based, data+pagination+meta)
-- [Phase 17]: Plain Hono handlers (not chanfana) for OCD endpoints -- OCD has its own spec, no OpenAPI generation needed
-- [Phase 17]: OCD ID reverse-lookup for detail endpoints -- fetch all entities, compute OCD IDs, find match (acceptable for small datasets)
-- [Phase 17]: Wildcard :id{.+} route params to handle OCD IDs containing slashes
-- [Phase 17]: Municipality middleware includes ocd_id in select; OCD endpoints use municipality.ocd_id directly instead of broken ocd_divisions join
-- [Phase 17]: Worker fetch handler extended to route both /api/v1/* and /api/ocd/* to same Hono app (gap closure)
-- [Phase 17]: Explicit .limit(100000) on full-table reverse-lookup queries to bypass PostgREST default row limit
-- [Phase 18]: chanfana docs_url/openapi_url must be relative to base (chanfana prepends base automatically) -- /docs and /openapi.json not /api/v1/docs
-- [Phase 18]: OCD endpoints registered via registerPath() even though outside chanfana base /api/v1 -- registerPath adds to spec JSON regardless of base path
-- [Phase 18]: API key management route registered explicitly in routes.ts (not flat-file auto-discovery) because settings.tsx layout parent would swallow child route
-- [Phase 18]: Per-key dialog state (revokeKeyId: string | null) for revoke confirmation to handle multiple active keys independently
+New for v1.4:
+- fumadocs v16 + Next.js 16 with `output: 'export'` for static site (no OpenNext/Workers runtime)
+- Cloudflare Workers static assets via `[assets]` directive (not Cloudflare Pages -- deprecated)
+- `apps/docs/` fully independent in pnpm workspace (avoids workers-sdk #10941 cross-install)
+- `generateFiles()` for OpenAPI MDX generation (not `openapiSource()` -- no RSC server in static export)
+- Prebuild script fetches live spec with committed fallback for offline builds
 
 ### Pending Todos
 
@@ -95,8 +69,8 @@ New for v1.3:
 - bootstrap.sql is out of date with 30+ applied migrations -- technical debt to track
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
-- OCD division ID for View Royal corrected to `csd:5917047` (was Victoria `csd:5917034`) -- migration applied in 17-01
 - Rate Limit binding pricing needs verification before production launch
+- `generateFiles()` exact invocation needs spike validation at start of Phase 20
 
 ### Quick Tasks Completed
 
@@ -112,7 +86,7 @@ New for v1.3:
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Starting v1.4 Developer Documentation Portal
+Stopped at: v1.4 roadmap created, Phase 19 ready to plan
 Resume file: None
 
 ### Paused Work: Phase 7.1
