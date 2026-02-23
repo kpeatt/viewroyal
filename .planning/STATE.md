@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.4 Developer Documentation Portal -- Phase 19 Infrastructure & Scaffolding
+**Current focus:** v1.4 Developer Documentation Portal -- Phase 20 OpenAPI Integration & API Reference
 
 ## Current Position
 
-Phase: 19 of 22 (Infrastructure & Scaffolding)
+Phase: 20 of 22 (OpenAPI Integration & API Reference)
 Plan: 2 of 2 in current phase
-Status: Phase 19 complete
-Last activity: 2026-02-23 -- Plan 19-02 complete (fumadocs scaffold)
+Status: Phase 20 complete
+Last activity: 2026-02-23 -- Plan 20-02 complete (API page components + build verification)
 
-Progress: [█████████░░░░░░░░░░░░░░░░░░░░░░░░░░] 25% (v1.4)
+Progress: [██████████████████░░░░░░░░░░░░░░░░░] 50% (v1.4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 52 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
+- Total plans completed: 54 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
 - Average duration: 4.1min
-- Total execution time: ~5.2 hours
+- Total execution time: ~5.4 hours
 
 **By Phase:**
 
@@ -47,6 +47,7 @@ Progress: [█████████░░░░░░░░░░░░░░
 | 17-ocd-interoperability | 6 | 12min | 2min |
 | 18-documentation-key-management | 2 | 9min | 5min |
 | 19-infrastructure-scaffolding | 2 | 5min | 3min |
+| 20-openapi-integration-api-reference | 2 | 13min | 7min |
 
 ## Accumulated Context
 
@@ -60,6 +61,9 @@ New for v1.4:
 - `apps/docs/` fully independent in pnpm workspace (avoids workers-sdk #10941 cross-install)
 - `generateFiles()` for OpenAPI MDX generation (not `openapiSource()` -- no RSC server in static export)
 - Prebuild script fetches live spec with committed fallback for offline builds
+- fumadocs-openapi v10 has built-in code sample generators (curl, JS, Python, Go, Java, C#) -- no custom generateCodeSamples needed
+- chanfana double-prefixes base path in spec (/api/v1/api/v1/...) -- prebuild script fixes this
+- chanfana doesn't emit tags/securitySchemes into spec despite registration -- prebuild injects them
 
 ### Pending Todos
 
@@ -71,7 +75,6 @@ New for v1.4:
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
 - Rate Limit binding pricing needs verification before production launch
-- `generateFiles()` exact invocation needs spike validation at start of Phase 20
 
 ### Quick Tasks Completed
 
@@ -87,7 +90,7 @@ New for v1.4:
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 19-02-PLAN.md (fumadocs scaffold), Phase 19 complete
+Stopped at: Completed Phase 20 (OpenAPI Integration & API Reference), all plans done
 Resume file: None
 
 ### Paused Work: Phase 7.1
