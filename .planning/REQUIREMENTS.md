@@ -14,8 +14,8 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 ### Framework & Deployment
 
-- [ ] **FWRK-01**: Fumadocs site scaffolded in apps/docs with Next.js 16 and fumadocs v16
-- [ ] **FWRK-02**: Static export builds successfully (output: 'export')
+- [x] **FWRK-01**: Fumadocs site scaffolded in apps/docs with Next.js 16 and fumadocs v16
+- [x] **FWRK-02**: Static export builds successfully (output: 'export')
 - [ ] **FWRK-03**: Docs site deployed to docs.viewroyal.ai via Cloudflare
 - [ ] **FWRK-04**: Built-in Orama search indexes all documentation pages
 - [ ] **FWRK-05**: Navigation sidebar auto-generated from content directory structure
@@ -73,8 +73,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | MONO-01 | Phase 19 | Complete |
 | MONO-02 | Phase 19 | Complete |
-| FWRK-01 | Phase 19 | Pending |
-| FWRK-02 | Phase 19 | Pending |
+| FWRK-01 | Phase 19 | Complete |
+| FWRK-02 | Phase 19 | Complete |
 | FWRK-03 | Phase 22 | Pending |
 | FWRK-04 | Phase 22 | Pending |
 | FWRK-05 | Phase 22 | Pending |

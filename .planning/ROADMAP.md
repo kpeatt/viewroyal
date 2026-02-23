@@ -57,7 +57,7 @@
 
 **Milestone Goal:** Ship a fumadocs-powered developer portal at docs.viewroyal.ai with auto-generated API reference, guides, data model docs, and project documentation.
 
-- [ ] **Phase 19: Infrastructure & Scaffolding** - pnpm workspace migration and fumadocs site scaffold with static export build pipeline
+- [x] **Phase 19: Infrastructure & Scaffolding** - pnpm workspace migration and fumadocs site scaffold with static export build pipeline (completed 2026-02-23)
 - [ ] **Phase 20: OpenAPI Integration & API Reference** - Auto-generated API reference pages from OpenAPI spec with interactive playground
 - [ ] **Phase 21: Developer Guides** - Hand-written getting started, authentication, pagination, and error handling guides
 - [ ] **Phase 22: Reference Content & Production** - Data model, OCD reference, changelog, contribution guide, and production deployment at docs.viewroyal.ai
@@ -151,7 +151,7 @@ Phases execute in numeric order: 19 → 20 → 21 → 22
 | 16. Core Data & Search API | v1.3 | 4/4 | Complete | 2026-02-21 |
 | 17. OCD Interoperability | v1.3 | 6/6 | Complete | 2026-02-21 |
 | 18. Documentation & Key Management | v1.3 | 2/2 | Complete | 2026-02-22 |
-| 19. Infrastructure & Scaffolding | 1/2 | In Progress|  | - |
+| 19. Infrastructure & Scaffolding | 2/2 | Complete   | 2026-02-23 | - |
 | 20. OpenAPI Integration & API Reference | v1.4 | 0/0 | Not started | - |
 | 21. Developer Guides | v1.4 | 0/0 | Not started | - |
 | 22. Reference Content & Production | v1.4 | 0/0 | Not started | - |
