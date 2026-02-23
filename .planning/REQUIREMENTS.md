@@ -71,31 +71,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MONO-01 | — | Pending |
-| MONO-02 | — | Pending |
-| FWRK-01 | — | Pending |
-| FWRK-02 | — | Pending |
-| FWRK-03 | — | Pending |
-| FWRK-04 | — | Pending |
-| FWRK-05 | — | Pending |
-| AREF-01 | — | Pending |
-| AREF-02 | — | Pending |
-| AREF-03 | — | Pending |
-| AREF-04 | — | Pending |
-| GUID-01 | — | Pending |
-| GUID-02 | — | Pending |
-| GUID-03 | — | Pending |
-| GUID-04 | — | Pending |
-| REFC-01 | — | Pending |
-| REFC-02 | — | Pending |
-| REFC-03 | — | Pending |
-| REFC-04 | — | Pending |
+| MONO-01 | Phase 19 | Pending |
+| MONO-02 | Phase 19 | Pending |
+| FWRK-01 | Phase 19 | Pending |
+| FWRK-02 | Phase 19 | Pending |
+| FWRK-03 | Phase 22 | Pending |
+| FWRK-04 | Phase 22 | Pending |
+| FWRK-05 | Phase 22 | Pending |
+| AREF-01 | Phase 20 | Pending |
+| AREF-02 | Phase 20 | Pending |
+| AREF-03 | Phase 20 | Pending |
+| AREF-04 | Phase 20 | Pending |
+| GUID-01 | Phase 21 | Pending |
+| GUID-02 | Phase 21 | Pending |
+| GUID-03 | Phase 21 | Pending |
+| GUID-04 | Phase 21 | Pending |
+| REFC-01 | Phase 22 | Pending |
+| REFC-02 | Phase 22 | Pending |
+| REFC-03 | Phase 22 | Pending |
+| REFC-04 | Phase 22 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 (pending roadmap creation)
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-23*
-*Last updated: 2026-02-23 after initial definition*
+*Last updated: 2026-02-23 after roadmap creation*
