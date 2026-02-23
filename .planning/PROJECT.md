@@ -72,7 +72,17 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(No active requirements — define with `/gsd:new-milestone`)
+## Current Milestone: v1.4 Developer Documentation Portal
+
+**Goal:** Ship a fumadocs.dev-powered developer portal at docs.viewroyal.ai with auto-generated API reference, guides, data model docs, and project documentation.
+
+**Target features:**
+- Fumadocs.dev documentation site in apps/docs/
+- Auto-generated API reference from OpenAPI 3.1 spec
+- Hand-written developer guides (getting started, authentication, code examples)
+- Data model documentation
+- Contribution guide and changelog
+- Deployed to docs.viewroyal.ai
 
 ### Out of Scope
 
@@ -142,4 +152,4 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | Serializer allowlist pattern | Never spread ...row; explicitly construct output objects to prevent field leakage | ✓ Good |
 
 ---
-*Last updated: 2026-02-22 after v1.3 milestone*
+*Last updated: 2026-02-23 after v1.4 milestone started*
