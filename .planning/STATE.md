@@ -2,17 +2,16 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-19)
+See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.3 Platform APIs -- Phase 18 (Documentation & Key Management)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 18 of 18 (Documentation & Key Management) -- COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-02-22 -- Completed 18-02-PLAN.md (API Key Management Page)
+Milestone: v1.3 Platform APIs -- SHIPPED 2026-02-22
+Status: Milestone Complete
+Last activity: 2026-02-22 -- v1.3 milestone archived
 
 Progress: [███████████████████████████████████] 100% overall (50/50 plans across all milestones)
 
