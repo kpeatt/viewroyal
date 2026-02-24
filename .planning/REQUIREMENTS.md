@@ -16,8 +16,8 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 - [x] **FWRK-01**: Fumadocs site scaffolded in apps/docs with Next.js 16 and fumadocs v16
 - [x] **FWRK-02**: Static export builds successfully (output: 'export')
-- [ ] **FWRK-03**: Docs site deployed to docs.viewroyal.ai via Cloudflare
-- [ ] **FWRK-04**: Built-in Orama search indexes all documentation pages
+- [x] **FWRK-03**: Docs site deployed to docs.viewroyal.ai via Cloudflare
+- [x] **FWRK-04**: Built-in Orama search indexes all documentation pages
 - [x] **FWRK-05**: Navigation sidebar auto-generated from content directory structure
 
 ### API Reference
@@ -38,8 +38,8 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 - [x] **REFC-01**: Data Model page with entity relationships and Mermaid ER diagram
 - [x] **REFC-02**: OCD Standard Reference: entity mapping, when to use v1 vs OCD, OCD ID format
-- [ ] **REFC-03**: Changelog page with initial v1.0 API entry
-- [ ] **REFC-04**: Contribution guide: bug reports, feature requests, GitHub links
+- [x] **REFC-03**: Changelog page with initial v1.0 API entry
+- [x] **REFC-04**: Contribution guide: bug reports, feature requests, GitHub links
 
 ## Future Requirements
 
@@ -75,8 +75,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MONO-02 | Phase 19 | Complete |
 | FWRK-01 | Phase 19 | Complete |
 | FWRK-02 | Phase 19 | Complete |
-| FWRK-03 | Phase 22 | Pending |
-| FWRK-04 | Phase 22 | Pending |
+| FWRK-03 | Phase 22 | Complete |
+| FWRK-04 | Phase 22 | Complete |
 | FWRK-05 | Phase 22 | Complete |
 | AREF-01 | Phase 20 | Pending |
 | AREF-02 | Phase 20 | Pending |
@@ -88,8 +88,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GUID-04 | Phase 21 | Complete |
 | REFC-01 | Phase 22 | Complete |
 | REFC-02 | Phase 22 | Complete |
-| REFC-03 | Phase 22 | Pending |
-| REFC-04 | Phase 22 | Pending |
+| REFC-03 | Phase 22 | Complete |
+| REFC-04 | Phase 22 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 19 total
