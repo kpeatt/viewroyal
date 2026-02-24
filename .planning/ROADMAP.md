@@ -103,11 +103,11 @@ Plans:
   2. Authentication guide documents the X-API-Key header, rate limit behavior, all authentication error responses, and links to the /developers key management page
   3. Pagination guide explains both cursor-based (v1 API) and page-based (OCD API) pagination with working code examples that a developer can copy and adapt
   4. Error Handling guide documents every error code (NOT_FOUND, UNAUTHORIZED, RATE_LIMITED, VALIDATION_ERROR, etc.) with response shapes and retry logic examples
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 21-01: TBD
-- [ ] 21-02: TBD
+- [ ] 21-01-PLAN.md — Guides navigation, Getting Started guide, and Authentication guide
+- [ ] 21-02-PLAN.md — Pagination guide, Error Handling guide, and full build verification
 
 ### Phase 22: Reference Content & Production
 **Goal**: The complete documentation portal is deployed at docs.viewroyal.ai with all reference content, working search across all pages, and navigation linking the entire site
@@ -153,5 +153,5 @@ Phases execute in numeric order: 19 → 20 → 21 → 22
 | 18. Documentation & Key Management | v1.3 | 2/2 | Complete | 2026-02-22 |
 | 19. Infrastructure & Scaffolding | 2/2 | Complete    | 2026-02-23 | - |
 | 20. OpenAPI Integration & API Reference | 2/2 | Complete    | 2026-02-23 | - |
-| 21. Developer Guides | v1.4 | 0/0 | Not started | - |
+| 21. Developer Guides | v1.4 | 0/2 | Planned | - |
 | 22. Reference Content & Production | v1.4 | 0/0 | Not started | - |
