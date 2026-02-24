@@ -1,0 +1,9 @@
+{
+  "title": "Guides",
+  "pages": [
+    "getting-started",
+    "authentication",
+    "pagination",
+    "error-handling"
+  ]
+}
