@@ -1,0 +1,294 @@
+---
+title: Error Handling
+description: Error codes, response shapes, and retry strategies for the ViewRoyal.ai API
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+All API errors follow a consistent JSON envelope. This guide documents every error code, explains how to handle each status category, and provides copy-pasteable retry logic.
+
+## Error Response Shape
+
+Every error response from the API uses the same structure:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable description of what went wrong",
+    "status": 400
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | string | Machine-readable identifier in `SCREAMING_SNAKE_CASE` |
+| `message` | string | Human-readable explanation of the error |
+| `status` | number | HTTP status code (matches the response status) |
+
+## Error Codes Reference
+
+### Client Errors (4xx)
+
+| HTTP Status | Code | Description |
+|-------------|------|-------------|
+| 400 | `VALIDATION_ERROR` | Request validation failed (invalid query parameters or missing required fields) |
+| 400 | `INVALID_TYPE` | Invalid search type filter value |
+| 401 | `MISSING_API_KEY` | No API key provided in request |
+| 401 | `INVALID_API_KEY` | API key not found or has been revoked |
+| 404 | `NOT_FOUND` | Requested endpoint does not exist |
+| 404 | `MUNICIPALITY_NOT_FOUND` | Invalid municipality slug in URL |
+| 404 | `MEETING_NOT_FOUND` | Meeting with given slug not found |
+| 404 | `PERSON_NOT_FOUND` | Person with given slug not found |
+| 404 | `MATTER_NOT_FOUND` | Matter with given slug not found |
+| 404 | `MOTION_NOT_FOUND` | Motion with given slug not found |
+| 404 | `BYLAW_NOT_FOUND` | Bylaw with given slug not found |
+| 404 | `EVENT_NOT_FOUND` | OCD event not found |
+| 404 | `BILL_NOT_FOUND` | OCD bill not found |
+| 404 | `VOTE_NOT_FOUND` | OCD vote not found |
+| 404 | `ORGANIZATION_NOT_FOUND` | OCD organization not found |
+| 404 | `JURISDICTION_NOT_FOUND` | OCD jurisdiction not found |
+| 429 | `RATE_LIMIT_EXCEEDED` | Rate limit of 100 requests per 60 seconds exceeded |
+
+### Server Errors (5xx)
+
+| HTTP Status | Code | Description |
+|-------------|------|-------------|
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
+| 500 | `QUERY_ERROR` | Database query failure |
+
+## Handling Errors by Status Code
+
+### 400 Bad Request
+
+Your request has invalid parameters. Check the `message` field for details on what to fix.
+
+**Example:** Setting `per_page` above the maximum of 100:
+
+```bash
+curl -H "X-API-Key: YOUR_API_KEY" \
+  "https://viewroyal.ai/api/v1/view-royal/meetings?per_page=999"
+```
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Expected number <= 100",
+    "status": 400
+  }
+}
+```
+
+**Fix:** Adjust your query parameters to valid values. For `per_page`, use a value between 1 and 100.
+
+### 401 Unauthorized
+
+Your API key is missing or invalid. There are two possible error codes:
+
+**No API key provided:**
+
+```json
+{
+  "error": {
+    "code": "MISSING_API_KEY",
+    "message": "API key required. Pass via X-API-Key header or ?apikey query parameter.",
+    "status": 401
+  }
+}
+```
+
+**API key not recognized or revoked:**
+
+```json
+{
+  "error": {
+    "code": "INVALID_API_KEY",
+    "message": "Invalid API key",
+    "status": 401
+  }
+}
+```
+
+**Fix:** Verify your API key is correct and has not been revoked. See the [Authentication guide](/docs/guides/authentication) for details on API key management.
+
+### 404 Not Found
+
+The resource you requested does not exist. The error code tells you whether the problem is the endpoint path or the specific resource identifier.
+
+<Callout type="info">
+  `NOT_FOUND` means the endpoint path itself is wrong (e.g., `/api/v1/view-royal/nonexistent`). Entity-specific codes like `MEETING_NOT_FOUND` or `PERSON_NOT_FOUND` mean the endpoint is correct but the slug or ID does not match any record.
+</Callout>
+
+**Endpoint path is wrong:**
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "The requested endpoint GET /api/v1/view-royal/nonexistent does not exist",
+    "status": 404
+  }
+}
+```
+
+**Resource slug is invalid:**
+
+```json
+{
+  "error": {
+    "code": "MEETING_NOT_FOUND",
+    "message": "Meeting not found",
+    "status": 404
+  }
+}
+```
+
+### 429 Rate Limited
+
+You have exceeded the rate limit of 100 requests per 60 seconds. The response includes a `Retry-After` header indicating how many seconds to wait before retrying.
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Rate limit exceeded. Please wait before making more requests.",
+    "status": 429
+  }
+}
+```
+
+**Fix:** Wait for the duration specified in the `Retry-After` header, then retry. See the [Authentication guide](/docs/guides/authentication#rate-limiting) for rate limit details and strategies.
+
+### 500 Server Error
+
+An unexpected error occurred on the server. This is not caused by your request.
+
+```json
+{
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred",
+    "status": 500
+  }
+}
+```
+
+**Fix:** Retry the request with exponential backoff. If the error persists, report it on [GitHub Issues](https://github.com/kylezinter/viewroyal/issues) and include the `X-Request-Id` header value from the response.
+
+## Retry Logic
+
+Not all errors should be retried. Here is a practical retry function that handles each status category correctly:
+
+- **429 (Rate Limited):** Read the `Retry-After` header and wait that many seconds before retrying
+- **500 (Server Error):** Retry up to 3 times with exponential backoff (1s, 2s, 4s)
+- **400, 401, 404 (Client Errors):** Do **not** retry -- these require fixing your request
+
+<Tabs groupId="language" items={['JavaScript', 'Python']}>
+  <Tab value="JavaScript">
+    ```javascript
+    async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const res = await fetch(url, options);
+
+        // Success -- return the response
+        if (res.ok) return res;
+
+        // Client errors -- don't retry, fix your request
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+          const body = await res.json();
+          throw new Error(`API error ${body.error.code}: ${body.error.message}`);
+        }
+
+        // Rate limited -- wait for Retry-After duration
+        if (res.status === 429) {
+          const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+          console.log(`Rate limited. Waiting ${retryAfter}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          continue;
+        }
+
+        // Server error -- exponential backoff
+        if (res.status >= 500) {
+          if (attempt === maxRetries) {
+            const body = await res.json();
+            throw new Error(`Server error after ${maxRetries} retries: ${body.error.code}`);
+          }
+          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          console.log(`Server error ${res.status}. Retrying in ${delay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // Usage
+    const res = await fetchWithRetry(
+      'https://viewroyal.ai/api/v1/view-royal/meetings',
+      { headers: { 'X-API-Key': 'YOUR_API_KEY' } }
+    );
+    const data = await res.json();
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```python
+    import time
+    import requests
+
+    def fetch_with_retry(url, headers=None, params=None, max_retries=3):
+        for attempt in range(max_retries + 1):
+            resp = requests.get(url, headers=headers, params=params)
+
+            # Success
+            if resp.ok:
+                return resp
+
+            # Client errors -- don't retry, fix your request
+            if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                body = resp.json()
+                raise Exception(
+                    f"API error {body['error']['code']}: {body['error']['message']}"
+                )
+
+            # Rate limited -- wait for Retry-After duration
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get('Retry-After', 60))
+                print(f"Rate limited. Waiting {retry_after}s...")
+                time.sleep(retry_after)
+                continue
+
+            # Server error -- exponential backoff
+            if resp.status_code >= 500:
+                if attempt == max_retries:
+                    body = resp.json()
+                    raise Exception(
+                        f"Server error after {max_retries} retries: {body['error']['code']}"
+                    )
+                delay = (2 ** attempt)  # 1s, 2s, 4s
+                print(f"Server error {resp.status_code}. Retrying in {delay}s...")
+                time.sleep(delay)
+
+    # Usage
+    resp = fetch_with_retry(
+        'https://viewroyal.ai/api/v1/view-royal/meetings',
+        headers={'X-API-Key': 'YOUR_API_KEY'}
+    )
+    data = resp.json()
+    ```
+  </Tab>
+</Tabs>
+
+## Response Headers
+
+The API includes useful headers for debugging and rate limit awareness:
+
+| Header | Present | Description |
+|--------|---------|-------------|
+| `X-Request-Id` | Every response | Unique request identifier for debugging |
+| `X-RateLimit-Limit` | Authenticated endpoints | Your rate limit (always `100`) |
+| `Retry-After` | 429 responses only | Seconds to wait before retrying |
+
+<Callout type="info">
+  Include the `X-Request-Id` value when reporting issues. It helps us locate your specific request in our logs.
+</Callout>
