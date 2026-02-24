@@ -1,0 +1,27 @@
+---
+title: Changelog
+description: Notable changes to the ViewRoyal.ai API
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="info">
+  **Current Version: v1.0**
+</Callout>
+
+This page documents notable changes to the ViewRoyal.ai API, following the [Keep a Changelog](https://keepachangelog.com) format.
+
+## [1.0.0] - 2026-02-22
+
+### Added
+
+- **Meetings API**: List and retrieve council meetings with agenda items, motions, attendance, and document sections
+- **People API**: Council members and staff with voting records, speaking time, and membership history
+- **Matters API**: Legislative matters tracked across meetings with lifecycle status and linked agenda items
+- **Motions API**: Formal decisions with mover/seconder, vote tallies, and individual roll call votes
+- **Bylaws API**: Municipal legislation with full text, AI summaries, and linked matters
+- **Search API**: Cross-content keyword search across motions, matters, and documents
+- **OCD Interoperability**: Open Civic Data standard endpoints for jurisdictions, organizations, people, events, bills, and votes
+- **Authentication**: API key management via `X-API-Key` header with per-key rate limiting
+- **Pagination**: Cursor-based pagination (v1 API) and page-based pagination (OCD API)
+- **Developer Portal**: API reference documentation, getting started guide, authentication, pagination, and error handling guides

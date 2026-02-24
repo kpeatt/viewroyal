@@ -1,0 +1,49 @@
+---
+title: Contributing
+description: How to contribute to ViewRoyal.ai
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+ViewRoyal.ai is an open civic intelligence platform for the Town of View Royal, British Columbia. It transforms public council meeting records into structured, searchable data. Contributions and feedback are welcome via GitHub.
+
+## Reporting Bugs
+
+Found an issue with the API? [Open a bug report](https://github.com/kpeatt/viewroyal/issues/new) on GitHub.
+
+Please include:
+
+- **Endpoint URL** you were calling (e.g., `/api/v1/view-royal/meetings`)
+- **Request parameters** (query string, headers used)
+- **Expected response** vs **actual response**
+- **API key prefix** (first 8 characters only -- never share the full key)
+
+## Requesting Features
+
+Have an idea for the API? [Open a feature request](https://github.com/kpeatt/viewroyal/issues/new) on GitHub.
+
+Please describe:
+
+- **Use case** -- what are you building and how would this help?
+- **Which endpoints or entities** are involved
+- **Any standards or formats** to consider (e.g., OCD, GeoJSON)
+
+## API Feedback
+
+We welcome feedback on:
+
+- **Response shapes** -- are fields named clearly? Is anything confusing?
+- **Missing fields** -- is there data you expected but could not find?
+- **Documentation clarity** -- is anything unclear or incomplete?
+
+Use the same [GitHub Issues](https://github.com/kpeatt/viewroyal/issues) page for feedback.
+
+## Important Notes
+
+<Callout>
+  - The API is **read-only** -- there are no write endpoints. All data comes from public council meeting records.
+  - The **OCD endpoints** follow the [Open Civic Data specification](https://opencivicdata.readthedocs.io/) and are publicly accessible without authentication.
+  - Data is sourced from the Town of View Royal's public meeting documents and video recordings.
+</Callout>
