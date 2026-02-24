@@ -1,0 +1,137 @@
+---
+title: Data Model
+description: Entity relationships in the ViewRoyal.ai API — how meetings, agenda items, motions, matters, bylaws, people, and organizations connect.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The ViewRoyal.ai API models the civic decision-making process of the Town of View Royal, British Columbia. Eight core entities capture the lifecycle of council business — from meetings and agenda items through to formal motions, recorded votes, and enacted bylaws.
+
+## Entity Relationship Diagram
+
+<Mermaid chart={`erDiagram
+    Organization ||--o{ Meeting : hosts
+    Person ||--o{ Meeting : chairs
+    Meeting ||--o{ AgendaItem : contains
+    AgendaItem }o--o| Matter : "tracks"
+    AgendaItem ||--o{ Motion : "has"
+    Motion ||--o{ Vote : "receives"
+    Person ||--o{ Motion : "moves"
+    Person ||--o{ Vote : "casts"
+    Person }o--o{ Organization : "member of"
+    Matter ||--o| Bylaw : "produces"
+
+    Organization {
+        int id PK
+        string name
+        string classification
+    }
+    Meeting {
+        int id PK
+        date date
+        string meeting_type
+        int organization_id FK
+    }
+    AgendaItem {
+        int id PK
+        int meeting_id FK
+        int matter_id FK
+        string title
+    }
+    Motion {
+        int id PK
+        int agenda_item_id FK
+        string result
+        int mover_id FK
+    }
+    Vote {
+        int id PK
+        int motion_id FK
+        int person_id FK
+        string value
+    }
+    Matter {
+        int id PK
+        string title
+        string status
+    }
+    Bylaw {
+        int id PK
+        string bylaw_number
+        string title
+    }
+    Person {
+        int id PK
+        string name
+        string role
+    }
+`} />
+
+## Entity Descriptions
+
+### Meeting
+
+A **Meeting** represents a council session — a regular council meeting, committee meeting, or special session held by the Town of View Royal. Each meeting belongs to an organization (e.g., Council, Committee of the Whole) and is chaired by a person. Meetings contain ordered agenda items and have associated attendance records.
+
+The API includes 738 meetings spanning from the earliest digitized records to the present.
+
+### Agenda Item
+
+An **Agenda Item** is a topic discussed during a meeting. Items are ordered within their meeting and may include staff reports, public hearings, correspondence, or new business. When an ongoing matter is revisited, the agenda item links to that matter, creating a trail across multiple meetings.
+
+There are 12,194 agenda items across all meetings in the system.
+
+### Motion
+
+A **Motion** is a formal proposal made during the discussion of an agenda item. A motion is moved by one councillor and typically seconded by another. After debate, the motion is voted on, producing a result such as "Carried", "Defeated", or "Tabled". Each motion records its mover, seconder, and the full text of what was proposed.
+
+The API tracks 10,536 motions.
+
+### Vote
+
+A **Vote** records an individual councillor's position on a motion. Each vote captures who voted, how they voted (in favour, opposed, or abstained), and which motion it applies to. Together, the votes on a motion form the roll call record.
+
+There are 44,919 individual votes recorded in the system.
+
+### Matter
+
+A **Matter** tracks an ongoing issue or topic that may span multiple meetings. Matters have a lifecycle status — they can be active, closed, or deferred. When a matter comes up at a council meeting, it appears as an agenda item linked back to the matter. Matters may ultimately produce bylaws.
+
+The API includes 1,727 matters.
+
+### Bylaw
+
+A **Bylaw** is a piece of municipal legislation enacted by the Town of View Royal. Bylaws have a number, title, and full text. Each bylaw originates from a matter that went through the council deliberation process. The API includes AI-generated summaries of bylaw content.
+
+There are 43 bylaws in the system.
+
+### Person
+
+A **Person** represents a council member, mayor, or municipal staff member who participates in civic proceedings. People move and second motions, cast votes, and hold memberships in organizations. The API provides voting records and speaking time data for each person.
+
+There are 837 people tracked in the system.
+
+### Organization
+
+An **Organization** is a governing body within the Town of View Royal — such as Council, Committee of the Whole, or an advisory board. Organizations host meetings and have person memberships. Each organization has a classification that describes its type.
+
+There are 10 organizations in the system.
+
+## Relationships
+
+The entity relationships model the full civic decision-making pipeline:
+
+- A **Meeting** belongs to an **Organization** and is chaired by a **Person**
+- **Agenda Items** belong to a **Meeting** and optionally link to an ongoing **Matter**
+- **Motions** are attached to **Agenda Items** and are moved and seconded by **People**
+- Each **Motion** receives individual **Votes** cast by **People**
+- **Matters** track issues across meetings via their linked **Agenda Items** and may produce **Bylaws**
+- **People** hold memberships in **Organizations**
+
+## API Coverage
+
+<Callout type="info">
+  Not all database columns are exposed through the API. The API returns curated fields designed for developer consumption. See the [API Reference](/docs/api-reference) for complete endpoint documentation with request and response schemas.
+</Callout>
+
+The entity relationship diagram above shows the primary keys and foreign keys that define how entities relate. The API endpoints provide additional computed fields (such as vote tallies on motions, attendance counts on meetings, and speaking time for people) that are not represented in the diagram.

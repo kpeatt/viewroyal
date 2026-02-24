@@ -1,0 +1,167 @@
+---
+title: OCD Standard Reference
+description: Open Civic Data interoperability — entity mapping, OCD ID format, and when to use the v1 API vs OCD API.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## What is Open Civic Data?
+
+[Open Civic Data](https://opencivicdata.readthedocs.io/) (OCD) is a set of specifications for representing government information in a standardized way. Originally developed for the [Open States](https://openstates.org/) project, OCD defines common data types for jurisdictions, organizations, people, events, bills, and votes — enabling civic technology tools to work across different municipalities without custom integrations.
+
+ViewRoyal.ai provides OCD-compliant endpoints alongside its native v1 API. The OCD endpoints transform View Royal's council data into the standardized OCD format, allowing civic tech applications that already speak OCD to consume View Royal data without modification.
+
+The OCD endpoints are publicly accessible and do not require an API key, matching the open-data philosophy of the OCD standard.
+
+## When to Use v1 vs OCD API
+
+| Feature | v1 API | OCD API |
+|---------|--------|---------|
+| **Use case** | ViewRoyal-specific features and richer data | Civic tech interoperability across jurisdictions |
+| **Authentication** | API key required (`X-API-Key` header) | No authentication required |
+| **Pagination** | Cursor-based (`cursor` parameter) | Page-based (`page` and `per_page` parameters) |
+| **ID format** | Integer IDs with URL slugs | OCD URIs (e.g., `ocd-person/{uuid}`) |
+| **Unique features** | Search, Bylaws, attendance, speaking time, AI summaries | Standardized entity types, cross-jurisdiction compatibility |
+| **Response envelope** | `{ data, pagination, meta }` | `{ results, pagination }` |
+| **Best for** | Building ViewRoyal-specific applications | Multi-jurisdiction civic tech tools |
+
+<Callout type="info">
+  **Choose v1** if you are building an application specifically for View Royal. The v1 API provides richer data (bylaws, search, AI summaries, speaking time) and cursor-based pagination for efficient traversal of large datasets.
+
+  **Choose OCD** if you are building a tool that needs to work across multiple municipalities, or if you want to integrate with existing OCD-compatible civic tech infrastructure.
+</Callout>
+
+## OCD ID Format
+
+OCD identifiers follow a hierarchical URI format. Geographic identifiers (divisions and jurisdictions) use structured paths, while entity identifiers use deterministic UUID v5 values derived from the primary key — the same entity always produces the same OCD ID.
+
+### Geographic Identifiers
+
+```
+Division:     ocd-division/country:ca/csd:5917047
+Jurisdiction: ocd-jurisdiction/country:ca/csd:5917047/government
+```
+
+- **Division** identifies the geographic area of View Royal using its Statistics Canada Census Subdivision (CSD) code `5917047`
+- **Jurisdiction** identifies the governing body within that division
+
+### Entity Identifiers
+
+```
+Person:       ocd-person/a1b2c3d4-e5f6-5789-abcd-ef0123456789
+Organization: ocd-organization/a1b2c3d4-e5f6-5789-abcd-ef0123456789
+Event:        ocd-event/a1b2c3d4-e5f6-5789-abcd-ef0123456789
+Bill:         ocd-bill/a1b2c3d4-e5f6-5789-abcd-ef0123456789
+Vote:         ocd-vote/a1b2c3d4-e5f6-5789-abcd-ef0123456789
+```
+
+<Callout>
+  OCD entity UUIDs are **deterministic** — they are generated using UUID v5 (SHA-1 name-based) with a fixed namespace. The same View Royal entity will always produce the same OCD ID, making them stable references for external systems.
+</Callout>
+
+## Entity Mapping
+
+The following table shows how v1 API entities map to OCD entities:
+
+| v1 Entity | v1 Endpoint | OCD Entity | OCD Endpoint | Notes |
+|-----------|-------------|------------|--------------|-------|
+| Municipality | (implicit) | Jurisdiction | `/api/ocd/{municipality}/jurisdictions` | The governing body for View Royal |
+| Organization | (via meetings) | Organization | `/api/ocd/{municipality}/organizations` | Council, committees, boards |
+| Person | `/api/v1/{municipality}/people` | Person | `/api/ocd/{municipality}/people` | Council members and staff |
+| Meeting | `/api/v1/{municipality}/meetings` | Event | `/api/ocd/{municipality}/events` | Council sessions |
+| Matter | `/api/v1/{municipality}/matters` | Bill | `/api/ocd/{municipality}/bills` | Legislative items tracked across meetings |
+| Motion | `/api/v1/{municipality}/motions` | Vote | `/api/ocd/{municipality}/votes` | Formal decisions with roll call |
+| Bylaw | `/api/v1/{municipality}/bylaws` | — | — | No OCD equivalent (ViewRoyal-specific) |
+| Search | `/api/v1/{municipality}/search` | — | — | No OCD equivalent (ViewRoyal-specific) |
+
+<Callout type="warn">
+  **Bylaws** and **Search** are only available through the v1 API. The OCD standard does not define equivalent entity types for municipal bylaws or cross-content search.
+</Callout>
+
+## OCD Endpoints
+
+All OCD endpoints are mounted under `/api/ocd/{municipality}/` where `{municipality}` is the URL slug (e.g., `view-royal`).
+
+### Discovery
+
+```
+GET /api/ocd/{municipality}/
+```
+
+Returns URLs for all available OCD entity endpoints:
+
+```json
+{
+  "jurisdictions_url": "/api/ocd/view-royal/jurisdictions",
+  "organizations_url": "/api/ocd/view-royal/organizations",
+  "people_url": "/api/ocd/view-royal/people",
+  "events_url": "/api/ocd/view-royal/events",
+  "bills_url": "/api/ocd/view-royal/bills",
+  "votes_url": "/api/ocd/view-royal/votes"
+}
+```
+
+### Entity Endpoints
+
+Each entity type supports list and detail operations:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/ocd/{municipality}/jurisdictions` | List jurisdictions |
+| `GET /api/ocd/{municipality}/jurisdictions/{id}` | Get a jurisdiction by OCD ID |
+| `GET /api/ocd/{municipality}/organizations` | List organizations |
+| `GET /api/ocd/{municipality}/organizations/{id}` | Get an organization by OCD ID |
+| `GET /api/ocd/{municipality}/people` | List people |
+| `GET /api/ocd/{municipality}/people/{id}` | Get a person by OCD ID |
+| `GET /api/ocd/{municipality}/events` | List events (meetings) |
+| `GET /api/ocd/{municipality}/events/{id}` | Get an event by OCD ID |
+| `GET /api/ocd/{municipality}/bills` | List bills (matters) |
+| `GET /api/ocd/{municipality}/bills/{id}` | Get a bill by OCD ID |
+| `GET /api/ocd/{municipality}/votes` | List votes (motions) |
+| `GET /api/ocd/{municipality}/votes/{id}` | Get a vote by OCD ID |
+
+### Pagination
+
+OCD list endpoints use page-based pagination:
+
+| Parameter | Default | Range | Description |
+|-----------|---------|-------|-------------|
+| `page` | 1 | 1+ | Page number |
+| `per_page` | 20 | 1–100 | Results per page |
+
+### Response Format
+
+List responses use the OCD envelope with `results` and `pagination`:
+
+```json
+{
+  "results": [
+    {
+      "id": "ocd-person/a1b2c3d4-e5f6-5789-abcd-ef0123456789",
+      "name": "John Smith",
+      "sort_name": "Smith, John",
+      "image": null,
+      "gender": null,
+      "birth_date": "",
+      "death_date": "",
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2024-01-15T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "max_page": 42,
+    "total_items": 837
+  }
+}
+```
+
+Detail responses return the entity directly at the top level (no wrapper object), following the OpenStates convention.
+
+## Further Reading
+
+- [Open Civic Data Specification](https://opencivicdata.readthedocs.io/) — Full OCD data type definitions
+- [Open States API](https://docs.openstates.org/) — Reference implementation of OCD endpoints
+- [Data Model](/docs/reference/data-model) — ViewRoyal.ai entity relationships and descriptions
+- [API Reference](/docs/api-reference) — Complete v1 API documentation
