@@ -59,7 +59,7 @@
 
 - [x] **Phase 19: Infrastructure & Scaffolding** - pnpm workspace migration and fumadocs site scaffold with static export build pipeline (completed 2026-02-23)
 - [x] **Phase 20: OpenAPI Integration & API Reference** - Auto-generated API reference pages from OpenAPI spec with interactive playground (completed 2026-02-23)
-- [ ] **Phase 21: Developer Guides** - Hand-written getting started, authentication, pagination, and error handling guides
+- [x] **Phase 21: Developer Guides** - Hand-written getting started, authentication, pagination, and error handling guides (completed 2026-02-24)
 - [ ] **Phase 22: Reference Content & Production** - Data model, OCD reference, changelog, contribution guide, and production deployment at docs.viewroyal.ai
 
 ## Phase Details
@@ -153,5 +153,5 @@ Phases execute in numeric order: 19 → 20 → 21 → 22
 | 18. Documentation & Key Management | v1.3 | 2/2 | Complete | 2026-02-22 |
 | 19. Infrastructure & Scaffolding | 2/2 | Complete    | 2026-02-23 | - |
 | 20. OpenAPI Integration & API Reference | 2/2 | Complete    | 2026-02-23 | - |
-| 21. Developer Guides | v1.4 | 1/2 | In Progress | - |
+| 21. Developer Guides | 2/2 | Complete   | 2026-02-24 | - |
 | 22. Reference Content & Production | v1.4 | 0/0 | Not started | - |

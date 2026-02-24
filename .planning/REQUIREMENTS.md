@@ -31,8 +31,8 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 - [x] **GUID-01**: Getting Started guide: zero to first API call in under 5 minutes
 - [x] **GUID-02**: Authentication guide: API key usage, headers, error responses, security best practices
-- [ ] **GUID-03**: Pagination and Filtering guide: cursor-based (v1) and page-based (OCD) with working examples
-- [ ] **GUID-04**: Error Handling guide: all error codes, response shapes, retry logic examples
+- [x] **GUID-03**: Pagination and Filtering guide: cursor-based (v1) and page-based (OCD) with working examples
+- [x] **GUID-04**: Error Handling guide: all error codes, response shapes, retry logic examples
 
 ### Reference Content
 
@@ -84,8 +84,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AREF-04 | Phase 20 | Pending |
 | GUID-01 | Phase 21 | Complete |
 | GUID-02 | Phase 21 | Complete |
-| GUID-03 | Phase 21 | Pending |
-| GUID-04 | Phase 21 | Pending |
+| GUID-03 | Phase 21 | Complete |
+| GUID-04 | Phase 21 | Complete |
 | REFC-01 | Phase 22 | Pending |
 | REFC-02 | Phase 22 | Pending |
 | REFC-03 | Phase 22 | Pending |
