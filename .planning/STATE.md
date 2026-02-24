@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.4 Developer Documentation Portal -- Phase 21 Developer Guides
+**Current focus:** v1.4 Developer Documentation Portal -- Phase 22 Reference Content & Production
 
 ## Current Position
 
-Phase: 21 of 22 (Developer Guides)
-Plan: 2 of 2 in current phase
-Status: Phase 21 complete
-Last activity: 2026-02-23 -- Plan 21-02 complete (Pagination + Error Handling guides)
+Phase: 22 of 22 (Reference Content & Production)
+Plan: 1 of 2 in current phase
+Status: Plan 22-01 complete
+Last activity: 2026-02-24 -- Plan 22-01 complete (Mermaid component, Data Model, OCD Standard Reference, sidebar)
 
-Progress: [████████████████████████░░░░░░░░░░░] 67% (v1.4)
+Progress: [██████████████████████████████░░░░░] 83% (v1.4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 56 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
-- Average duration: 4.1min
-- Total execution time: ~5.4 hours
+- Total plans completed: 57 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
+- Average duration: 4.0min
+- Total execution time: ~5.5 hours
 
 **By Phase:**
 
@@ -49,6 +49,7 @@ Progress: [███████████████████████
 | 19-infrastructure-scaffolding | 2 | 5min | 3min |
 | 20-openapi-integration-api-reference | 2 | 13min | 7min |
 | 21-developer-guides | 2 | 5min | 3min |
+| 22-reference-content-production | 1 | 3min | 3min |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ New for v1.4:
 - Getting Started guide starts with unauthenticated health check (Step 0) for instant gratification
 - Pagination guide covers three patterns (cursor, page, hybrid search) with comparison table
 - Error handling retry logic differentiates retryable (429, 500) from non-retryable (400, 401, 404) errors
+- Single comprehensive Mermaid ER diagram with 8 entities and key columns (not grouped sub-diagrams)
+- OCD endpoints documented inline in reference page (not linked to API Reference -- they use Hono routing, not chanfana)
+- next-themes installed explicitly for Mermaid dark/light theme support (not re-exported by fumadocs-ui)
 
 ### Pending Todos
 
@@ -94,8 +98,8 @@ New for v1.4:
 
 ## Session Continuity
 
-Last session: 2026-02-23
-Stopped at: Completed 21-02-PLAN.md (Pagination + Error Handling guides -- Phase 21 complete)
+Last session: 2026-02-24
+Stopped at: Completed 22-01-PLAN.md (Mermaid component, Data Model, OCD Standard Reference, sidebar)
 Resume file: None
 
 ### Paused Work: Phase 7.1
