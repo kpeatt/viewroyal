@@ -18,7 +18,7 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 - [x] **FWRK-02**: Static export builds successfully (output: 'export')
 - [ ] **FWRK-03**: Docs site deployed to docs.viewroyal.ai via Cloudflare
 - [ ] **FWRK-04**: Built-in Orama search indexes all documentation pages
-- [ ] **FWRK-05**: Navigation sidebar auto-generated from content directory structure
+- [x] **FWRK-05**: Navigation sidebar auto-generated from content directory structure
 
 ### API Reference
 
@@ -36,8 +36,8 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 ### Reference Content
 
-- [ ] **REFC-01**: Data Model page with entity relationships and Mermaid ER diagram
-- [ ] **REFC-02**: OCD Standard Reference: entity mapping, when to use v1 vs OCD, OCD ID format
+- [x] **REFC-01**: Data Model page with entity relationships and Mermaid ER diagram
+- [x] **REFC-02**: OCD Standard Reference: entity mapping, when to use v1 vs OCD, OCD ID format
 - [ ] **REFC-03**: Changelog page with initial v1.0 API entry
 - [ ] **REFC-04**: Contribution guide: bug reports, feature requests, GitHub links
 
@@ -77,7 +77,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FWRK-02 | Phase 19 | Complete |
 | FWRK-03 | Phase 22 | Pending |
 | FWRK-04 | Phase 22 | Pending |
-| FWRK-05 | Phase 22 | Pending |
+| FWRK-05 | Phase 22 | Complete |
 | AREF-01 | Phase 20 | Pending |
 | AREF-02 | Phase 20 | Pending |
 | AREF-03 | Phase 20 | Pending |
@@ -86,8 +86,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GUID-02 | Phase 21 | Complete |
 | GUID-03 | Phase 21 | Complete |
 | GUID-04 | Phase 21 | Complete |
-| REFC-01 | Phase 22 | Pending |
-| REFC-02 | Phase 22 | Pending |
+| REFC-01 | Phase 22 | Complete |
+| REFC-02 | Phase 22 | Complete |
 | REFC-03 | Phase 22 | Pending |
 | REFC-04 | Phase 22 | Pending |
 
