@@ -3,6 +3,8 @@
   "pages": [
     "---Getting Started---",
     "...",
+    "---Guides---",
+    "guides",
     "---API Reference---",
     "api-reference"
   ]

@@ -1,0 +1,146 @@
+---
+title: Getting Started
+description: Make your first API call in under 5 minutes
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The ViewRoyal.ai API is a free, read-only REST API that returns JSON. It provides access to council meeting data, people, matters, motions, bylaws, and full-text search for the Town of View Royal, BC.
+
+**Base URL:** `https://viewroyal.ai/api/v1/view-royal/`
+
+## Step 0: Quick Test (No Auth Needed)
+
+Before creating an account, verify you can reach the API by hitting the health endpoint. No API key is required.
+
+<Tabs groupId="language" items={['curl', 'JavaScript', 'Python']}>
+  <Tab value="curl">
+    ```bash
+    curl https://viewroyal.ai/api/v1/health
+    ```
+  </Tab>
+  <Tab value="JavaScript">
+    ```javascript
+    const res = await fetch('https://viewroyal.ai/api/v1/health');
+    const data = await res.json();
+    console.log(data);
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```python
+    import requests
+
+    resp = requests.get('https://viewroyal.ai/api/v1/health')
+    print(resp.json())
+    ```
+  </Tab>
+</Tabs>
+
+**Expected response:**
+
+```json
+{ "status": "ok" }
+```
+
+## Step 1: Create an Account
+
+Sign up for a free account at [viewroyal.ai/signup](https://viewroyal.ai/signup). You will need an account to generate API keys.
+
+## Step 2: Generate an API Key
+
+Navigate to [viewroyal.ai/settings/api-keys](https://viewroyal.ai/settings/api-keys) and create a new API key.
+
+<Callout type="warn">
+  Your API key is shown only once at creation time. Copy it immediately and store it securely (e.g., in an environment variable). Keys start with `vr_` and cannot be retrieved after creation.
+</Callout>
+
+## Step 3: Make an Authenticated Request
+
+With your API key, you can access all data endpoints. Here is an example that lists the three most recent council meetings:
+
+<Tabs groupId="language" items={['curl', 'JavaScript', 'Python']}>
+  <Tab value="curl">
+    ```bash
+    curl -H "X-API-Key: YOUR_API_KEY" \
+      "https://viewroyal.ai/api/v1/view-royal/meetings?per_page=3"
+    ```
+  </Tab>
+  <Tab value="JavaScript">
+    ```javascript
+    const res = await fetch(
+      'https://viewroyal.ai/api/v1/view-royal/meetings?per_page=3',
+      { headers: { 'X-API-Key': 'YOUR_API_KEY' } }
+    );
+    const data = await res.json();
+    console.log(data);
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```python
+    import requests
+
+    resp = requests.get(
+        'https://viewroyal.ai/api/v1/view-royal/meetings',
+        headers={'X-API-Key': 'YOUR_API_KEY'},
+        params={'per_page': 3}
+    )
+    data = resp.json()
+    print(data)
+    ```
+  </Tab>
+</Tabs>
+
+**Example response:**
+
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "slug": "2024-01-15-regular-council",
+      "title": "Regular Council Meeting",
+      "date": "2024-01-15",
+      "meeting_type": "Regular Council"
+    },
+    {
+      "id": 41,
+      "slug": "2024-01-08-committee-of-the-whole",
+      "title": "Committee of the Whole Meeting",
+      "date": "2024-01-08",
+      "meeting_type": "Committee of the Whole"
+    },
+    {
+      "id": 40,
+      "slug": "2023-12-18-regular-council",
+      "title": "Regular Council Meeting",
+      "date": "2023-12-18",
+      "meeting_type": "Regular Council"
+    }
+  ],
+  "pagination": {
+    "has_more": true,
+    "next_cursor": "eyJ2IjoiMjAyMy0xMi0xOCIsImlkIjo0MH0=",
+    "per_page": 3
+  },
+  "meta": {
+    "request_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+The response includes:
+- **`data`** -- An array of meeting objects
+- **`pagination`** -- Cursor-based pagination info (`has_more`, `next_cursor`, `per_page`)
+- **`meta`** -- Request metadata including a unique `request_id`
+
+See the full [List Meetings endpoint](/docs/api-reference/meetings/get_ListMeetings) for all query parameters and response fields.
+
+## Next Steps
+
+Now that you have made your first API call, explore these guides for deeper detail:
+
+- [Authentication](/docs/guides/authentication) -- API key management, rate limits, and security best practices
+- [Pagination](/docs/guides/pagination) -- Navigate large result sets with cursors
+- [Error Handling](/docs/guides/error-handling) -- Handle errors gracefully with retry logic
+- [API Reference](/docs/api-reference) -- Full endpoint documentation for all resources
