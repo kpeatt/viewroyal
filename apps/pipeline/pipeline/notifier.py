@@ -83,8 +83,10 @@ def send_update_notification(report: ChangeReport, processed_count: int = 0, tes
         title = f"{prefix}Pipeline Update"
 
     # Build message body -- one line per meeting change
-    all_changes = list(report.meetings_with_new_docs) + list(
-        report.meetings_with_new_video
+    all_changes = (
+        list(report.meetings_new)
+        + list(report.meetings_with_new_docs)
+        + list(report.meetings_with_new_video)
     )
 
     lines = [_format_change_line(c) for c in all_changes]

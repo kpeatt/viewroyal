@@ -113,7 +113,7 @@ export async function getHomeData(supabase: SupabaseClient) {
         .select(
           "id, title, meeting_date, type, has_agenda, organizations(name)",
         )
-        .gt("meeting_date", today)
+        .gte("meeting_date", today)
         .order("meeting_date", { ascending: true })
         .limit(1)
         .maybeSingle(),

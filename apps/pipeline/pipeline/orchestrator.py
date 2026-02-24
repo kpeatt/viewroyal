@@ -183,6 +183,14 @@ class Archiver:
         print(f"Checked at: {report.checked_at}")
         print()
 
+        if report.meetings_new:
+            print(f"New Meetings ({len(report.meetings_new)} folders not in DB):")
+            for change in report.meetings_new:
+                details_str = ", ".join(change.details) if change.details else "New folder"
+                print(f"  {change.meeting_date} {change.meeting_type}: {details_str}")
+        else:
+            print("New Meetings: None")
+
         if report.meetings_with_new_docs:
             print(f"New Documents ({len(report.meetings_with_new_docs)} meetings):")
             for change in report.meetings_with_new_docs:
@@ -223,6 +231,15 @@ class Archiver:
             return
 
         processed = 0
+
+        # Ingest brand-new meeting folders (not yet in DB)
+        for change in report.meetings_new:
+            print(f"\n  [update] Ingesting new meeting: {change.meeting_date} {change.meeting_type}")
+            try:
+                self._ingest_meetings(target_folder=change.archive_path, force_update=False)
+                processed += 1
+            except Exception as e:
+                print(f"  [!] Error processing {change.archive_path}: {e}")
 
         # Process meetings with new documents
         for change in report.meetings_with_new_docs:
