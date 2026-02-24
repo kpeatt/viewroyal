@@ -106,7 +106,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 21-01-PLAN.md — Guides navigation, Getting Started guide, and Authentication guide
+- [x] 21-01-PLAN.md — Guides navigation, Getting Started guide, and Authentication guide
 - [ ] 21-02-PLAN.md — Pagination guide, Error Handling guide, and full build verification
 
 ### Phase 22: Reference Content & Production
@@ -153,5 +153,5 @@ Phases execute in numeric order: 19 → 20 → 21 → 22
 | 18. Documentation & Key Management | v1.3 | 2/2 | Complete | 2026-02-22 |
 | 19. Infrastructure & Scaffolding | 2/2 | Complete    | 2026-02-23 | - |
 | 20. OpenAPI Integration & API Reference | 2/2 | Complete    | 2026-02-23 | - |
-| 21. Developer Guides | v1.4 | 0/2 | Planned | - |
+| 21. Developer Guides | v1.4 | 1/2 | In Progress | - |
 | 22. Reference Content & Production | v1.4 | 0/0 | Not started | - |

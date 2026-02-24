@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.4 Developer Documentation Portal -- Phase 20 OpenAPI Integration & API Reference
+**Current focus:** v1.4 Developer Documentation Portal -- Phase 21 Developer Guides
 
 ## Current Position
 
-Phase: 20 of 22 (OpenAPI Integration & API Reference)
-Plan: 2 of 2 in current phase
-Status: Phase 20 complete
-Last activity: 2026-02-23 -- Plan 20-02 complete (API page components + build verification)
+Phase: 21 of 22 (Developer Guides)
+Plan: 1 of 2 in current phase
+Status: Plan 21-01 complete
+Last activity: 2026-02-23 -- Plan 21-01 complete (Getting Started + Authentication guides)
 
-Progress: [██████████████████░░░░░░░░░░░░░░░░░] 50% (v1.4)
+Progress: [████████████████████████░░░░░░░░░░░] 67% (v1.4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 54 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
+- Total plans completed: 55 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
 - Average duration: 4.1min
 - Total execution time: ~5.4 hours
 
@@ -48,6 +48,7 @@ Progress: [██████████████████░░░░░
 | 18-documentation-key-management | 2 | 9min | 5min |
 | 19-infrastructure-scaffolding | 2 | 5min | 3min |
 | 20-openapi-integration-api-reference | 2 | 13min | 7min |
+| 21-developer-guides | 1 | 2min | 2min |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ New for v1.4:
 - fumadocs-openapi v10 has built-in code sample generators (curl, JS, Python, Go, Java, C#) -- no custom generateCodeSamples needed
 - chanfana double-prefixes base path in spec (/api/v1/api/v1/...) -- prebuild script fixes this
 - chanfana doesn't emit tags/securitySchemes into spec despite registration -- prebuild injects them
+- Guides use groupId="language" on Tabs for cross-page language preference persistence
+- Getting Started guide starts with unauthenticated health check (Step 0) for instant gratification
 
 ### Pending Todos
 
@@ -90,7 +93,7 @@ New for v1.4:
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed Phase 20 (OpenAPI Integration & API Reference), all plans done
+Stopped at: Completed 21-01-PLAN.md (Getting Started + Authentication guides)
 Resume file: None
 
 ### Paused Work: Phase 7.1
