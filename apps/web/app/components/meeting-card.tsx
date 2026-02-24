@@ -16,7 +16,8 @@ interface MeetingCardProps {
 }
 
 export function MeetingCard({ meeting }: MeetingCardProps) {
-  const isPast = new Date(meeting.meeting_date) < new Date();
+  const today = new Date().toLocaleDateString("en-CA");
+  const isPast = meeting.meeting_date < today;
   const hasContent =
     meeting.has_agenda ||
     meeting.agenda_url ||

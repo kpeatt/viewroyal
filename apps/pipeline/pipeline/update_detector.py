@@ -37,14 +37,17 @@ class ChangeReport:
 
     meetings_with_new_docs: list[MeetingChange] = field(default_factory=list)
     meetings_with_new_video: list[MeetingChange] = field(default_factory=list)
+    meetings_new: list[MeetingChange] = field(default_factory=list)
     total_changes: int = 0
     checked_at: str = ""
 
     def __post_init__(self):
         if not self.checked_at:
             self.checked_at = datetime.now(timezone.utc).isoformat()
-        self.total_changes = len(self.meetings_with_new_docs) + len(
-            self.meetings_with_new_video
+        self.total_changes = (
+            len(self.meetings_with_new_docs)
+            + len(self.meetings_with_new_video)
+            + len(self.meetings_new)
         )
 
 
@@ -201,6 +204,93 @@ class UpdateDetector:
 
         return changes
 
+    @staticmethod
+    def _normalize_archive_path(folder_path: str) -> str:
+        """Normalize archive path to relative form (same logic as MeetingIngester)."""
+        abs_path = os.path.abspath(folder_path)
+
+        archive_marker = "/archive/"
+        if archive_marker in abs_path:
+            idx = abs_path.find(archive_marker) + 1
+            return abs_path[idx:]
+
+        marker = "viewroyal_archive"
+        if marker in abs_path:
+            idx = abs_path.find(marker)
+            return abs_path[idx:]
+
+        return folder_path
+
+    def detect_new_meetings(self, supabase=None) -> list[MeetingChange]:
+        """Detect meeting folders on disk that have no corresponding DB record.
+
+        Walks the archive for folders containing Agenda or Audio subdirs,
+        normalizes their paths, and checks for a matching archive_path in
+        the meetings table.
+
+        Args:
+            supabase: Supabase client instance. Required for DB lookup.
+
+        Returns:
+            List of MeetingChange objects with change_type="new_meeting".
+        """
+        if supabase is None:
+            print("[UpdateDetector] No Supabase client provided, skipping new meeting detection.")
+            return []
+
+        # Collect all meeting folders on disk
+        disk_folders: list[tuple[str, str]] = []  # (abs_path, normalized_path)
+        for root, dirs, _files in os.walk(self.archive_root):
+            if "Agenda" not in dirs and "Audio" not in dirs:
+                continue
+            normalized = self._normalize_archive_path(root)
+            disk_folders.append((root, normalized))
+
+        if not disk_folders:
+            return []
+
+        # Fetch all known archive_paths from DB in one query
+        result = (
+            supabase.table("meetings")
+            .select("archive_path")
+            .not_("archive_path", "is", "null")
+            .execute()
+        )
+        known_paths = {row["archive_path"] for row in (result.data or [])}
+
+        changes: list[MeetingChange] = []
+        for abs_path, normalized in disk_folders:
+            if normalized in known_paths:
+                continue
+
+            folder_name = os.path.basename(abs_path)
+            date_key = utils.extract_date_from_string(folder_name) or "unknown"
+            meeting_type = utils.infer_meeting_type(folder_name) or "Unknown"
+
+            disk = check_disk_documents(abs_path)
+            details = []
+            if disk["has_agenda"]:
+                details.append("Agenda on disk")
+            if disk["has_minutes"]:
+                details.append("Minutes on disk")
+            if disk["has_transcript"]:
+                details.append("Transcript on disk")
+
+            if not details:
+                continue
+
+            changes.append(
+                MeetingChange(
+                    archive_path=abs_path,
+                    meeting_date=date_key,
+                    meeting_type=meeting_type,
+                    change_type="new_meeting",
+                    details=details,
+                )
+            )
+
+        return changes
+
     def detect_all_changes(self, supabase=None) -> ChangeReport:
         """Run all detection methods and produce a combined ChangeReport.
 
@@ -210,12 +300,14 @@ class UpdateDetector:
         Returns:
             ChangeReport with both document and video changes.
         """
+        new_meetings = self.detect_new_meetings(supabase)
         doc_changes = self.detect_document_changes(supabase)
         video_changes = self.detect_video_changes()
 
         report = ChangeReport(
             meetings_with_new_docs=doc_changes,
             meetings_with_new_video=video_changes,
+            meetings_new=new_meetings,
         )
 
         # Print human-readable summary
@@ -223,6 +315,15 @@ class UpdateDetector:
         print(f"  Update Detection Report")
         print(f"  Checked at: {report.checked_at}")
         print(f"{'='*60}")
+
+        if new_meetings:
+            print(f"\n  New Meetings ({len(new_meetings)} folders not in DB):")
+            for change in new_meetings:
+                print(f"    {change.meeting_date} {change.meeting_type}")
+                for detail in change.details:
+                    print(f"      - {detail}")
+        else:
+            print("\n  New Meetings: None detected")
 
         if doc_changes:
             print(f"\n  Document Changes ({len(doc_changes)} meetings):")

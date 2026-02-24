@@ -127,7 +127,8 @@ export default function Meetings({ loaderData }: Route.ComponentProps) {
   const filteredMeetingsForList = useMemo(() => {
     const filtered = meetings.filter((m) => {
       // Status Filter
-      const isPast = new Date(m.meeting_date) < new Date();
+      const today = new Date().toLocaleDateString("en-CA");
+      const isPast = m.meeting_date < today;
       const effectiveStatus = m.status || (isPast ? "Completed" : "Planned");
 
       if (statusTab === "past") {

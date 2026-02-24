@@ -211,7 +211,8 @@ export function CalendarView({ meetings }: CalendarViewProps) {
 
               <div className="space-y-1 overflow-y-auto max-h-[calc(100%-32px)] no-scrollbar">
                 {dayMeetings.map((meeting) => {
-                  const isPast = new Date(meeting.meeting_date) < new Date();
+                  const today = new Date().toLocaleDateString("en-CA");
+                  const isPast = meeting.meeting_date < today;
                   const status =
                     meeting.status || (isPast ? "Completed" : "Planned");
 

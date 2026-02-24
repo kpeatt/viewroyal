@@ -1059,7 +1059,7 @@ class MeetingIngester:
 
         meeting_status = "Planned"
         m_date = datetime.strptime(meta["meeting_date"], "%Y-%m-%d").date()
-        if m_date <= datetime.now().date():
+        if m_date < datetime.now().date():
             if has_minutes and has_transcript:
                 meeting_status = "Completed"
             elif has_transcript:
