@@ -96,6 +96,32 @@ function injectTags(spec) {
 }
 
 /**
+ * Inject missing path parameters (chanfana omits {municipality}).
+ */
+function injectPathParams(spec) {
+  const MUNICIPALITY_PARAM = {
+    name: 'municipality',
+    in: 'path',
+    required: true,
+    schema: { type: 'string', default: 'view-royal' },
+    description: 'Municipality slug (e.g., "view-royal")',
+  };
+
+  for (const [path, methods] of Object.entries(spec.paths || {})) {
+    if (!path.includes('{municipality}')) continue;
+    for (const [, operation] of Object.entries(methods)) {
+      if (typeof operation !== 'object' || !operation.operationId) continue;
+      if (!operation.parameters) operation.parameters = [];
+      const has = operation.parameters.some((p) => p.name === 'municipality' && p.in === 'path');
+      if (!has) {
+        operation.parameters.unshift({ ...MUNICIPALITY_PARAM });
+      }
+    }
+  }
+  return spec;
+}
+
+/**
  * Inject servers array and security scheme if missing.
  */
 function injectServerAndSecurity(spec) {
@@ -117,6 +143,22 @@ function injectServerAndSecurity(spec) {
     };
   }
 
+  // Apply global security (most endpoints require auth)
+  if (!spec.security) {
+    spec.security = [{ ApiKeyAuth: [] }];
+  }
+
+  // Mark public endpoints as security-free
+  const PUBLIC_OPS = ['HealthEndpoint'];
+  for (const [, methods] of Object.entries(spec.paths || {})) {
+    for (const [, operation] of Object.entries(methods)) {
+      if (typeof operation !== 'object' || !operation.operationId) continue;
+      if (PUBLIC_OPS.some((op) => operation.operationId.includes(op))) {
+        operation.security = [];
+      }
+    }
+  }
+
   // Enrich the info description
   spec.info.description =
     'Public API for the ViewRoyal.ai civic intelligence platform.\n\n' +
@@ -133,6 +175,7 @@ function injectServerAndSecurity(spec) {
 const spec = await fetchSpec();
 fixPaths(spec);
 injectTags(spec);
+injectPathParams(spec);
 injectServerAndSecurity(spec);
 
 // Write the cleaned spec as the committed fallback
