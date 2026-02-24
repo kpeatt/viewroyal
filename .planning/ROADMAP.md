@@ -142,7 +142,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 23-01-PLAN.md — Fix broken cross-links in MDX content, update stale checkboxes, rebuild and verify
+- [ ] 23-01-PLAN.md — Fix 18 broken /docs/ prefix links across 7 MDX files, create API Reference landing page, rebuild and verify
 
 ### Phase 24: Tech Debt Cleanup
 **Goal**: Documentation build and deploy pipeline is clean, self-contained, and production-ready
