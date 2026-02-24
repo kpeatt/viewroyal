@@ -22,10 +22,10 @@ Requirements for the Developer Documentation Portal milestone. Each maps to road
 
 ### API Reference
 
-- [ ] **AREF-01**: OpenAPI spec fetched at build time from live API with checked-in fallback
-- [ ] **AREF-02**: API reference pages auto-generated from OpenAPI 3.1 spec grouped by tag (Meetings, People, Matters, Motions, Bylaws, Search, OCD, System)
-- [ ] **AREF-03**: Interactive playground on API reference pages for live API requests
-- [ ] **AREF-04**: Multi-language code examples (curl, JavaScript, Python) on reference pages
+- [x] **AREF-01**: OpenAPI spec fetched at build time from live API with checked-in fallback
+- [x] **AREF-02**: API reference pages auto-generated from OpenAPI 3.1 spec grouped by tag (Meetings, People, Matters, Motions, Bylaws, Search, OCD, System)
+- [x] **AREF-03**: Interactive playground on API reference pages for live API requests
+- [x] **AREF-04**: Multi-language code examples (curl, JavaScript, Python) on reference pages
 
 ### Developer Guides
 
@@ -78,10 +78,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FWRK-03 | Phase 22 | Complete |
 | FWRK-04 | Phase 22 | Complete |
 | FWRK-05 | Phase 22 | Complete |
-| AREF-01 | Phase 20 | Pending |
-| AREF-02 | Phase 20 | Pending |
-| AREF-03 | Phase 20 | Pending |
-| AREF-04 | Phase 20 | Pending |
+| AREF-01 | Phase 20 | Complete |
+| AREF-02 | Phase 20 | Complete |
+| AREF-03 | Phase 20 | Complete |
+| AREF-04 | Phase 20 | Complete |
 | GUID-01 | Phase 21 | Complete |
 | GUID-02 | Phase 21 | Complete |
 | GUID-03 | Phase 21 | Complete |
@@ -98,4 +98,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-23*
-*Last updated: 2026-02-23 after roadmap creation*
+*Last updated: 2026-02-24 after gap closure planning (AREF-01-04 checkboxes fixed)*

@@ -6,7 +6,7 @@
 - ✅ **v1.1 Deep Intelligence** -- Phases 7-11 (shipped 2026-02-19) -- [Archive](milestones/v1.1-ROADMAP.md)
 - ✅ **v1.2 Pipeline Automation** -- Phases 12-14 (shipped 2026-02-20) -- [Archive](milestones/v1.2-ROADMAP.md)
 - ✅ **v1.3 Platform APIs** -- Phases 15-18 (shipped 2026-02-22) -- [Archive](milestones/v1.3-ROADMAP.md)
-- 🚧 **v1.4 Developer Documentation Portal** -- Phases 19-22 (in progress)
+- 🚧 **v1.4 Developer Documentation Portal** -- Phases 19-24 (in progress)
 
 ## Phases
 
@@ -61,6 +61,10 @@
 - [x] **Phase 20: OpenAPI Integration & API Reference** - Auto-generated API reference pages from OpenAPI spec with interactive playground (completed 2026-02-23)
 - [x] **Phase 21: Developer Guides** - Hand-written getting started, authentication, pagination, and error handling guides (completed 2026-02-24)
 - [x] **Phase 22: Reference Content & Production** - Data model, OCD reference, changelog, contribution guide, and production deployment at docs.viewroyal.ai (completed 2026-02-24)
+- [ ] **Phase 23: Cross-Link Fix & Cleanup** - Fix 18 broken inline links across 7 MDX files and update stale AREF checkboxes (gap closure)
+- [ ] **Phase 24: Tech Debt Cleanup** - Deploy script, wrangler dependency, duplicate prebuild, DNS configuration
+
+*Phases 23-24 added by gap closure plan after v1.4 audit (2026-02-24)*
 
 ## Phase Details
 
@@ -125,6 +129,35 @@ Plans:
 - [ ] 22-01-PLAN.md — Mermaid component, Data Model page, OCD Standard Reference, sidebar configuration
 - [ ] 22-02-PLAN.md — Changelog, Contributing guide, static search fix, deployment to docs.viewroyal.ai
 
+### Phase 23: Cross-Link Fix & Cleanup
+**Goal**: All inline cross-links in documentation content work correctly and REQUIREMENTS.md accurately reflects verified completion status
+**Depends on**: Phase 22 (content authored, site deployed)
+**Requirements**: None new (fixes integration gap INT-01 from audit)
+**Gap Closure:** Closes gaps from v1.4 audit
+**Success Criteria** (what must be TRUE):
+  1. All 18 inline links across 7 MDX files use correct paths (no `/docs/` prefix) and resolve without 404
+  2. E2E flow "Developer follows inline links from guides to API reference" works end-to-end
+  3. E2E flow "Landing page links to all sections" works end-to-end
+  4. AREF-01 through AREF-04 checkboxes in REQUIREMENTS.md reflect verified-complete status
+**Plans**: 1 plan
+
+Plans:
+- [ ] 23-01-PLAN.md — Fix broken cross-links in MDX content, update stale checkboxes, rebuild and verify
+
+### Phase 24: Tech Debt Cleanup
+**Goal**: Documentation build and deploy pipeline is clean, self-contained, and production-ready
+**Depends on**: Phase 23 (critical fix done first)
+**Requirements**: None (tech debt reduction)
+**Success Criteria** (what must be TRUE):
+  1. `generate-openapi.mjs` runs exactly once per build (no duplicate execution)
+  2. `apps/docs/package.json` has a `deploy` script for one-command deployment
+  3. Wrangler is a direct devDependency of `apps/docs` (no reliance on shamefully-hoist)
+  4. Custom domain `docs.viewroyal.ai` serves the documentation site (or DNS configuration is documented if blocked)
+**Plans**: 1 plan
+
+Plans:
+- [ ] 24-01-PLAN.md — Fix duplicate prebuild, add deploy script, add wrangler dependency, configure DNS
+
 ## Progress
 
 **Execution Order:**
@@ -155,3 +188,5 @@ Phases execute in numeric order: 19 → 20 → 21 → 22
 | 20. OpenAPI Integration & API Reference | 2/2 | Complete    | 2026-02-23 | - |
 | 21. Developer Guides | 2/2 | Complete    | 2026-02-24 | - |
 | 22. Reference Content & Production | 2/2 | Complete    | 2026-02-24 | - |
+| 23. Cross-Link Fix & Cleanup | v1.4 | 0/1 | Pending | - |
+| 24. Tech Debt Cleanup | v1.4 | 0/1 | Pending | - |
