@@ -5,7 +5,7 @@ async function fetchAllVotesForAlignment(
 ): Promise<any[]> {
   const allData: any[] = [];
   let page = 0;
-  const pageSize = 1000;
+  const pageSize = 10000;
 
   while (true) {
     const { data, error } = await supabase
