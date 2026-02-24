@@ -59,7 +59,8 @@
         },
         "tags": [
           "System"
-        ]
+        ],
+        "security": []
       }
     },
     "/api/v1/{municipality}/health": {
@@ -103,6 +104,19 @@
         },
         "tags": [
           "System"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          }
         ]
       }
     },
@@ -157,6 +171,18 @@
         },
         "tags": [
           "System"
+        ],
+        "parameters": [
+          {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          }
         ]
       }
     },
@@ -166,6 +192,16 @@
         "description": "Returns a paginated list of meetings with optional filters. Sorted by meeting date descending (most recent first).",
         "operationId": "get_ListMeetings",
         "parameters": [
+          {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          },
           {
             "schema": {
               "type": "string",
@@ -564,6 +600,16 @@
         "operationId": "get_ListPeople",
         "parameters": [
           {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          },
+          {
             "schema": {
               "type": "string",
               "description": "Pagination cursor from previous response"
@@ -876,6 +922,16 @@
         "operationId": "get_ListMatters",
         "parameters": [
           {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          },
+          {
             "schema": {
               "type": "string",
               "description": "Pagination cursor from previous response"
@@ -992,6 +1048,16 @@
         "operationId": "get_ListMotions",
         "parameters": [
           {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          },
+          {
             "schema": {
               "type": "string",
               "description": "Pagination cursor from previous response"
@@ -1097,6 +1163,16 @@
         "description": "Returns a paginated list of bylaws with optional filters for status, category, and year.",
         "operationId": "get_ListBylaws",
         "parameters": [
+          {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          },
           {
             "schema": {
               "type": "string",
@@ -1207,6 +1283,16 @@
         "operationId": "get_SearchEndpoint",
         "parameters": [
           {
+            "name": "municipality",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "view-royal"
+            },
+            "description": "Municipality slug (e.g., \"view-royal\")"
+          },
+          {
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -1303,6 +1389,11 @@
     {
       "url": "https://viewroyal.ai",
       "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
     }
   ]
 }
