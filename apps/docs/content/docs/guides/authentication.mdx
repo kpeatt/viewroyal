@@ -1,0 +1,206 @@
+---
+title: Authentication
+description: API key usage, headers, rate limits, and error handling
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+All data endpoints on the ViewRoyal.ai API require an API key for authentication. The API is read-only -- there are no write, update, or delete operations. The only unauthenticated endpoint is the [health check](/docs/api-reference/system/get_HealthEndpoint).
+
+## Getting an API Key
+
+Navigate to [viewroyal.ai/settings/api-keys](https://viewroyal.ai/settings/api-keys) to create and manage your API keys.
+
+Keys follow the format `vr_` followed by 64 hexadecimal characters (67 characters total). For example: `vr_a1b2c3d4e5f6...`
+
+<Callout type="warn">
+  Your API key is displayed only once at creation time. It is stored as a SHA-256 hash and cannot be retrieved later. Copy it immediately and store it securely.
+</Callout>
+
+The key management page allows you to:
+- Create multiple API keys (e.g., one per application)
+- View key prefixes and creation dates
+- Revoke compromised keys instantly
+
+## Using Your API Key
+
+There are two ways to authenticate your requests.
+
+### Header (Recommended)
+
+Pass your key in the `X-API-Key` header:
+
+<Tabs groupId="language" items={['curl', 'JavaScript', 'Python']}>
+  <Tab value="curl">
+    ```bash
+    curl -H "X-API-Key: vr_your_key_here" \
+      https://viewroyal.ai/api/v1/view-royal/meetings
+    ```
+  </Tab>
+  <Tab value="JavaScript">
+    ```javascript
+    const res = await fetch(
+      'https://viewroyal.ai/api/v1/view-royal/meetings',
+      { headers: { 'X-API-Key': 'vr_your_key_here' } }
+    );
+    const data = await res.json();
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```python
+    import requests
+
+    resp = requests.get(
+        'https://viewroyal.ai/api/v1/view-royal/meetings',
+        headers={'X-API-Key': 'vr_your_key_here'}
+    )
+    data = resp.json()
+    ```
+  </Tab>
+</Tabs>
+
+### Query Parameter (Fallback)
+
+If you cannot set custom headers (e.g., certain webhook configurations), pass the key as a query parameter:
+
+```
+https://viewroyal.ai/api/v1/view-royal/meetings?apikey=vr_your_key_here
+```
+
+<Callout type="warn">
+  The query parameter method is less secure because the key is visible in URLs, server logs, and browser history. Use the header method whenever possible.
+</Callout>
+
+<Callout type="warn">
+  Never expose your API key in client-side JavaScript. Always make API calls from your backend server.
+</Callout>
+
+## Rate Limiting
+
+The API enforces rate limits to ensure fair usage for all developers.
+
+| Parameter | Value |
+|-----------|-------|
+| **Limit** | 100 requests per 60 seconds |
+| **Scope** | Per API key (not per IP address) |
+| **Response header** | `X-RateLimit-Limit: 100` (included on every authenticated response) |
+| **Retry header** | `Retry-After: 60` (included only on 429 responses) |
+
+When the rate limit is exceeded, the API returns HTTP 429:
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Rate limit exceeded. Please wait before making more requests.",
+    "status": 429
+  }
+}
+```
+
+### Retry Logic
+
+Implement exponential backoff that respects the `Retry-After` header:
+
+<Tabs groupId="language" items={['JavaScript', 'Python']}>
+  <Tab value="JavaScript">
+    ```javascript
+    async function fetchWithRetry(url, options, maxRetries = 3) {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const res = await fetch(url, options);
+
+        if (res.status !== 429) return res;
+
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+        const delay = retryAfter * 1000 * Math.pow(2, attempt);
+        console.log(`Rate limited. Retrying in ${delay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      throw new Error('Max retries exceeded');
+    }
+
+    const res = await fetchWithRetry(
+      'https://viewroyal.ai/api/v1/view-royal/meetings',
+      { headers: { 'X-API-Key': 'vr_your_key_here' } }
+    );
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```python
+    import time
+    import requests
+
+    def fetch_with_retry(url, headers, max_retries=3):
+        for attempt in range(max_retries):
+            resp = requests.get(url, headers=headers)
+
+            if resp.status_code != 429:
+                return resp
+
+            retry_after = int(resp.headers.get('Retry-After', 60))
+            delay = retry_after * (2 ** attempt)
+            print(f'Rate limited. Retrying in {delay}s...')
+            time.sleep(delay)
+
+        raise Exception('Max retries exceeded')
+
+    resp = fetch_with_retry(
+        'https://viewroyal.ai/api/v1/view-royal/meetings',
+        headers={'X-API-Key': 'vr_your_key_here'}
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Authentication Errors
+
+The API returns these authentication-specific error codes:
+
+| Status | Code | When |
+|--------|------|------|
+| 401 | `MISSING_API_KEY` | No `X-API-Key` header or `apikey` query parameter provided |
+| 401 | `INVALID_API_KEY` | API key not found in the system or has been revoked |
+| 429 | `RATE_LIMIT_EXCEEDED` | More than 100 requests in a 60-second window |
+
+**Example 401 response:**
+
+```json
+{
+  "error": {
+    "code": "MISSING_API_KEY",
+    "message": "API key required. Pass via X-API-Key header or ?apikey query parameter.",
+    "status": 401
+  }
+}
+```
+
+For the complete list of all error codes across the API, see the [Error Handling guide](/docs/guides/error-handling).
+
+## CORS
+
+The API supports Cross-Origin Resource Sharing (CORS) with the following configuration:
+
+| Parameter | Value |
+|-----------|-------|
+| **Allowed origins** | `*` (all origins) |
+| **Allowed methods** | `GET`, `HEAD`, `OPTIONS` |
+| **Allowed headers** | `X-API-Key`, `Content-Type` |
+| **Exposed headers** | `X-Request-Id`, `X-RateLimit-Limit`, `Retry-After` |
+| **Max age** | 86400 seconds (24 hours) |
+
+This means browser-based applications can call the API directly. However, doing so exposes your API key in client-side code.
+
+<Callout type="warn">
+  For production applications, proxy API requests through your backend server to keep your API key secret. Only use direct browser requests for local development or prototyping.
+</Callout>
+
+## Best Practices
+
+- **Store API keys in environment variables**, never hard-coded in source code
+- **Use header authentication** (`X-API-Key`) over the query parameter method
+- **Implement retry logic** with exponential backoff for 429 responses
+- **Create separate API keys** for separate applications or environments
+- **Revoke compromised keys immediately** at [viewroyal.ai/settings/api-keys](https://viewroyal.ai/settings/api-keys)
+- **Monitor your usage** -- if you consistently hit rate limits, optimize your request patterns with pagination cursors and caching
