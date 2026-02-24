@@ -119,11 +119,11 @@ Plans:
   3. Changelog page has an initial v1.0 API entry and Contribution guide links to GitHub for bug reports and feature requests
   4. docs.viewroyal.ai is live on Cloudflare Workers serving the static export, with Orama search returning results across all documentation pages
   5. Navigation sidebar is auto-generated from the content directory structure and correctly groups API Reference, Guides, and Reference sections
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 22-01: TBD
-- [ ] 22-02: TBD
+- [ ] 22-01-PLAN.md — Mermaid component, Data Model page, OCD Standard Reference, sidebar configuration
+- [ ] 22-02-PLAN.md — Changelog, Contributing guide, static search fix, deployment to docs.viewroyal.ai
 
 ## Progress
 
