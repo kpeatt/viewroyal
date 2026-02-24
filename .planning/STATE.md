@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-23)
 ## Current Position
 
 Phase: 22 of 22 (Reference Content & Production)
-Plan: 1 of 2 in current phase
-Status: Plan 22-01 complete
-Last activity: 2026-02-24 -- Plan 22-01 complete (Mermaid component, Data Model, OCD Standard Reference, sidebar)
+Plan: 2 of 2 in current phase
+Status: Phase 22 complete
+Last activity: 2026-02-24 -- Plan 22-02 complete (Changelog, Contributing, search, deployment)
 
-Progress: [██████████████████████████████░░░░░] 83% (v1.4)
+Progress: [███████████████████████████████████] 100% (v1.4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 57 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
+- Total plans completed: 58 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
 - Average duration: 4.0min
 - Total execution time: ~5.5 hours
 
@@ -49,7 +49,7 @@ Progress: [███████████████████████
 | 19-infrastructure-scaffolding | 2 | 5min | 3min |
 | 20-openapi-integration-api-reference | 2 | 13min | 7min |
 | 21-developer-guides | 2 | 5min | 3min |
-| 22-reference-content-production | 1 | 3min | 3min |
+| 22-reference-content-production | 2 | 13min | 7min |
 
 ## Accumulated Context
 
@@ -73,6 +73,8 @@ New for v1.4:
 - Single comprehensive Mermaid ER diagram with 8 entities and key columns (not grouped sub-diagrams)
 - OCD endpoints documented inline in reference page (not linked to API Reference -- they use Hono routing, not chanfana)
 - next-themes installed explicitly for Mermaid dark/light theme support (not re-exported by fumadocs-ui)
+- Docs site baseUrl changed from /docs to / for root-level serving (post-deploy fix)
+- Workers Static Assets deployment with wrangler.toml [assets] directive pointing to ./out
 
 ### Pending Todos
 
@@ -99,7 +101,7 @@ New for v1.4:
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 22-01-PLAN.md (Mermaid component, Data Model, OCD Standard Reference, sidebar)
+Stopped at: Completed 22-02-PLAN.md (Changelog, Contributing, search, deployment -- Phase 22 complete)
 Resume file: None
 
 ### Paused Work: Phase 7.1
