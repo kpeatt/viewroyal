@@ -2,8 +2,14 @@
   "root": true,
   "pages": [
     "---Getting Started---",
-    "...",
-    "guides",
-    "api-reference"
+    "guides/getting-started",
+    "---Guides---",
+    "guides/authentication",
+    "guides/pagination",
+    "guides/error-handling",
+    "---API Reference---",
+    "api-reference",
+    "---Reference---",
+    "reference"
   ]
 }
