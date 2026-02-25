@@ -1,6 +1,10 @@
 name = "viewroyal-docs"
 compatibility_date = "2025-04-01"
 
+routes = [
+  { pattern = "docs.viewroyal.ai/*", zone_name = "viewroyal.ai" }
+]
+
 [assets]
 directory = "./out"
 not_found_handling = "404-page"
