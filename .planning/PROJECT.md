@@ -152,4 +152,4 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | Serializer allowlist pattern | Never spread ...row; explicitly construct output objects to prevent field leakage | ✓ Good |
 
 ---
-*Last updated: 2026-02-23 after v1.4 milestone started*
+*Last updated: 2026-02-25 after Phase 23 (cross-link fix)*

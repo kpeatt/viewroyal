@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Gap closure -- Phase 23 Cross-Link Fix
+**Current focus:** Phase 24 Tech Debt Cleanup
 
 ## Current Position
 
@@ -78,6 +78,7 @@ New for v1.4:
 - Workers Static Assets deployment with wrangler.toml [assets] directive pointing to ./out
 - Created api-reference/index.mdx landing page (hand-authored, gitignore exception added)
 - Internal MDX links must omit /docs/ prefix -- fumadocs baseUrl is /
+- .gitignore negation pattern for hand-authored files in auto-generated directories
 
 ### Pending Todos
 
@@ -103,8 +104,8 @@ New for v1.4:
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Completed 23-01-PLAN.md (fix 18 broken cross-links, create API Reference landing page -- Phase 23 complete)
+Last session: 2026-02-25
+Stopped at: Phase 23 complete, ready to plan Phase 24
 Resume file: None
 
 ### Paused Work: Phase 7.1
