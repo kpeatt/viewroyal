@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 24 Tech Debt Cleanup
+**Current focus:** Phase 24 complete -- v1.4 milestone finished
 
 ## Current Position
 
-Phase: 23 (Cross-Link Fix -- gap closure)
+Phase: 24 (Tech Debt Cleanup)
 Plan: 1 of 1 in current phase
-Status: Phase 23 complete
-Last activity: 2026-02-24 -- Plan 23-01 complete (fix 18 broken cross-links, create API Reference landing page)
+Status: Phase 24 complete -- v1.4 milestone complete
+Last activity: 2026-02-24 -- Plan 24-01 complete (fix duplicate prebuild, add deploy script, wrangler dep, DNS config)
 
 Progress: [███████████████████████████████████] 100% (v1.4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 59 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4 + gap closure)
+- Total plans completed: 60 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4 + gap closure)
 - Average duration: 4.0min
 - Total execution time: ~5.5 hours
 
@@ -51,6 +51,7 @@ Progress: [███████████████████████
 | 21-developer-guides | 2 | 5min | 3min |
 | 22-reference-content-production | 2 | 13min | 7min |
 | 23-cross-link-fix | 1 | 2min | 2min |
+| 24-tech-debt-cleanup | 1 | 3min | 3min |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ New for v1.4:
 - Created api-reference/index.mdx landing page (hand-authored, gitignore exception added)
 - Internal MDX links must omit /docs/ prefix -- fumadocs baseUrl is /
 - .gitignore negation pattern for hand-authored files in auto-generated directories
+- npm prebuild lifecycle hook as single entry point for generate-openapi.mjs (not duplicated in build script)
+- docs deploy script: tsc --noEmit && pnpm build && wrangler deploy (typecheck before build)
+- docs.viewroyal.ai custom domain via wrangler.toml routes directive (same pattern as apps/web)
 
 ### Pending Todos
 
@@ -104,8 +108,8 @@ New for v1.4:
 
 ## Session Continuity
 
-Last session: 2026-02-25
-Stopped at: Phase 23 complete, ready to plan Phase 24
+Last session: 2026-02-24
+Stopped at: Phase 24 complete, v1.4 milestone finished
 Resume file: None
 
 ### Paused Work: Phase 7.1
