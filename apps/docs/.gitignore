@@ -3,3 +3,4 @@ out/
 .source/
 node_modules/
 content/docs/api-reference/**/*.mdx
+!content/docs/api-reference/index.mdx
