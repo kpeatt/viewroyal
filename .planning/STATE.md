@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-23)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.4 Developer Documentation Portal -- Phase 22 Reference Content & Production
+**Current focus:** Gap closure -- Phase 23 Cross-Link Fix
 
 ## Current Position
 
-Phase: 22 of 22 (Reference Content & Production)
-Plan: 2 of 2 in current phase
-Status: Phase 22 complete
-Last activity: 2026-02-24 -- Plan 22-02 complete (Changelog, Contributing, search, deployment)
+Phase: 23 (Cross-Link Fix -- gap closure)
+Plan: 1 of 1 in current phase
+Status: Phase 23 complete
+Last activity: 2026-02-24 -- Plan 23-01 complete (fix 18 broken cross-links, create API Reference landing page)
 
 Progress: [███████████████████████████████████] 100% (v1.4)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 58 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4)
+- Total plans completed: 59 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4 + gap closure)
 - Average duration: 4.0min
 - Total execution time: ~5.5 hours
 
@@ -50,6 +50,7 @@ Progress: [███████████████████████
 | 20-openapi-integration-api-reference | 2 | 13min | 7min |
 | 21-developer-guides | 2 | 5min | 3min |
 | 22-reference-content-production | 2 | 13min | 7min |
+| 23-cross-link-fix | 1 | 2min | 2min |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ New for v1.4:
 - next-themes installed explicitly for Mermaid dark/light theme support (not re-exported by fumadocs-ui)
 - Docs site baseUrl changed from /docs to / for root-level serving (post-deploy fix)
 - Workers Static Assets deployment with wrangler.toml [assets] directive pointing to ./out
+- Created api-reference/index.mdx landing page (hand-authored, gitignore exception added)
+- Internal MDX links must omit /docs/ prefix -- fumadocs baseUrl is /
 
 ### Pending Todos
 
@@ -101,7 +104,7 @@ New for v1.4:
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 22-02-PLAN.md (Changelog, Contributing, search, deployment -- Phase 22 complete)
+Stopped at: Completed 23-01-PLAN.md (fix 18 broken cross-links, create API Reference landing page -- Phase 23 complete)
 Resume file: None
 
 ### Paused Work: Phase 7.1
