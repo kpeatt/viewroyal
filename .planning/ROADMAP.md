@@ -62,7 +62,7 @@
 - [x] **Phase 21: Developer Guides** - Hand-written getting started, authentication, pagination, and error handling guides (completed 2026-02-24)
 - [x] **Phase 22: Reference Content & Production** - Data model, OCD reference, changelog, contribution guide, and production deployment at docs.viewroyal.ai (completed 2026-02-24)
 - [x] **Phase 23: Cross-Link Fix & Cleanup** - Fix 18 broken inline links across 7 MDX files and update stale AREF checkboxes (gap closure) (completed 2026-02-25)
-- [ ] **Phase 24: Tech Debt Cleanup** - Deploy script, wrangler dependency, duplicate prebuild, DNS configuration
+- [x] **Phase 24: Tech Debt Cleanup** - Deploy script, wrangler dependency, duplicate prebuild, DNS configuration (completed 2026-02-25)
 
 *Phases 23-24 added by gap closure plan after v1.4 audit (2026-02-24)*
 
@@ -189,4 +189,4 @@ Phases execute in numeric order: 19 → 20 → 21 → 22
 | 21. Developer Guides | 2/2 | Complete    | 2026-02-24 | - |
 | 22. Reference Content & Production | 2/2 | Complete    | 2026-02-24 | - |
 | 23. Cross-Link Fix & Cleanup | 1/1 | Complete    | 2026-02-25 | - |
-| 24. Tech Debt Cleanup | v1.4 | 0/1 | Pending | - |
+| 24. Tech Debt Cleanup | 1/1 | Complete    | 2026-02-25 | - |
