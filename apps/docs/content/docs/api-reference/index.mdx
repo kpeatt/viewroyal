@@ -1,0 +1,22 @@
+---
+title: API Reference
+description: Complete REST API reference for the ViewRoyal.ai civic intelligence platform
+---
+
+The ViewRoyal.ai API provides read-only access to council meeting data for the Town of View Royal, BC. All endpoints return JSON and require an API key unless noted otherwise.
+
+**Base URL:** `https://viewroyal.ai/api/v1/view-royal`
+
+## Endpoint Groups
+
+- [System](/api-reference/system/get_HealthEndpoint) -- Health check and API status (no auth required)
+- [Meetings](/api-reference/meetings/get_ListMeetings) -- Council meetings with agenda items and attendance
+- [People](/api-reference/people/get_ListPeople) -- Council members, mayors, and municipal staff
+- [Matters](/api-reference/matters/get_ListMatters) -- Ongoing issues tracked across meetings
+- [Motions](/api-reference/motions/get_ListMotions) -- Formal proposals with vote results
+- [Bylaws](/api-reference/bylaws/get_ListBylaws) -- Municipal legislation
+- [Search](/api-reference/search/get_SearchEndpoint) -- Full-text search across all content types
+
+## Authentication
+
+All data endpoints require an API key passed via the `X-API-Key` header. See the [Authentication guide](/guides/authentication) for details on obtaining and using API keys.
