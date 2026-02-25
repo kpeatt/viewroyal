@@ -5,6 +5,7 @@
     "dev:web": "pnpm --filter web dev",
     "dev:docs": "pnpm --filter docs dev",
     "build:web": "pnpm --filter web build",
-    "build:docs": "pnpm --filter docs build"
+    "build:docs": "pnpm --filter docs build",
+    "deploy:docs": "pnpm --filter docs deploy"
   }
 }
