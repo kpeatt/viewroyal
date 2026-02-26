@@ -181,3 +181,23 @@ body {
     transform: scale(1.0) translate(0, 0);
   }
 }
+
+/* Table scroll shadow indicators */
+.table-scroll-container {
+  position: relative;
+}
+.table-scroll-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2rem;
+  background: linear-gradient(to right, transparent, white);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.table-scroll-container.has-overflow::after {
+  opacity: 1;
+}
