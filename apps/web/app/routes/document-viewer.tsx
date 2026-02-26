@@ -131,28 +131,48 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
   const JUNK_TAG_RE =
     /\b(logo|signature|letterhead|header|footer|crest|coat of arms|watermark|handwritten|stamp|seal|branding)\b/i;
 
-  // Sort all images by (page, id), split into substantial vs artifacts
+  // Sort all images by (page, id) for consistent ordering
   const sortedImages = [...documentImages].sort(
     (a, b) => a.page - b.page || a.id - b.id,
   );
-  const substantialImages = sortedImages.filter(
-    (img) => (img.width ?? 0) * (img.height ?? 0) >= MIN_IMAGE_AREA,
+
+  // Phase 1: Group images by their database-assigned document_section_id.
+  // This is the primary mapping — the pipeline already knows which section
+  // each image belongs to. Apply substantial image filter to DB-mapped images.
+  const imagesBySection = new Map<number, DocumentImage[]>();
+  const sectionById = new Map(allSections.map((s) => [s.id, s]));
+
+  for (const img of sortedImages) {
+    if (img.document_section_id != null && sectionById.has(img.document_section_id)) {
+      const area = (img.width ?? 0) * (img.height ?? 0);
+      if (area >= MIN_IMAGE_AREA) {
+        const existing = imagesBySection.get(img.document_section_id) || [];
+        existing.push(img);
+        imagesBySection.set(img.document_section_id, existing);
+      }
+    }
+  }
+
+  // Phase 2: Fallback — images without document_section_id use positional
+  // consumption against [Image:] tags, but only for sections that have no
+  // DB-mapped images (avoids double-assigning).
+  const unmappedImages = sortedImages.filter(
+    (img) =>
+      img.document_section_id == null &&
+      (img.width ?? 0) * (img.height ?? 0) >= MIN_IMAGE_AREA,
   );
 
-  // Walk sections in order, match [Image:] tags to substantial images positionally.
-  // For each section, count how many non-junk [Image:] tags it has and consume
-  // that many images from the global queue.
-  let imgCursor = 0;
-  const imagesBySection = new Map<number, DocumentImage[]>();
-
+  let fallbackCursor = 0;
   for (const section of allSections) {
+    if (imagesBySection.has(section.id)) continue;
+
     const tags = section.section_text.match(/\[Image:\s*[^\]]+\]/g) || [];
     const sectionImgs: DocumentImage[] = [];
     for (const tag of tags) {
       const desc = tag.replace(/^\[Image:\s*/, "").replace(/\]$/, "");
       if (JUNK_TAG_RE.test(desc)) continue; // skip junk tags
-      if (imgCursor < substantialImages.length) {
-        sectionImgs.push(substantialImages[imgCursor++]);
+      if (fallbackCursor < unmappedImages.length) {
+        sectionImgs.push(unmappedImages[fallbackCursor++]);
       }
     }
     if (sectionImgs.length > 0) {
