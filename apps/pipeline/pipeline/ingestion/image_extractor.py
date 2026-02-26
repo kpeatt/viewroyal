@@ -240,6 +240,11 @@ def match_images_to_sections(
     Junk images (logos/signatures) are skipped without consuming a tag slot.
     Images matched to a section get section_id and description assigned.
 
+    After processing each section's tags, any remaining images from the same
+    page as the last consumed image are marked unmatched. This prevents
+    multi-image pages (e.g. a collage Gemini described as one image) from
+    bleeding into the next section's tag slots.
+
     Args:
         sections: Ordered list of {section_id, section_text} dicts.
         images: Ordered list of PyMuPDF image dicts (by page + position).
@@ -256,6 +261,7 @@ def match_images_to_sections(
         section_text = section.get("section_text", "")
         descs = parse_image_descriptions(section_text)
 
+        last_consumed_page = None
         for desc in descs:
             # Consume images until we find a non-junk one or run out
             while img_idx < len(images):
@@ -269,8 +275,20 @@ def match_images_to_sections(
 
                 img["section_id"] = section_id
                 img["description"] = desc
+                last_consumed_page = img["page"]
                 kept.append(img)
                 break
+
+        # Skip remaining images from the same page as the last consumed image.
+        # This handles cases where Gemini described multiple images as one
+        # (e.g. "collage") but PyMuPDF extracted them individually.
+        if last_consumed_page is not None:
+            while img_idx < len(images) and images[img_idx]["page"] == last_consumed_page:
+                img = images[img_idx]
+                img_idx += 1
+                img["section_id"] = None
+                img.setdefault("description", None)
+                kept.append(img)
 
     # Any remaining images have no matching tag — keep with no section
     while img_idx < len(images):
