@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A civic transparency platform that scrapes council meeting documents and video from municipal websites, diarizes speakers, extracts structured data with AI, and serves it through a searchable web app with subscription-based email alerts. Citizens can browse meetings, motions, bylaws, people, and matters — search across all content types with hybrid keyword+vector search — ask natural language questions answered by a RAG agent with conversation memory — view AI-generated councillor stance summaries backed by evidence — compare councillors side by side — and subscribe to topics for personalized email digests.
+A civic transparency platform that scrapes council meeting documents and video from municipal websites, diarizes speakers, extracts structured data with AI, and serves it through a searchable web app with subscription-based email alerts and a public REST API with developer documentation. Citizens can browse meetings, motions, bylaws, people, and matters — search across all content types with hybrid keyword+vector search — ask natural language questions answered by a RAG agent with conversation memory — view AI-generated councillor stance summaries backed by evidence — compare councillors side by side — and subscribe to topics for personalized email digests. Developers can integrate via authenticated REST and OCD-standard APIs with interactive documentation at docs.viewroyal.ai.
 
 ## Core Value
 
@@ -69,20 +69,19 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ OCD IDs (UUID v5 deterministic) and page-based pagination matching OpenStates convention — v1.3
 - ✓ OpenAPI 3.1 spec at /api/v1/openapi.json with interactive Swagger UI at /api/v1/docs — v1.3
 - ✓ Self-service API key management page (create, view prefix, revoke with confirmation) — v1.3
+- ✓ pnpm workspace monorepo with apps/web, apps/docs, and apps/vimeo-proxy — v1.4
+- ✓ Fumadocs v16 + Next.js 16 documentation portal with static export — v1.4
+- ✓ Auto-generated API reference from OpenAPI spec with interactive playground — v1.4
+- ✓ Multi-language code examples (curl, JavaScript, Python) on API reference pages — v1.4
+- ✓ Getting Started guide: zero to first API call walkthrough — v1.4
+- ✓ Authentication, Pagination, and Error Handling developer guides — v1.4
+- ✓ Data Model page with Mermaid ER diagram — v1.4
+- ✓ OCD Standard Reference with entity mapping guide — v1.4
+- ✓ docs.viewroyal.ai live on Cloudflare Workers with Orama search — v1.4
 
 ### Active
 
-## Current Milestone: v1.4 Developer Documentation Portal
-
-**Goal:** Ship a fumadocs.dev-powered developer portal at docs.viewroyal.ai with auto-generated API reference, guides, data model docs, and project documentation.
-
-**Target features:**
-- Fumadocs.dev documentation site in apps/docs/
-- Auto-generated API reference from OpenAPI 3.1 spec
-- Hand-written developer guides (getting started, authentication, code examples)
-- Data model documentation
-- Contribution guide and changelog
-- Deployed to docs.viewroyal.ai
+(No active milestone — run `/gsd:new-milestone` to start next)
 
 ### Out of Scope
 
@@ -97,9 +96,9 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ## Context
 
-Shipped v1.3 with ~94,500 LOC (TypeScript + Python), 40+ database tables, 357 automated tests, 5,042 LOC public API.
-Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed.
-v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. v1.2: 3 phases, 5 plans in 12 minutes. v1.3: 4 phases, 14 plans in 50 minutes.
+Shipped v1.4 with ~113,800 LOC (TypeScript + Python + MDX), 40+ database tables, 357 automated tests, 5,042 LOC public API, developer docs portal at docs.viewroyal.ai.
+Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed, fumadocs v16 + Next.js 16 (docs).
+v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. v1.2: 3 phases, 5 plans in 12 minutes. v1.3: 4 phases, 14 plans in 50 minutes. v1.4: 6 phases, 10 plans in 46 minutes.
 
 **Known technical debt:**
 - `bootstrap.sql` is out of date with 30+ applied migrations
@@ -150,6 +149,12 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | UUID v5 via Web Crypto for OCD IDs | No npm dependency, deterministic IDs from entity PKs, Cloudflare-compatible | ✓ Good |
 | Plain Hono handlers for OCD (not chanfana) | OCD has its own spec; OpenAPI generation unnecessary for those endpoints | ✓ Good |
 | Serializer allowlist pattern | Never spread ...row; explicitly construct output objects to prevent field leakage | ✓ Good |
+| Fumadocs v16 + Next.js 16 static export | No server runtime needed; static `out/` served by Workers Static Assets | ✓ Good |
+| Cloudflare Workers Static Assets (not Pages) | Pages deprecated; `[assets]` directive in wrangler.toml is the modern approach | ✓ Good |
+| generateFiles() for OpenAPI MDX | No RSC server available in static export; prebuild generates MDX at build time | ✓ Good |
+| Prebuild script with committed fallback spec | Live API fetch at build time, checked-in openapi.json for offline builds | ✓ Good |
+| pnpm workspace with shamefully-hoist | wrangler/vite plugins need hoisted deps; workspace keeps apps independent | ✓ Good |
+| fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-02-25 after Phase 23 (cross-link fix)*
+*Last updated: 2026-02-25 after v1.4 milestone*

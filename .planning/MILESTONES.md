@@ -91,3 +91,23 @@
 
 ---
 
+
+## v1.4 Developer Documentation Portal (Shipped: 2026-02-25)
+
+**Phases completed:** 6 phases, 10 plans
+**Timeline:** 2 days (2026-02-23 → 2026-02-24), ~46 minutes execution
+**Git range:** 621a2457..3999225e (91 files changed, +19,347/-83 lines)
+**Docs site:** apps/docs/ — fumadocs v16 + Next.js 16, static export on Cloudflare Workers
+
+**Key accomplishments:**
+1. pnpm workspace monorepo with apps/web, apps/docs, and apps/vimeo-proxy as workspace members
+2. Fumadocs v16 + Next.js 16 documentation portal with static export build pipeline and Orama search
+3. Auto-generated API reference from OpenAPI spec with interactive playground and multi-language code samples (curl, JS, Python)
+4. Hand-written developer guides: Getting Started, Authentication, Pagination, and Error Handling
+5. Reference content: Data Model with Mermaid ER diagram, OCD Standard Reference, Changelog, and Contributing guide
+6. Deployed to docs.viewroyal.ai on Cloudflare Workers Static Assets with custom domain routing
+
+**Delivered:** Developers can browse complete API reference documentation with interactive playground, follow guides from zero to first API call in under 5 minutes, understand the data model through ER diagrams, and explore OCD standard mapping — all at docs.viewroyal.ai with full-text search.
+
+---
+
