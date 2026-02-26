@@ -82,11 +82,12 @@ All v1.0-v1.4 decisions archived -- see PROJECT.md Key Decisions table.
 | 6 | Restructure root README as monorepo overview + pipeline README | 2026-02-20 | 18a6d11b | [6-update-main-readme-as-monorepo-readme-an](./quick/6-update-main-readme-as-monorepo-readme-an/) |
 | 7 | Fix broken /docs/-prefixed links on docs.viewroyal.ai | 2026-02-26 | (redeploy) | [7-the-docs-site-has-a-lot-of-broken-links-](./quick/7-the-docs-site-has-a-lot-of-broken-links-/) |
 | 8 | Add footer to site with GitHub and docs links | 2026-02-26 | fa26c100 | [8-add-a-footer-to-the-site](./quick/8-add-a-footer-to-the-site/) |
+| 9 | Fix TypeError in update_detector.py .not_() call | 2026-02-26 | 24dbd665 | [9-fix-typeerror-in-update-detector-py-not-](./quick/9-fix-typeerror-in-update-detector-py-not-/) |
 
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed quick task 8 (add footer to site)
+Stopped at: Completed quick task 9 (fix TypeError in update_detector.py)
 Resume file: None
 
 ### Paused Work: Phase 7.1
