@@ -68,6 +68,7 @@ v1.5 decisions from research:
 ### Pending Todos
 
 1. **Let users supply their own Gemini API key** (api) -- Allow power users to provide their own Gemini key for RAG queries
+2. **Extract images before document extraction for Gemini linking** (pipeline) -- Pass extracted images to Gemini during content extraction so it can link them directly instead of positional matching
 
 ### Blockers/Concerns
 
