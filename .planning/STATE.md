@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 Phase: None (between milestones)
 Plan: -
 Status: v1.4 shipped, awaiting next milestone
-Last activity: 2026-02-25 -- v1.4 Developer Documentation Portal milestone archived
+Last activity: 2026-02-26 - Completed quick task 7: the docs site has a lot of broken links to /docs/
 
 Progress: [███████████████████████████████████] 100% (v1.4)
 
