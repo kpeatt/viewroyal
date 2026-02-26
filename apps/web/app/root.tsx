@@ -20,6 +20,7 @@ import { FlaskConical } from "lucide-react";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Navbar } from "./components/navbar";
+import { Footer } from "./components/footer";
 
 export const meta: Route.MetaFunction = ({ matches }) => {
   const municipality = getMunicipalityFromMatches(matches);
@@ -133,7 +134,7 @@ function NavigationProgress() {
 
 export default function App() {
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
       <NavigationProgress />
       <div className="bg-amber-50 border-b border-amber-200 text-center text-xs text-amber-800 py-1.5 px-4">
         <span className="inline-flex items-center gap-1.5">
@@ -142,8 +143,11 @@ export default function App() {
         </span>
       </div>
       <Navbar />
-      <Outlet />
-    </>
+      <main className="flex-1 flex flex-col">
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
   );
 }
 
