@@ -344,14 +344,8 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
                 <div
                   key={section.id}
                   id={`section-${section.section_order}`}
-                  className={cn("relative", idx > 0 && "mt-6")}
+                  className={cn("relative", idx > 0 && "mt-2")}
                 >
-                  {section.section_title && (
-                    <h2 className="text-base font-semibold text-zinc-900 mb-2 font-serif">
-                      {section.section_title}
-                    </h2>
-                  )}
-
                   <MarkdownContent content={content} />
 
                   {section.page_start != null && (
@@ -362,10 +356,6 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
                         ? `\u2013${section.page_end}`
                         : ""}
                     </div>
-                  )}
-
-                  {idx < allSections.length - 1 && (
-                    <hr className="mt-6 border-zinc-100" />
                   )}
                 </div>
               );
