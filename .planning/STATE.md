@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-25)
+See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Planning next milestone
+**Current focus:** v1.5 Document Experience
 
 ## Current Position
 
-Phase: None (between milestones)
-Plan: -
-Status: v1.4 shipped, awaiting next milestone
-Last activity: 2026-02-26 - Completed quick task 8: Add a footer to the site that links to the github and the docs site
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-26 — Milestone v1.5 started
 
-Progress: [███████████████████████████████████] 100% (v1.4)
+Progress: ░░░░░░░░░░ 0% (v1.5)
 
 ## Performance Metrics
 

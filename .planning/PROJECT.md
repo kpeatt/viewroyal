@@ -81,7 +81,11 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start next)
+**v1.5 Document Experience:**
+- Document viewer with polished typography, spacing, responsive tables, and deduplicated titles
+- Document section links surfaced on meeting detail pages per agenda item
+- All related documents shown on matter pages across every meeting
+- Meeting provenance indicators (Agenda, Minutes, Video) with source links and last-updated timestamp
 
 ### Out of Scope
 
@@ -157,4 +161,4 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-02-25 after v1.4 milestone*
+*Last updated: 2026-02-26 after v1.5 milestone start*
