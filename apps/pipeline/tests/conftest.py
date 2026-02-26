@@ -71,12 +71,15 @@ def mock_supabase():
 
     # All chainable methods return self for fluent API
     for method in [
-        "select", "eq", "neq", "in_", "not_", "lte", "gte", "lt", "gt",
+        "select", "eq", "neq", "in_", "lte", "gte", "lt", "gt",
         "or_", "single", "insert", "upsert", "update", "delete",
         "range", "order", "limit", "is_", "ilike", "like", "filter",
         "contains", "contained_by", "overlap", "text_search",
     ]:
         getattr(table_mock, method).return_value = table_mock
+
+    # .not_ is a property (negation modifier) in postgrest-py, not a method
+    table_mock.not_ = table_mock
 
     table_mock.execute.return_value = MagicMock(data=[], count=0)
     client.table.return_value = table_mock
