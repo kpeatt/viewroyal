@@ -68,7 +68,7 @@
 
 ### v1.5 Document Experience
 
-- [ ] **Phase 25: Document Viewer Polish** - Polished typography, responsive tables, and title deduplication for the document viewer
+- [x] **Phase 25: Document Viewer Polish** - Polished typography, responsive tables, and title deduplication for the document viewer (completed 2026-02-26)
 - [ ] **Phase 26: Meeting Provenance** - Source availability badges with links and last-updated timestamps on meeting pages
 - [ ] **Phase 27: Document Discoverability** - Document links on agenda items and full document trails on matter pages
 - [ ] **Phase 28: Document Navigation** - Table of contents sidebar and cross-references between related documents
@@ -159,7 +159,7 @@ Plans:
 | 22. Reference Content & Production | v1.4 | 2/2 | Complete | 2026-02-24 |
 | 23. Cross-Link Fix & Cleanup | v1.4 | 1/1 | Complete | 2026-02-25 |
 | 24. Tech Debt Cleanup | v1.4 | 1/1 | Complete | 2026-02-25 |
-| 25. Document Viewer Polish | v1.5 | 0/? | Not started | - |
+| 25. Document Viewer Polish | 2/2 | Complete    | 2026-02-26 | - |
 | 26. Meeting Provenance | v1.5 | 0/? | Not started | - |
 | 27. Document Discoverability | v1.5 | 0/? | Not started | - |
 | 28. Document Navigation | v1.5 | 0/? | Not started | - |
