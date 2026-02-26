@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 Phase: None (between milestones)
 Plan: -
 Status: v1.4 shipped, awaiting next milestone
-Last activity: 2026-02-26 - Completed quick task 7: the docs site has a lot of broken links to /docs/
+Last activity: 2026-02-26 - Completed quick task 8: Add a footer to the site that links to the github and the docs site
 
 Progress: [███████████████████████████████████] 100% (v1.4)
 
@@ -81,11 +81,12 @@ All v1.0-v1.4 decisions archived -- see PROJECT.md Key Decisions table.
 | 5 | Fix missing email alerts after pipeline ingestion | 2026-02-20 | dc50f436 | [5-bug-i-didn-t-get-an-email-sent-after-the](./quick/5-bug-i-didn-t-get-an-email-sent-after-the/) |
 | 6 | Restructure root README as monorepo overview + pipeline README | 2026-02-20 | 18a6d11b | [6-update-main-readme-as-monorepo-readme-an](./quick/6-update-main-readme-as-monorepo-readme-an/) |
 | 7 | Fix broken /docs/-prefixed links on docs.viewroyal.ai | 2026-02-26 | (redeploy) | [7-the-docs-site-has-a-lot-of-broken-links-](./quick/7-the-docs-site-has-a-lot-of-broken-links-/) |
+| 8 | Add footer to site with GitHub and docs links | 2026-02-26 | fa26c100 | [8-add-a-footer-to-the-site](./quick/8-add-a-footer-to-the-site/) |
 
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed quick task 7 (docs redeploy)
+Stopped at: Completed quick task 8 (add footer to site)
 Resume file: None
 
 ### Paused Work: Phase 7.1
