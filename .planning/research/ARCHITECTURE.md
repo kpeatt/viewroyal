@@ -1,496 +1,541 @@
-# Architecture Patterns: v1.4 Developer Documentation Portal
+# Architecture Patterns: v1.5 Document Experience
 
-**Domain:** Fumadocs.dev documentation site integration into existing monorepo
-**Researched:** 2026-02-23
+**Domain:** Document viewer improvements, document-to-motion/matter linking, meeting provenance indicators
+**Researched:** 2026-02-26
 
 ---
 
 ## 1. Current Architecture Summary
 
-```
-viewroyal.ai (Cloudflare Workers)
-  apps/web/         React Router 7, Vite 7, Cloudflare Workers
-  apps/vimeo-proxy/  Cloudflare Worker + Puppeteer
-  apps/pipeline/     Python ETL (uv, local execution)
-```
-
-**Key characteristics:**
-- No root-level pnpm workspace -- each app is independently managed
-- `apps/web/pnpm-workspace.yaml` has `packages: ["."]` (self-contained)
-- `apps/vimeo-proxy/` has its own independent `package.json`
-- DNS: `viewroyal.ai/*` routed to web Worker via `wrangler.toml` routes
-- OpenAPI 3.1 spec served at runtime: `https://viewroyal.ai/api/v1/openapi.json`
-- Node.js v25.3.0 available (exceeds fumadocs minimum of v22)
-
----
-
-## 2. Recommended Architecture
-
-### High-Level Deployment
+### Existing Data Model (Document-Related Tables)
 
 ```
-viewroyal.ai/*           --> Cloudflare Worker (apps/web/ - React Router 7)
-docs.viewroyal.ai/*      --> Cloudflare Pages (apps/docs/ - Next.js 16 static export)
-vimeo-proxy.kpeatt.workers.dev --> Cloudflare Worker (apps/vimeo-proxy/)
-```
-
-### Why Static Export to Cloudflare Pages (Not Workers)
-
-**Decision: Use `next build` with `output: 'export'` deployed to Cloudflare Pages.**
-
-Rationale:
-1. **Fumadocs does not work on Edge runtime** -- the official docs explicitly state this
-2. **OpenNext/Workers adds unnecessary complexity** -- docs are pure content, no server-side features needed
-3. **Static export is the simplest path** -- generates HTML/CSS/JS files, served from Cloudflare CDN
-4. **Cloudflare Pages is free** -- no Worker execution costs, just CDN serving
-5. **Pages supports custom subdomains natively** -- `docs.viewroyal.ai` CNAME to `<project>.pages.dev`
-6. **Search works client-side in static mode** -- fumadocs stores search indexes statically, computed in browser
-7. **No OpenNext adapter needed** -- static HTML export is vanilla Next.js, no Cloudflare-specific adapter
-
-The only feature lost with static export vs. SSR is server-side search (browser-computed search is sufficient for docs).
-
-### Component Boundaries
-
-| Component | Location | Responsibility | Communicates With |
-|-----------|----------|---------------|-------------------|
-| Docs site | `apps/docs/` | Developer documentation, API reference | Fetches OpenAPI spec at build time from viewroyal.ai |
-| Web app | `apps/web/` | Main civic app + API server | Serves OpenAPI spec at `/api/v1/openapi.json` |
-| Pipeline | `apps/pipeline/` | ETL data ingestion | Writes to Supabase (no docs interaction) |
-| Vimeo proxy | `apps/vimeo-proxy/` | Video URL extraction | No docs interaction |
-
-### Data Flow for OpenAPI Spec
-
-```
-Build Time:
-  apps/docs/ build script
-    --> fetch https://viewroyal.ai/api/v1/openapi.json
-    --> save to apps/docs/openapi.json (checked into repo as fallback)
-    --> fumadocs-openapi generates API reference pages
-    --> next build --output export
-    --> deploy static files to Cloudflare Pages
-
-Runtime:
-  Browser hits docs.viewroyal.ai
-    --> Cloudflare Pages CDN serves static HTML/CSS/JS
-    --> Client-side search indexes computed in browser
-    --> API playground links point to viewroyal.ai/api/v1/*
-```
-
----
-
-## 3. Detailed Component Architecture
-
-### 3.1 `apps/docs/` Project Structure
-
-```
-apps/docs/
-  app/
-    layout.tsx              # Root layout with fumadocs-ui DocsLayout
-    global.css              # Tailwind CSS 4 + fumadocs preset imports
-    docs/
-      [[...slug]]/
-        page.tsx            # Catch-all route rendering MDX + OpenAPI pages
-    api-reference/
-      [[...slug]]/
-        page.tsx            # OpenAPI API reference pages (if separate section)
-  content/
-    docs/
-      index.mdx             # Landing page
-      getting-started/
-        index.mdx            # Quick start guide
-        authentication.mdx   # API key auth guide
-        code-examples.mdx    # Language-specific examples
-      guides/
-        search.mdx           # Search API guide
-        pagination.mdx       # Cursor vs page-based pagination
-        ocd-api.mdx          # Open Civic Data endpoints
-        webhooks.mdx         # (future) Webhook integration
-      data-model/
-        overview.mdx         # Entity relationship overview
-        meetings.mdx         # Meetings data model
-        people.mdx           # People data model
-        matters.mdx          # Matters data model
-        motions.mdx          # Motions data model
-        bylaws.mdx           # Bylaws data model
-      contributing/
-        index.mdx            # Contribution guide
-        architecture.mdx     # System architecture overview
-      meta.json              # Navigation tree definition
-    openapi/                 # Generated API reference pages (from script)
-      meta.json
-  lib/
-    source.ts               # Fumadocs loader configuration
-    openapi.ts              # OpenAPI instance configuration
-  components/
-    api-page.tsx            # APIPage component for OpenAPI rendering
-    api-page.client.tsx     # Client-side API page config
-  scripts/
-    generate-openapi.mts    # Build-time script to fetch + generate API docs
-  openapi.json              # Checked-in OpenAPI spec (fallback)
-  source.config.ts          # Fumadocs MDX collection definitions
-  next.config.mjs           # Next.js config with static export
-  tailwind.config.ts        # Tailwind config (if needed beyond CSS imports)
-  tsconfig.json
-  package.json
-  pnpm-workspace.yaml       # packages: ["."] (self-contained like other apps)
-```
-
-### 3.2 Key Configuration Files
-
-#### `next.config.mjs`
-
-```js
-import { createMDX } from 'fumadocs-mdx/config';
-
-const withMDX = createMDX();
-
-/** @type {import('next').NextConfig} */
-const config = {
-  output: 'export',
-  images: { unoptimized: true },
-  // trailingSlash: true,  // optional, for cleaner URLs on static hosts
-};
-
-export default withMDX(config);
-```
-
-#### `source.config.ts`
-
-```ts
-import { defineCollections, defineConfig } from 'fumadocs-mdx/config';
-import { z } from 'zod';
-
-export const docs = defineCollections({
-  type: 'doc',
-  dir: 'content/docs',
-  schema: z.object({
-    title: z.string(),
-    description: z.string().optional(),
-    // additional frontmatter fields as needed
-  }),
-});
-
-export default defineConfig({ collections: [docs] });
-```
-
-#### `lib/openapi.ts`
-
-```ts
-import { createOpenAPI } from 'fumadocs-openapi/server';
-
-export const openapi = createOpenAPI({
-  // Use local checked-in copy (generated by build script)
-  input: ['./openapi.json'],
-});
-```
-
-#### `scripts/generate-openapi.mts` (Build-time spec fetch)
-
-```ts
-import { writeFileSync } from 'node:fs';
-
-const SPEC_URL = 'https://viewroyal.ai/api/v1/openapi.json';
-const OUTPUT = './openapi.json';
-
-async function fetchSpec() {
-  console.log(`Fetching OpenAPI spec from ${SPEC_URL}...`);
-  const res = await fetch(SPEC_URL);
-  if (!res.ok) {
-    console.warn(`Failed to fetch spec (${res.status}), using existing copy`);
-    return;
-  }
-  const spec = await res.json();
-  writeFileSync(OUTPUT, JSON.stringify(spec, null, 2));
-  console.log(`Spec written to ${OUTPUT}`);
-}
-
-fetchSpec().catch(console.error);
-```
-
-#### `package.json` scripts
-
-```json
-{
-  "scripts": {
-    "dev": "next dev",
-    "prebuild": "node --import tsx scripts/generate-openapi.mts",
-    "build": "next build",
-    "deploy": "pnpm run build && wrangler pages deploy out --project-name viewroyal-docs",
-    "typecheck": "tsc --noEmit"
-  }
-}
-```
-
-### 3.3 OpenAPI Spec Consumption Strategy
-
-**Recommended: Hybrid approach (build-time fetch + checked-in fallback)**
-
-1. The `prebuild` script attempts to fetch the live spec from `viewroyal.ai/api/v1/openapi.json`
-2. If fetch succeeds, it overwrites `openapi.json` in the docs root
-3. If fetch fails (network issue, site down), the existing checked-in copy is used
-4. The `openapi.json` file IS checked into git as a fallback
-5. fumadocs-openapi reads the local file to generate API reference pages
-
-**Why not a remote URL at build time directly in fumadocs config?**
-- fumadocs-openapi `input` accepts URLs, but a pre-fetch script gives better error handling
-- A checked-in fallback means builds never fail due to network issues
-- The checked-in spec also serves as a diff-able record of API changes
-
-**When to update the spec:**
-- Automatically during every docs build (prebuild script)
-- Manually by running `node --import tsx scripts/generate-openapi.mts` and committing
-- As part of CI/CD: API changes in apps/web trigger docs rebuild
-
-### 3.4 Fumadocs Version Strategy
-
-**Decision: Use fumadocs v16 (latest) with Next.js 16.**
-
-| Package | Version | Requires |
-|---------|---------|----------|
-| fumadocs-core | ^16.6.5 | Next.js 16, React 19, Zod 4 |
-| fumadocs-ui | ^16.6.5 | Next.js 16, React 19, fumadocs-core 16 |
-| fumadocs-mdx | ^14.2.8 | Next.js 15+ or 16, fumadocs-core 15+ or 16 |
-| fumadocs-openapi | ^10.3.9 | fumadocs-core ^16.5, fumadocs-ui ^16.5, React 19 |
-| next | ^16.1.6 | Node.js 22+ (have v25.3.0) |
-
-**Rationale for v16 over v15:**
-- fumadocs-openapi v10 (current/latest) requires fumadocs-core/ui ^16.5 -- there is no way to use the latest OpenAPI integration with fumadocs v15
-- fumadocs-openapi v5.x worked with Next.js 15, but it used a different API surface and is now significantly behind
-- Next.js 16 is stable (released, multiple patch versions) and works with static export
-- The docs site is a new greenfield app -- no migration cost, no risk to existing apps/web
-- Next.js 16 has broader Cloudflare compatibility via OpenNext (though we use static export, not relevant but good to know)
-
-**Note on Zod version:** fumadocs-core v16 requires Zod 4.x as a peer dependency. The main app (apps/web) uses Zod 4.3.6. Since apps/docs is a fully independent package with its own node_modules, there is zero risk of Zod version conflicts.
-
----
-
-## 4. Workspace Integration Pattern
-
-### Current State: Independent Apps, No Root Workspace
-
-The repo currently has no root `pnpm-workspace.yaml`. Each app manages its own dependencies independently. This is an unconventional but functional pattern.
-
-**Recommendation: Keep the independent app pattern.** Do not create a root workspace.
-
-Rationale:
-1. **Zero coupling** -- `apps/docs/` has completely different dependencies (Next.js 16, fumadocs) from `apps/web/` (React Router 7, Vite 7). A shared workspace would create phantom dependency risks
-2. **Independent deployment** -- docs deploy to Cloudflare Pages, web deploys to Cloudflare Workers. Different CI pipelines, different build tools
-3. **Consistency** -- matches how `apps/web/` and `apps/vimeo-proxy/` already work
-4. **No shared packages** -- there are no shared UI libraries or utilities between apps. The docs site has no runtime dependency on the web app
-
-### `apps/docs/pnpm-workspace.yaml`
-
-```yaml
-packages: ["."]
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-```
-
-(Mirrors the pattern in `apps/web/pnpm-workspace.yaml`)
-
----
-
-## 5. DNS and Deployment Architecture
-
-### Cloudflare Pages Project Setup
-
-```
-Project name: viewroyal-docs
-Production branch: main
-Build command: pnpm run build
-Build output directory: out
-Root directory: apps/docs
-```
-
-### DNS Configuration
-
-Since `viewroyal.ai` is already a Cloudflare zone:
-
-1. In Cloudflare Pages dashboard: Add custom domain `docs.viewroyal.ai` to the `viewroyal-docs` project
-2. Cloudflare automatically creates the CNAME record: `docs.viewroyal.ai -> viewroyal-docs.pages.dev`
-3. SSL certificate is auto-provisioned by Cloudflare
-
-No manual DNS records needed -- Cloudflare handles it since the zone is already managed.
-
-### Deployment Pipeline
-
-```
-Manual (current pattern):
-  cd apps/docs
-  pnpm run build   # prebuild fetches spec, next build exports to /out
-  wrangler pages deploy out --project-name viewroyal-docs
-
-Future (Cloudflare Pages Git integration):
-  Push to main branch
-  Cloudflare Pages auto-builds from apps/docs/ root directory
-  Build command: cd apps/docs && pnpm install && pnpm run build
-  Output directory: apps/docs/out
-```
-
-**Note:** Cloudflare Pages Git integration supports configuring a root directory within the repo, making monorepo deployment straightforward.
-
-### No Conflict with Existing Worker
-
-The existing `apps/web/wrangler.toml` routes `viewroyal.ai/*` to the Worker. Since `docs.viewroyal.ai` is a different subdomain, there is zero routing conflict. Cloudflare resolves subdomains independently:
-- `viewroyal.ai` -> Worker (apps/web)
-- `docs.viewroyal.ai` -> Pages (apps/docs)
-
----
-
-## 6. Build Pipeline Integration
-
-### Build Order and Dependencies
-
-```
-apps/web (must be deployed first for OpenAPI spec availability)
+meetings
+  |-- has_agenda, has_minutes, has_transcript (boolean flags)
+  |-- agenda_url, minutes_url, video_url (source links)
+  |-- updated_at (timestamp)
   |
-  v
-apps/docs (fetches spec from deployed apps/web, then builds)
+  |-- documents (source PDFs)
+  |     |-- meeting_id FK
+  |     |-- title, category, source_url, file_path, page_count
+  |     |
+  |     |-- extracted_documents (logical docs within a PDF)
+  |     |     |-- document_id FK, agenda_item_id FK
+  |     |     |-- title, document_type, page_start, page_end
+  |     |     |-- summary, key_facts (jsonb)
+  |     |     |
+  |     |     |-- document_images
+  |     |     |     |-- extracted_document_id FK
+  |     |     |     |-- r2_key, page, description, dimensions
+  |     |     |
+  |     |     |-- document_sections (content chunks)
+  |     |           |-- extracted_document_id FK, document_id FK
+  |     |           |-- agenda_item_id FK
+  |     |           |-- section_title, section_text (markdown)
+  |     |           |-- section_order, page_start, page_end
+  |     |           |-- embedding halfvec(384), text_search tsvector
+  |
+  |-- agenda_items
+  |     |-- meeting_id FK, matter_id FK
+  |     |-- title, category, source_file
+  |     |
+  |     |-- motions
+  |           |-- agenda_item_id FK, meeting_id FK
+  |
+  |-- matters
+        |-- agenda_items (via matter_id FK on agenda_items)
 ```
 
-The docs site has a **build-time dependency** on the web app being deployed (for the OpenAPI spec). However, the checked-in `openapi.json` fallback means docs can always build even if the web app is unreachable.
+### Existing Routes and Components
 
-### CI/CD Considerations
+| Route | File | Purpose |
+|-------|------|---------|
+| `/meetings/:id` | `meeting-detail.tsx` | Meeting page with tabs: overview, agenda, motions, participants |
+| `/meetings/:id/documents` | `meeting-documents.tsx` | Document listing page for a meeting |
+| `/meetings/:id/documents/:docId` | `document-viewer.tsx` | Individual extracted document viewer |
+| `/matters/:id` | `matter-detail.tsx` | Matter detail with lifecycle timeline |
 
-**Current state:** No CI/CD pipeline -- manual deploys via `pnpm run deploy` from apps/web and `wrangler deploy` from apps/vimeo-proxy.
+| Component | File | Purpose |
+|-----------|------|---------|
+| `AgendaOverview` | `meeting/AgendaOverview.tsx` | Agenda item list with expansion |
+| `DocumentSections` | `meeting/DocumentSections.tsx` | Inline doc sections within agenda items |
+| `MarkdownContent` | `markdown-content.tsx` | Lightweight markdown-to-HTML renderer |
+| `FormattedText` | `formatted-text.tsx` | Official document styling (minutes) |
+| `MeetingTabs` | `meeting/MeetingTabs.tsx` | Tab navigation on meeting detail |
 
-**Recommended for docs:** Same manual pattern initially:
-```bash
-cd apps/docs
-pnpm run deploy  # fetches spec + builds + deploys to Pages
-```
+### Existing Service Functions
 
-**Future enhancement:** Cloudflare Pages Git integration for automatic deploys on push to main. This eliminates the need to run local builds for docs.
+| Function | File | What It Fetches |
+|----------|------|----------------|
+| `getMeetingById` | `services/meetings.ts` | Meeting + agenda items + motions + votes + transcript + attendance |
+| `getDocumentSectionsForMeeting` | `services/meetings.ts` | All document_sections for a meeting's documents |
+| `getExtractedDocumentsForMeeting` | `services/meetings.ts` | All extracted_documents for a meeting |
+| `getMatterById` | `services/matters.ts` | Matter + agenda_items with meetings + motions + votes |
 
-### Triggering Docs Rebuild After API Changes
+### Key Linking Paths Already in Place
 
-When the API spec changes (new endpoints, schema changes in apps/web):
-1. Deploy apps/web first (`cd apps/web && pnpm run deploy`)
-2. Then rebuild docs (`cd apps/docs && pnpm run deploy`)
-3. The prebuild script fetches the updated spec automatically
+1. **Document -> Agenda Item**: `extracted_documents.agenda_item_id` and `document_sections.agenda_item_id` (both FKs exist)
+2. **Agenda Item -> Matter**: `agenda_items.matter_id` FK
+3. **Agenda Item -> Meeting**: `agenda_items.meeting_id` FK
+4. **Document -> Meeting**: `documents.meeting_id` FK
+5. **Motion -> Agenda Item**: `motions.agenda_item_id` FK
 
-This is a manual two-step process. An automated solution (GitHub Actions workflow that deploys docs after web) is a future enhancement.
+**The linking chain document -> agenda_item -> matter and document -> agenda_item -> motion already exists in the database.** The v1.5 work is about surfacing these links in the UI, not creating new schema.
 
 ---
 
-## 7. Patterns to Follow
+## 2. Architecture for v1.5 Features
 
-### Pattern 1: Content-Code Separation
+### Feature 1: Document Viewer Improvements
 
-**What:** Keep MDX content in `content/docs/` and code in `app/`, `lib/`, `components/`
-**When:** Always -- this is the fumadocs convention
-**Why:** Clean separation enables non-developers to contribute documentation via MDX without touching app code
+**Current state:** `document-viewer.tsx` renders sections with `MarkdownContent`, which uses Tailwind's `prose` utility classes. Tables and headings work but lack polish.
 
-### Pattern 2: Generated OpenAPI + Hand-Written Guides
+**Architecture approach:** Enhance `MarkdownContent` component -- no new components needed.
 
-**What:** Auto-generate API reference from the OpenAPI spec, hand-write conceptual guides
-**When:** API reference pages should never be manually maintained
-**Why:** Auto-generated reference stays in sync with the API. Hand-written guides provide context, tutorials, and examples that auto-generation cannot
+```
+document-viewer.tsx
+  |-- MarkdownContent (enhanced prose classes, responsive table wrapper)
+  |-- [existing] breadcrumb, header, summary, key facts, gallery
+```
 
-### Pattern 3: MDX File Generation for OpenAPI (Not Virtual Files)
+**What changes:**
 
-**What:** Use `generateFiles()` to create physical MDX files from the OpenAPI spec, not the virtual files approach
-**When:** For static export deployment
-**Why:** Static export requires all pages to exist at build time. Virtual files use a runtime loader that requires RSC server capabilities. MDX file generation produces actual files that `next build --export` can process.
+| Change | Where | Type |
+|--------|-------|------|
+| Table responsiveness | `MarkdownContent` | Wrap tables in `overflow-x-auto` container |
+| Typography polish | `MarkdownContent` | Refine prose heading scales, spacing, font-weight |
+| Title deduplication | `document-viewer.tsx` | Compare `extractedDoc.title` with first section title, skip if duplicate |
+| Responsive tables | `MarkdownContent` | Add `prose-table:w-full` and horizontal scroll wrapper via CSS or post-processing |
 
-**Note:** This is a critical architectural decision. The fumadocs docs describe two approaches: MDX generation and virtual files. Only MDX generation works reliably with `output: 'export'`.
+**Why modify `MarkdownContent` not create a new component:** `MarkdownContent` is used in both `document-viewer.tsx` and `DocumentSections.tsx` (inline agenda item docs). Improvements to the shared component benefit both contexts. The current component uses `marked` for SSR-safe synchronous rendering -- this approach should be preserved.
 
-### Pattern 4: Fallback-First External Dependencies
+**Title deduplication strategy:** The pipeline sometimes extracts the document title as the first section's `section_title`. The viewer should compare `extractedDoc.title` against `sections[0].section_title` and skip rendering the section title if they match (case-insensitive, trimmed). This is a presentation-layer fix, not a data fix.
 
-**What:** Always have a checked-in fallback for any data fetched at build time
-**When:** The OpenAPI spec, any external content
-**Why:** Builds should never fail due to network issues. The fallback ensures deterministic builds.
+### Feature 2: Document Section Links on Meeting Detail (Per Agenda Item)
+
+**Current state:** `AgendaOverview` already filters `documentSections` and `extractedDocuments` by `agenda_item_id` and renders them via `DocumentSections` component inside the expanded agenda item. Documents are shown as expandable accordions with content inline.
+
+**What needs to change:** Add links from the inline document sections to the full document viewer. Currently, `DocumentSections` shows the content inline but does not link to `/meetings/:id/documents/:docId`.
+
+```
+AgendaOverview
+  |-- AgendaItemRow (expanded)
+        |-- DocumentSections (already rendered)
+              |-- GroupedDocumentSections
+                    |-- [NEW] "View Full Document" link per extracted doc
+                    |-- [existing] section title, summary, content accordion
+```
+
+**Architecture approach:** Add a `meetingId` prop to `DocumentSections` and render a `Link` to `/meetings/${meetingId}/documents/${ed.id}` in each extracted document header row. This is a small prop-threading change.
+
+| Change | Where | Type |
+|--------|-------|------|
+| Add `meetingId` prop | `DocumentSections` interface | Prop addition |
+| Render Link to viewer | `GroupedDocumentSections` | Add Link element per extracted doc |
+| Thread prop from parent | `AgendaOverview` -> `AgendaItemRow` -> `DocumentSections` | Prop threading |
+| Pass `meetingId` from loader | `meeting-detail.tsx` | Already available as `meeting.id` |
+
+**Data flow (unchanged):** The meeting-detail loader already fetches `documentSections` and `extractedDocuments` in parallel via `getDocumentSectionsForMeeting` and `getExtractedDocumentsForMeeting`. No new queries needed.
+
+### Feature 3: All Related Documents on Matter Pages
+
+**Current state:** `matter-detail.tsx` shows a lifecycle timeline of agenda items per meeting. It does NOT show documents at all. The `getMatterById` service fetches `agenda_items` with `meetings` and `motions` but not documents.
+
+**Architecture approach:** Fetch documents related to a matter's agenda items and render them in the timeline.
+
+```
+matter-detail.tsx (loader)
+  |-- getMatterById (existing)
+  |-- [NEW] getDocumentsForMatter (new service function)
+  |
+matter-detail.tsx (component)
+  |-- Timeline
+        |-- TimelineItem (existing agenda item card)
+              |-- [NEW] DocumentLinks section per agenda item
+```
+
+**New service function:**
+
+```typescript
+// services/matters.ts (or services/documents.ts)
+export async function getDocumentsForMatter(
+  supabase: SupabaseClient,
+  matterId: string
+): Promise<Map<number, ExtractedDocument[]>> {
+  // Step 1: Get agenda_item_ids for this matter
+  const { data: items } = await supabase
+    .from("agenda_items")
+    .select("id")
+    .eq("matter_id", matterId);
+
+  if (!items || items.length === 0) return new Map();
+
+  const itemIds = items.map(i => i.id);
+
+  // Step 2: Get extracted_documents linked to those agenda items
+  const { data: docs } = await supabase
+    .from("extracted_documents")
+    .select("id, document_id, agenda_item_id, title, document_type, page_start, page_end, summary, key_facts, created_at")
+    .in("agenda_item_id", itemIds)
+    .order("created_at", { ascending: true });
+
+  // Step 3: Group by agenda_item_id
+  const grouped = new Map<number, ExtractedDocument[]>();
+  for (const doc of docs || []) {
+    const existing = grouped.get(doc.agenda_item_id!) || [];
+    existing.push(doc as ExtractedDocument);
+    grouped.set(doc.agenda_item_id!, existing);
+  }
+  return grouped;
+}
+```
+
+**Why a separate function, not modifying `getMatterById`:** The existing query is already complex (nested joins for agenda_items -> meetings -> organizations, motions -> votes -> people). Adding document joins would make it unwieldy. A parallel fetch is cleaner and keeps the loader fast.
+
+**Component change:** In each timeline item in `matter-detail.tsx`, render document links when they exist. This needs the meeting_id to construct the viewer URL. The meeting_id is already available from `item.meeting_id` in the timeline data.
+
+| Change | Where | Type |
+|--------|-------|------|
+| `getDocumentsForMatter` | `services/matters.ts` | New function |
+| Loader parallel fetch | `matter-detail.tsx` loader | Add to Promise.all |
+| Document links in timeline | `matter-detail.tsx` component | New section in timeline card |
+
+### Feature 4: Meeting Provenance Indicators
+
+**Current state:** The meeting detail page shows `has_agenda`, `has_minutes`, `has_transcript` booleans, `agenda_url`, `minutes_url`, `video_url` links, and `updated_at` timestamp. However, these are not surfaced as explicit provenance indicators -- they are scattered across the header and tab navigation.
+
+**Architecture approach:** Create a new `MeetingProvenance` component that shows data source badges with links.
+
+```
+meeting-detail.tsx
+  |-- header section
+        |-- [NEW] MeetingProvenance component
+              |-- Agenda badge (links to agenda_url if present)
+              |-- Minutes badge (links to minutes_url if present)
+              |-- Video badge (links to video_url if present)
+              |-- "Last updated" timestamp
+```
+
+**Data required (already loaded):** The `meeting` object from `getMeetingById` already contains `has_agenda`, `has_minutes`, `has_transcript`, `agenda_url`, `minutes_url`, `video_url`, and `updated_at`.
+
+No new queries needed. This is a pure presentation component.
+
+| Change | Where | Type |
+|--------|-------|------|
+| `MeetingProvenance` | New: `components/meeting/MeetingProvenance.tsx` | New component |
+| Render in header | `meeting-detail.tsx` | Add below existing header |
+
+**Badge design:**
+
+```
+[Agenda icon] Agenda    [Minutes icon] Minutes    [Video icon] Video
+ green if has_agenda     green if has_minutes      green if has_transcript
+ links to agenda_url     links to minutes_url      links to video_url
+ gray if not present     gray if not present       gray if not present
+
+Last updated: Feb 24, 2026
+```
 
 ---
 
-## 8. Anti-Patterns to Avoid
+## 3. Component Boundaries
 
-### Anti-Pattern 1: Root pnpm Workspace
+### New Components
 
-**What:** Creating a `pnpm-workspace.yaml` at the repo root to link apps/web and apps/docs
-**Why bad:** Different frameworks (React Router 7 vs Next.js 16), different React versions possible, different build tools (Vite vs Next.js). Shared hoisting would cause version conflicts and phantom dependencies
-**Instead:** Keep each app self-contained with its own workspace config
+| Component | File | Responsibility | Props |
+|-----------|------|---------------|-------|
+| `MeetingProvenance` | `components/meeting/MeetingProvenance.tsx` | Source indicator badges | `meeting: Meeting` |
 
-### Anti-Pattern 2: Sharing UI Components Between Web and Docs
+### Modified Components
 
-**What:** Creating a `packages/ui/` shared component library
-**Why bad:** apps/web uses React Router 7 + Tailwind CSS 4 + shadcn/ui. apps/docs uses Next.js 16 + fumadocs-ui. The component models are incompatible. Trying to share would create a maintenance nightmare
-**Instead:** Let each app own its UI stack entirely
+| Component | File | Change |
+|-----------|------|--------|
+| `MarkdownContent` | `components/markdown-content.tsx` | Enhanced prose classes, table responsiveness |
+| `DocumentSections` | `components/meeting/DocumentSections.tsx` | Add `meetingId` prop, render viewer links |
+| `AgendaOverview` | `components/meeting/AgendaOverview.tsx` | Thread `meetingId` to DocumentSections |
 
-### Anti-Pattern 3: Runtime OpenAPI Spec Fetching
+### Modified Routes
 
-**What:** Having fumadocs fetch the OpenAPI spec from the live URL at page render time
-**Why bad:** With static export, there is no runtime. And even with SSR, it couples docs availability to API availability
-**Instead:** Fetch at build time, check in as fallback
+| Route | File | Change |
+|-------|------|--------|
+| `document-viewer.tsx` | `routes/document-viewer.tsx` | Title deduplication logic |
+| `meeting-detail.tsx` | `routes/meeting-detail.tsx` | Add MeetingProvenance component |
+| `matter-detail.tsx` | `routes/matter-detail.tsx` | Fetch documents, render in timeline |
 
-### Anti-Pattern 4: Deploying Docs to Cloudflare Workers via OpenNext
+### Modified Services
 
-**What:** Using @opennextjs/cloudflare to deploy the docs site as a Worker
-**Why bad:** Adds significant complexity (Worker size limits, OpenNext adapter quirks). Docs are pure static content -- no server features needed. Workers cost compute per request; Pages CDN is free
-**Instead:** Static export to Cloudflare Pages
+| Function | File | Change |
+|----------|------|--------|
+| `getDocumentsForMatter` | `services/matters.ts` | New function |
 
-### Anti-Pattern 5: Embedding Docs in the Main Web App
+### Unchanged
 
-**What:** Adding fumadocs as a dependency of apps/web and serving docs from viewroyal.ai/docs
-**Why bad:** apps/web is a React Router 7 app on Cloudflare Workers. Fumadocs is a Next.js framework. They cannot coexist in the same deployment. Even if they could, it would bloat the Worker bundle far beyond size limits
-**Instead:** Separate app on separate subdomain
+| Component/File | Why Unchanged |
+|----------------|--------------|
+| `meeting-documents.tsx` | Document listing page is unaffected |
+| `services/meetings.ts` | All needed queries already exist |
+| `MeetingTabs` | Tab structure unchanged |
+| `FormattedText` | Minutes renderer, separate from document viewer |
+| Database schema | All FKs already in place |
+
+---
+
+## 4. Data Flow
+
+### Meeting Detail Page (Existing + Changes)
+
+```
+Loader:
+  Promise.all([
+    getMeetingById(supabase, id),              // unchanged
+    getDocumentSectionsForMeeting(supabase, id), // unchanged
+    getExtractedDocumentsForMeeting(supabase, id) // unchanged
+  ])
+
+Component:
+  <header>
+    [existing title, date, organization]
+    <MeetingProvenance meeting={meeting} />       // NEW
+  </header>
+  <MeetingTabs />                                  // unchanged
+  <AgendaOverview
+    items={agendaItems}
+    documentSections={documentSections}
+    extractedDocuments={extractedDocuments}
+    meetingId={meeting.id}                         // NEW prop
+    ...
+  />
+    |-- AgendaItemRow (expanded)
+          |-- DocumentSections
+                meetingId={meetingId}               // NEW prop
+                |-- Link to /meetings/{id}/documents/{docId}  // NEW
+```
+
+### Matter Detail Page (Existing + Changes)
+
+```
+Loader:
+  Promise.all([
+    getMatterById(supabase, id),                   // unchanged
+    getDocumentsForMatter(supabase, id)            // NEW
+  ])
+
+Component:
+  <Timeline>
+    {timeline.map(item => (
+      <TimelineItem>
+        [existing: title, summary, debate_summary, motions]
+        {documentsForItem && documentsForItem.length > 0 && (
+          <DocumentLinks                             // NEW section
+            documents={documentsForItem}
+            meetingId={item.meeting_id}
+          />
+        )}
+      </TimelineItem>
+    ))}
+  </Timeline>
+```
+
+### Document Viewer (Existing + Changes)
+
+```
+Loader: unchanged
+
+Component:
+  <header>
+    [existing breadcrumb, title, metadata]
+  </header>
+  <sections>
+    {sections.map((section, idx) => {
+      // NEW: skip first section title if it matches document title
+      const skipTitle = idx === 0 &&
+        section.section_title?.trim().toLowerCase() ===
+        extractedDoc.title.trim().toLowerCase();
+
+      return (
+        <div>
+          {section.section_title && !skipTitle && (
+            <h2>{section.section_title}</h2>
+          )}
+          <MarkdownContent content={content} />    // enhanced styling
+        </div>
+      );
+    })}
+  </sections>
+```
+
+---
+
+## 5. Patterns to Follow
+
+### Pattern 1: Parallel Loader Fetches with Promise.all
+
+**What:** All independent Supabase queries run in parallel in the route loader.
+**When:** Always -- this is the existing pattern throughout the codebase.
+**Why:** SSR response time is bounded by the slowest query, not the sum.
+
+The matter-detail page should add `getDocumentsForMatter` to its existing `Promise.all` rather than making it sequential.
+
+### Pattern 2: Prop Threading for Meeting Context
+
+**What:** Pass `meetingId` down through component hierarchy rather than using context or fetching again.
+**When:** Components need to construct URLs like `/meetings/:id/documents/:docId`.
+**Why:** Explicit props are the established pattern. No React context providers exist in the codebase. The component tree is shallow (3 levels max).
+
+```
+meeting-detail -> AgendaOverview -> AgendaItemRow -> DocumentSections
+                  meetingId={meeting.id}             meetingId={meetingId}
+```
+
+### Pattern 3: Service Function Per Query, Not Per Page
+
+**What:** Create reusable service functions (like `getDocumentsForMatter`) that multiple pages can share.
+**When:** The same data might be needed on different pages.
+**Why:** Follows existing pattern -- `getExtractedDocumentsForMeeting` is used by both `meeting-detail.tsx` and `meeting-documents.tsx`.
+
+### Pattern 4: Presentation-Layer Fixes Over Schema Changes
+
+**What:** Fix display issues (title deduplication, spacing) in components, not by changing database content.
+**When:** The data is technically correct but displays awkwardly.
+**Why:** Avoids pipeline re-runs and data migrations. The pipeline ingests hundreds of meetings -- changing extraction logic requires expensive reprocessing. A component-level check (`if title matches, skip`) is instant and reversible.
+
+### Pattern 5: Component Composition Over Configuration
+
+**What:** Build provenance indicators as a focused component (`MeetingProvenance`) rather than adding flags to `MeetingTabs`.
+**When:** New UI elements that represent a distinct concern.
+**Why:** `MeetingTabs` handles tab navigation. Provenance is informational display. Mixing them would violate single responsibility. A new component can be independently tested and repositioned.
+
+---
+
+## 6. Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Fetching Documents Inside Components
+
+**What:** Using `useEffect` or client-side fetches to load documents after page render.
+**Why bad:** The entire app uses SSR via React Router 7 loaders. Client-side fetching creates layout shift, loses SSR benefits, and adds network waterfalls.
+**Instead:** Fetch everything in the route loader using `Promise.all`.
+
+### Anti-Pattern 2: Creating a documents.ts Service for Matter Documents
+
+**What:** Creating a new `services/documents.ts` file for the matter documents query.
+**Why bad:** The function needs matter context (fetching agenda_item_ids by matter_id). Splitting across files obscures the domain relationship.
+**Instead:** Add `getDocumentsForMatter` to `services/matters.ts` where matter-related queries belong.
+
+### Anti-Pattern 3: Modifying the MarkdownContent Component Per-Context
+
+**What:** Creating `DocumentMarkdownContent` and `InlineMarkdownContent` variants.
+**Why bad:** The styling differences between document-viewer and agenda-item contexts are minor (font size, spacing). Variants create maintenance burden.
+**Instead:** Use the `className` prop on `MarkdownContent` for context-specific overrides. The component already accepts a `className` prop.
+
+### Anti-Pattern 4: Joining Documents in getMatterById
+
+**What:** Adding document joins to the already-complex `getMatterById` Supabase query.
+**Why bad:** The query already has 3 levels of nesting (matter -> agenda_items -> meetings -> organizations, agenda_items -> motions -> votes -> people). Supabase client has a default 1000-row limit on nested selects. Adding documents would risk hitting limits and would make the query harder to debug.
+**Instead:** Separate parallel fetch via `getDocumentsForMatter`.
+
+### Anti-Pattern 5: Adding Updated_at to the Meetings Query
+
+**What:** Modifying `getMeetingById` to add `updated_at` to the select string for provenance.
+**Why unnecessary:** The meeting object from `getMeetingById` already includes the full meeting row via `select("id, ... meta, created_at, ...")`. Check if `updated_at` is already included. If not, it is a one-field addition to the select string, not a structural change.
+
+---
+
+## 7. Integration Points Summary
+
+### Database Tables Touched (Read-Only)
+
+| Table | How Used | By |
+|-------|----------|-----|
+| `meetings` | Existing: provenance flags + URLs | MeetingProvenance component |
+| `documents` | Existing: already fetched for meeting docs pages | No change needed |
+| `extracted_documents` | Existing + new query by agenda_item_id | getDocumentsForMatter |
+| `document_sections` | Existing: already rendered in AgendaOverview | MarkdownContent enhancement |
+| `agenda_items` | Existing: IDs used to look up documents for matter | getDocumentsForMatter |
+
+**No schema migrations required.** All FKs and indexes already exist.
+
+### Supabase Queries
+
+| Query | New/Existing | Notes |
+|-------|-------------|-------|
+| `getMeetingById` | Existing | May need `updated_at` in select if missing |
+| `getDocumentSectionsForMeeting` | Existing | No change |
+| `getExtractedDocumentsForMeeting` | Existing | No change |
+| `getMatterById` | Existing | No change |
+| `getDocumentsForMatter` | **NEW** | 2 queries: agenda_item IDs + extracted_documents by those IDs |
+
+### New/Modified Files Inventory
+
+```
+NEW:
+  components/meeting/MeetingProvenance.tsx
+
+MODIFIED:
+  components/markdown-content.tsx         (prose classes, table wrapper)
+  components/meeting/DocumentSections.tsx  (meetingId prop, viewer links)
+  components/meeting/AgendaOverview.tsx    (thread meetingId prop)
+  routes/document-viewer.tsx              (title dedup logic)
+  routes/meeting-detail.tsx               (add MeetingProvenance)
+  routes/matter-detail.tsx                (fetch + render documents)
+  services/matters.ts                     (getDocumentsForMatter)
+```
+
+---
+
+## 8. Build Order Considering Dependencies
+
+The features have clear dependency ordering:
+
+### Phase 1: Document Viewer Polish (Independent)
+
+No dependencies on other features. Can be built first because:
+- `MarkdownContent` is a shared component used by both the viewer and inline sections
+- Title deduplication is viewer-only logic
+- Changes here benefit all downstream document rendering
+
+### Phase 2: Document Links on Agenda Items (Depends on Phase 1)
+
+Requires enhanced `MarkdownContent` to be in place, but the link functionality itself is independent. Could technically be built in parallel with Phase 1, but building after means the linked-to viewer already looks polished.
+
+### Phase 3: Meeting Provenance Indicators (Independent)
+
+Entirely independent of Phase 1 and 2. Pure new component, no shared dependencies. Could be built in any position.
+
+### Phase 4: Matter Page Documents (Depends on Phase 2 conceptually)
+
+Requires `getDocumentsForMatter` service function (new). The document links rendered in the matter timeline use the same URL pattern as Phase 2 (`/meetings/:id/documents/:docId`). Building after Phase 2 ensures the viewer target is already enhanced with links.
+
+**Recommended order: 1 -> 2 -> 3 -> 4** (or 1 -> [2, 3 parallel] -> 4)
 
 ---
 
 ## 9. Scalability Considerations
 
-| Concern | At Launch | At 50 Pages | At 200+ Pages |
-|---------|-----------|-------------|---------------|
-| Build time | <30s static export | ~1 min | ~3 min (still fast for static) |
-| Search | Client-side, instant | Client-side, search index ~50KB | May need to split index or use Algolia |
-| Bundle size | Negligible (static HTML) | Negligible | Negligible -- each page is independent |
-| Deployment | Manual wrangler pages deploy | Same | Cloudflare Pages Git integration recommended |
-| Spec changes | Manual two-step deploy | Same | GitHub Actions to auto-trigger docs rebuild |
-| Content contributors | Developer only | Developer only | Consider CMS integration for non-dev contributors |
+| Concern | Current Scale (180 meetings) | At 500 Meetings | At 2000+ Meetings |
+|---------|-------------------------------|-----------------|-------------------|
+| Matter documents query | < 10 agenda items per matter | Up to 30 items; 2 simple indexed queries | Consider RPC or materialized view |
+| MarkdownContent rendering | <50 sections per document | Same | No concern -- sections are chunked |
+| Provenance component | Trivial -- reads from already-loaded meeting | Same | Same |
+| Document viewer | <30 sections, <20 images | Same | Consider lazy-loading images |
 
----
-
-## 10. Cross-Linking Between Docs and Main App
-
-The docs site should link to the main app where appropriate:
-
-| From (docs.viewroyal.ai) | To (viewroyal.ai) | Purpose |
-|--------------------------|-------------------|---------|
-| API reference endpoint | `/api/v1/docs` | Interactive Swagger UI (already exists) |
-| Getting started guide | `/developers` | API key management page |
-| Authentication guide | `/developers` | Key creation flow |
-| Home page | `viewroyal.ai` | Back to main product |
-
-The main app should link back to docs:
-| From (viewroyal.ai) | To (docs.viewroyal.ai) | Purpose |
-|---------------------|----------------------|---------|
-| `/api/v1/docs` Swagger UI | `docs.viewroyal.ai` | Full documentation |
-| `/developers` API key page | `docs.viewroyal.ai/docs/getting-started` | Getting started guide |
-| Footer | `docs.viewroyal.ai` | Developer docs link |
+At current and projected scale, all proposed architecture is well within performance bounds.
 
 ---
 
 ## Sources
 
-- [Fumadocs Official Documentation](https://www.fumadocs.dev/docs) - Framework overview, installation, deployment
-- [Fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi) - OpenAPI setup, generateFiles(), virtual files
-- [Fumadocs Deploying](https://www.fumadocs.dev/docs/deploying) - Cloudflare requires OpenNext; Edge runtime not supported
-- [Fumadocs Static Build](https://www.fumadocs.dev/docs/deploying/static) - Static export configuration
-- [Cloudflare Pages Custom Domains](https://developers.cloudflare.com/pages/configuration/custom-domains/) - Subdomain CNAME setup
-- [Cloudflare Pages Static Next.js](https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-nextjs-site/) - Framework preset for static export
-- [OpenNext Cloudflare](https://opennext.js.org/cloudflare) - Next.js on Workers (not recommended for this use case)
-- npm registry version checks: fumadocs-core@16.6.5, fumadocs-ui@16.6.5, fumadocs-mdx@14.2.8, fumadocs-openapi@10.3.9, next@16.1.6
+- Codebase analysis of existing routes, services, components, and schema (HIGH confidence -- direct code reading)
+- Database schema from `sql/bootstrap.sql` and `supabase/migrations/` (HIGH confidence)
+- Existing data model relationships verified from migration files (HIGH confidence)
 
 ### Confidence Levels
 
 | Finding | Confidence | Source |
 |---------|------------|--------|
-| Static export to CF Pages | HIGH | Official fumadocs docs + CF docs |
-| fumadocs v16 requires Next.js 16 | HIGH | npm registry peer dependencies |
-| fumadocs-openapi v10 requires fumadocs v16 | HIGH | npm registry peer dependencies |
-| OpenAPI spec fetch at build time | HIGH | fumadocs docs + code examples |
-| generateFiles() needed for static export | MEDIUM | Logical inference: virtual files need RSC server; confirmed by docs stating server-first approach |
-| Client-side search works in static mode | HIGH | fumadocs static build docs |
-| No root workspace needed | HIGH | Existing repo pattern, framework incompatibility |
-| CNAME auto-created for CF-managed zones | HIGH | CF custom domains docs |
+| All FKs already exist for document linking | HIGH | Migration files + bootstrap.sql |
+| No schema changes needed | HIGH | Direct column/FK verification |
+| MeetingProvenance uses already-loaded data | HIGH | getMeetingById select string analysis |
+| getDocumentsForMatter needs 2 queries | HIGH | Supabase client .in() requires IDs first |
+| MarkdownContent className prop exists | HIGH | Component source code |
+| Title deduplication is presentation-only fix | MEDIUM | Based on observed pipeline behavior |
+| Matter documents query performance sufficient | MEDIUM | Assumes < 100 agenda items per matter |
