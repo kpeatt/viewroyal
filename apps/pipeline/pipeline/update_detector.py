@@ -253,7 +253,7 @@ class UpdateDetector:
         result = (
             supabase.table("meetings")
             .select("archive_path")
-            .not_("archive_path", "is", "null")
+            .not_.is_("archive_path", "null")
             .execute()
         )
         known_paths = {row["archive_path"] for row in (result.data or [])}
