@@ -53,22 +53,22 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOCV-01 | — | Pending |
-| DOCV-02 | — | Pending |
-| DOCV-03 | — | Pending |
-| DOCV-04 | — | Pending |
-| DOCL-01 | — | Pending |
-| DOCL-02 | — | Pending |
-| DOCL-03 | — | Pending |
-| PROV-01 | — | Pending |
-| PROV-02 | — | Pending |
-| PROV-03 | — | Pending |
+| DOCV-01 | Phase 25 | Pending |
+| DOCV-02 | Phase 25 | Pending |
+| DOCV-03 | Phase 25 | Pending |
+| DOCV-04 | Phase 28 | Pending |
+| DOCL-01 | Phase 27 | Pending |
+| DOCL-02 | Phase 27 | Pending |
+| DOCL-03 | Phase 28 | Pending |
+| PROV-01 | Phase 26 | Pending |
+| PROV-02 | Phase 26 | Pending |
+| PROV-03 | Phase 26 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10
+- Mapped to phases: 10
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after initial definition*
+*Last updated: 2026-02-26 after roadmap creation*
