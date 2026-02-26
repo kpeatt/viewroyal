@@ -9,9 +9,9 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 
 ### Document Viewer
 
-- [ ] **DOCV-01**: User sees document sections with polished typography — proper font sizes, line heights, and spacing between headings, paragraphs, and lists
-- [ ] **DOCV-02**: User can view documents with wide tables on mobile without horizontal page overflow (tables scroll independently)
-- [ ] **DOCV-03**: User does not see duplicate document titles when the first section heading matches the document title
+- [x] **DOCV-01**: User sees document sections with polished typography — proper font sizes, line heights, and spacing between headings, paragraphs, and lists
+- [x] **DOCV-02**: User can view documents with wide tables on mobile without horizontal page overflow (tables scroll independently)
+- [x] **DOCV-03**: User does not see duplicate document titles when the first section heading matches the document title
 - [ ] **DOCV-04**: User sees a table of contents sidebar for long documents that highlights the current section while scrolling
 
 ### Document Linking
