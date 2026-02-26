@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.5 Document Experience
+**Current focus:** Phase 25 - Document Viewer Polish
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-26 — Milestone v1.5 started
+Phase: 25 of 28 (Document Viewer Polish)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-26 -- v1.5 roadmap created
 
 Progress: ░░░░░░░░░░ 0% (v1.5)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 60 (across v1.0 + v1.1 + v1.2 + v1.3 + v1.4 + gap closure)
+- Total plans completed: 60 (across v1.0-v1.4)
 - Average duration: 4.0min
 - Total execution time: ~5.5 hours
 
@@ -58,6 +58,12 @@ Progress: ░░░░░░░░░░ 0% (v1.5)
 ### Decisions
 
 All v1.0-v1.4 decisions archived -- see PROJECT.md Key Decisions table.
+v1.5 decisions from research:
+
+- Document viewer uses `marked` (not `react-markdown`) for SSR stability on Workers
+- No new npm packages -- `@tailwindcss/typography`, `marked`, `lucide-react` already installed
+- Meeting/matter loaders fetch document metadata only, never full section text
+- Matter documents use batch `.in()` query, not per-item loops (N+1 prevention)
 
 ### Pending Todos
 
@@ -69,6 +75,8 @@ All v1.0-v1.4 decisions archived -- see PROJECT.md Key Decisions table.
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
 - Rate Limit binding pricing needs verification before production launch
+- [Phase 26]: Verify `updated_at` is in `getMeetingById` select string before building provenance
+- [Phase 27]: Choose nested select vs. parallel fetch for matter documents before writing code
 
 ### Quick Tasks Completed
 
@@ -83,11 +91,12 @@ All v1.0-v1.4 decisions archived -- see PROJECT.md Key Decisions table.
 | 7 | Fix broken /docs/-prefixed links on docs.viewroyal.ai | 2026-02-26 | (redeploy) | [7-the-docs-site-has-a-lot-of-broken-links-](./quick/7-the-docs-site-has-a-lot-of-broken-links-/) |
 | 8 | Add footer to site with GitHub and docs links | 2026-02-26 | fa26c100 | [8-add-a-footer-to-the-site](./quick/8-add-a-footer-to-the-site/) |
 | 9 | Fix TypeError in update_detector.py .not_() call | 2026-02-26 | 24dbd665 | [9-fix-typeerror-in-update-detector-py-not-](./quick/9-fix-typeerror-in-update-detector-py-not-/) |
+| 10 | Fix image alignment with document_section_id-based mapping | 2026-02-26 | 568cc358 | [10-fix-image-alignment-with-document-sectio](./quick/10-fix-image-alignment-with-document-sectio/) |
 
 ## Session Continuity
 
 Last session: 2026-02-26
-Stopped at: Completed quick task 9 (fix TypeError in update_detector.py)
+Stopped at: Completed quick-10 (fix image alignment with document_section_id)
 Resume file: None
 
 ### Paused Work: Phase 7.1
