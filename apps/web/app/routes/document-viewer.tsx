@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { Route } from "./+types/document-viewer";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link } from "react-router";
@@ -216,6 +217,35 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
       );
     });
   }
+
+  // Toggle table scroll fade indicators based on overflow
+  useEffect(() => {
+    const containers = document.querySelectorAll('.table-scroll-container');
+    if (containers.length === 0) return;
+
+    const check = () => {
+      containers.forEach((el) => {
+        el.classList.toggle('has-overflow', el.scrollWidth > el.clientWidth);
+      });
+    };
+
+    // Check on scroll (user may scroll to reveal all content)
+    const onScroll = (e: Event) => {
+      const el = e.target as HTMLElement;
+      el.classList.toggle('has-overflow', el.scrollLeft + el.clientWidth < el.scrollWidth);
+    };
+
+    const observer = new ResizeObserver(check);
+    containers.forEach((el) => {
+      observer.observe(el);
+      el.addEventListener('scroll', onScroll);
+    });
+
+    return () => {
+      observer.disconnect();
+      containers.forEach((el) => el.removeEventListener('scroll', onScroll));
+    };
+  }, [sections]);
 
   return (
     <div className="min-h-screen bg-white">
