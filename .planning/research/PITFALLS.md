@@ -1,140 +1,122 @@
-# Domain Pitfalls: v1.4 Developer Documentation Portal
+# Domain Pitfalls: v1.5 Document Experience
 
-**Domain:** Adding fumadocs/Next.js documentation site to existing Cloudflare-deployed monorepo
-**Researched:** 2026-02-23
+**Domain:** Adding document viewer polish, cross-linking, and meeting provenance to existing civic intelligence SSR platform
+**Researched:** 2026-02-26
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, deployment failures, or major integration breakage.
+Mistakes that cause rewrites, performance regressions, or major user-facing breakage.
 
 ---
 
-### Pitfall 1: Deploying fumadocs via OpenNext/Workers Instead of Static Export
+### Pitfall 1: Cloudflare Workers SSR Payload Bloat from Document Content in Loader Data
 
-**What goes wrong:** Attempting to run fumadocs as a server-rendered Next.js app on Cloudflare Workers via `@opennextjs/cloudflare`. This introduces massive complexity (worker size limits, Edge runtime incompatibility, Node.js compatibility shims, I/O context errors) for what is fundamentally a static content site. Fumadocs official docs explicitly state: "Use https://opennext.js.org/cloudflare, Fumadocs doesn't work on Edge runtime." This warning steers people toward OpenNext, but the far better path for a docs site is static export entirely.
+**What goes wrong:** The meeting-detail loader already fetches agenda items, transcript segments, speaker aliases, attendance, people, document sections, and extracted documents -- all serialized into the HTML response as `__reactRouterData`. Adding per-agenda-item document content (section text, summaries, key facts) to the meeting-detail page inflates this serialized payload. A meeting with 15 agenda items, each with 2-3 linked documents and 5-10 sections, can push the initial HTML response from 200-400KB to 1-2MB. Cloudflare Workers have 128MB memory per isolate, but the real constraint is CPU time (10-20ms typical for SSR) and the client-side JSON parse cost.
 
-**Why it happens:** The existing web app deploys to Cloudflare Workers, so the natural instinct is to deploy the docs site the same way. OpenNext's marketing makes it seem straightforward. But a documentation site has zero dynamic server requirements -- all content is known at build time.
-
-**Consequences:**
-- Worker compressed size limit: 3 MiB (free) / 10 MiB (paid). Next.js + fumadocs + shiki syntax highlighter can easily exceed 3 MiB compressed.
-- `@opennextjs/cloudflare` drops Edge runtime support -- must use Node.js runtime with `nodejs_compat` flag and compatibility date >= 2024-09-23.
-- Runtime I/O context errors ("Cannot perform I/O on behalf of a different request") if any module-level state persists across requests.
-- FinalizationRegistry errors require compatibility_date >= 2025-05-05.
-- Cold starts on every request for a docs site that should be instant.
-- Next.js 16 has known OpenNext instrumentation hook errors; workaround is downgrading to 15.3.
-
-**Prevention:** Deploy fumadocs as a static site (`output: 'export'` in next.config.mjs) to Cloudflare Pages. A documentation site is 100% static content. Cloudflare Pages serves static assets from their CDN with zero cold starts, no worker size limits, and free unlimited bandwidth. Assign `docs.viewroyal.ai` as a custom domain on the Pages project.
-
-**Detection:** Worker deployment fails with size errors, or succeeds but has 200-500ms cold starts on doc pages that should be instant.
-
-**Phase:** Address in Phase 1 (project setup). Wrong deployment target poisons every subsequent phase.
-
-**Confidence:** HIGH -- fumadocs official docs confirm static export support and note "doesn't work on Edge runtime"; Cloudflare Pages is the standard static hosting platform.
-
-**Sources:**
-- [fumadocs Deployment Docs](https://www.fumadocs.dev/docs/deploying) -- "Use https://opennext.js.org/cloudflare, Fumadocs doesn't work on Edge runtime"
-- [fumadocs Static Build Guide](https://www.fumadocs.dev/docs/deploying/static)
-- [OpenNext Cloudflare Troubleshooting](https://opennext.js.org/cloudflare/troubleshooting) -- worker size limits, FinalizationRegistry errors
-- [Cloudflare Pages Static Next.js](https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-nextjs-site/)
-
----
-
-### Pitfall 2: OpenAPI Spec Synchronization -- Runtime vs Build-Time Mismatch
-
-**What goes wrong:** The existing API generates its OpenAPI 3.1 spec at runtime via chanfana (Hono middleware) at `/api/v1/openapi.json`. It is NOT a static file -- chanfana builds it dynamically from Zod schemas registered in `apps/web/app/api/index.ts`. fumadocs-openapi needs to consume this spec to generate API reference pages, but the spec only exists when the Worker is running.
-
-**Why it happens:** fumadocs-openapi offers two approaches: `generateFiles()` (build-time MDX generation from a spec file) and `openapiSource()` (runtime server-side generation via RSC). Both expect a spec file or URL. But if you point `generateFiles()` at the production URL, the docs build depends on the production API being up and having the latest spec. If you point it at a local file, the file goes stale whenever API endpoints change. And `openapiSource()` requires a running Next.js server with RSC context, which contradicts static export (`output: 'export'`).
+**Why it happens:** The natural instinct is to add document content to the existing `getMeetingById` data shape -- just add more fields to each agenda item. This is how the current document sections are surfaced: fetched in parallel in the loader, passed down as props. But the meeting-detail page is already the largest loader in the app (it paginates transcript segments in 1000-row batches). Each additional data dimension compounds the payload.
 
 **Consequences:**
-- API reference pages show outdated endpoints, missing parameters, or wrong response schemas.
-- Build failures when production API is unreachable during docs CI build.
-- Circular dependency: API changes deploy first, then docs must rebuild, creating a window where docs are wrong.
-- Using `openapiSource()` forces server-side rendering, which contradicts the static export strategy from Pitfall 1.
+- First contentful paint degrades noticeably on mobile (parsing 1MB+ JSON on a mid-range phone takes 200-500ms)
+- Cloudflare Workers CPU time approaches the 30-second default limit for complex meetings (many agenda items, many documents)
+- The `getMeetingById` function already makes 6+ sequential/parallel Supabase queries. Adding document queries without coordination creates resource contention
+- React hydration slows because the entire document tree must be reconciled even though most documents are hidden behind accordion UI
 
 **Prevention:**
-1. Add a spec extraction script to `apps/docs/scripts/` that programmatically generates the OpenAPI JSON without starting the full Worker. chanfana's `fromHono()` builds the spec in-memory -- the registry can be imported and serialized to JSON in a Node.js script.
-2. Simpler alternative: run `wrangler dev` for the web app, `curl http://localhost:8787/api/v1/openapi.json > apps/docs/content/openapi.json`, then kill wrangler. Wire this as a `prebuild` script.
-3. Use `generateFiles()` (NOT `openapiSource()`) since static export cannot use RSC server-side APIs at runtime.
-4. Commit the spec JSON file to version control. Treat it as a build artifact that gets regenerated when API endpoints change.
-5. Add a CI step that regenerates and diffs -- warn if the committed spec is stale.
+1. Do NOT add full document section text to the meeting-detail loader. The current approach of fetching `documentSections` and `extractedDocuments` with minimal fields (id, title, summary, key_facts) is correct -- keep it lightweight.
+2. For the document viewer route (`/meetings/:id/documents/:docId`), the full content is already loaded only when the user navigates there. This is the right pattern.
+3. If showing document previews inline on the agenda tab, limit to summary + key facts (already available in `extractedDocuments`). Never inline full section text on the meeting-detail page.
+4. For the matter-detail page, use the same pattern: fetch document metadata (titles, types, summaries) in the loader, let the user click through to the full document viewer.
 
-**Detection:** API reference pages don't match actual API behavior. New endpoints missing from docs after API deployment.
+**Detection:** Measure HTML response size for meeting-detail pages with `curl -s -o /dev/null -w "%{size_download}" https://viewroyal.ai/meetings/123`. If it exceeds 500KB, the loader is too heavy.
 
-**Phase:** Address in Phase 1 (spec extraction script) and Phase 2 (OpenAPI integration). This is foundational -- get it wrong and every API reference page is unreliable.
+**Phase:** Address in the phase that adds document links to meeting detail and matter pages. This is an architectural constraint that must be respected throughout.
 
-**Confidence:** HIGH -- verified that chanfana generates spec at runtime from `apps/web/app/api/index.ts`; fumadocs-openapi docs confirm the two approaches and their tradeoffs.
-
-**Sources:**
-- [fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi)
-- [fumadocs OpenAPI generateFiles()](https://fumadocs.dev/docs/ui/openapi/generate-files)
-- [fumadocs OpenAPI v10 Blog](https://www.fumadocs.dev/blog/openapi-v10) -- comparison of approaches
+**Confidence:** HIGH -- verified from the existing codebase: `meeting-detail.tsx` loader already fetches 6+ parallel queries and paginates transcript segments. The `document-viewer.tsx` loader already demonstrates the correct pattern of loading content only for a single document.
 
 ---
 
-### Pitfall 3: Breaking Existing Apps by Introducing pnpm Workspaces
+### Pitfall 2: N+1 Query Pattern When Linking Documents to Matters Across Meetings
 
-**What goes wrong:** The current repo has `apps/web/`, `apps/pipeline/`, and `apps/vimeo-proxy/` as fully independent apps. There is NO root `package.json` and NO `pnpm-workspace.yaml`. Each app has its own `node_modules` and lockfile. Adding `pnpm-workspace.yaml` to enable shared packages would fundamentally change how dependencies are resolved for ALL existing apps, breaking their builds.
+**What goes wrong:** The matter-detail page shows a timeline of every meeting where the matter appeared. Adding "related documents" to each timeline entry requires querying documents for each meeting. The current `getMatterById` query uses Supabase's nested select to fetch agenda items with their meetings and motions in a single query. But documents live in a separate table chain: `matters -> agenda_items -> extracted_documents -> document_sections`. Supabase's PostgREST cannot join through `agenda_items` to `extracted_documents` in the same nested select because `extracted_documents` links to `agenda_items` via `agenda_item_id` (a reverse FK from the perspective of the agenda_items query).
 
-**Why it happens:** Sharing the OpenAPI spec or a Tailwind config between `apps/web/` and `apps/docs/` seems like it needs workspaces. The "proper monorepo" instinct leads to adding workspace configuration. But Cloudflare's build system installs ALL workspace packages even when building a single app (workers-sdk issue #10941), causing builds to fail when unrelated workspaces have incompatible dependencies. Adding workspaces retroactively also changes pnpm's hoisting behavior, which can break existing `pnpm install` for `apps/web/` and `apps/vimeo-proxy/`.
+**Why it happens:** Supabase's PostgREST auto-detects relationships via foreign keys. `agenda_items` has a FK to `matters`, and `extracted_documents` has a FK to `agenda_items`. But the existing `getMatterById` query already selects `agenda_items(...)` with nested `motions(...)` and `votes(...)`. Adding `extracted_documents(...)` to this nested select DOES work because PostgREST can follow the FK from extracted_documents.agenda_item_id. However, developers often miss this and instead write a separate loop query: "for each agenda item, fetch its extracted documents." That loop query is the N+1 trap.
 
 **Consequences:**
-- `pnpm install` in `apps/web/` starts resolving packages from other workspaces, finding conflicting versions.
-- Cloudflare Workers build for `apps/web/` fails because pnpm tries to install `apps/docs/`'s Next.js dependencies.
-- Build cache invalidation -- pnpm monorepo build cache on Cloudflare is broken for pnpm workspaces (community report).
-- The Python pipeline in `apps/pipeline/` is unaffected (uses `uv`, not pnpm), but the Node apps are not isolated anymore.
+- A matter that appeared in 20 meetings generates 20 additional Supabase queries (one per agenda item) instead of 1
+- Supabase client rate limiting kicks in, causing 429 errors in production
+- Loader response time goes from 200ms to 2-4 seconds
+- The matter-detail page becomes the slowest page in the app
 
 **Prevention:**
-1. Keep `apps/docs/` as a fully independent app with its own `package.json`, `pnpm-lock.yaml`, and deployment pipeline. Do NOT introduce pnpm workspaces.
-2. Share the OpenAPI spec via a simple file copy in a build script, not via workspace package imports.
-3. Deploy `apps/docs/` to Cloudflare Pages as a separate project from the Workers deployment of `apps/web/`.
-4. If workspaces become necessary later, that is a separate refactoring milestone with full testing of all existing deployment pipelines.
+1. Add `extracted_documents(id, title, document_type, summary, key_facts, page_start, page_end)` to the existing nested select in `getMatterById`. PostgREST handles the join through the `agenda_item_id` FK automatically.
+2. Test with a matter that appears in 15+ meetings to verify the query returns documents correctly without N+1.
+3. If the nested select approach hits PostgREST's depth limit (3 levels of nesting), use a single RPC or a SQL view that pre-joins the data.
+4. NEVER loop over agenda items to fetch documents individually.
 
-**Detection:** `pnpm install` in one app directory starts pulling dependencies from other apps. Build times spike. Cloudflare Workers build fails with module resolution errors.
+**Detection:** Check Supabase dashboard query logs for the matter-detail route. If you see clusters of identical `extracted_documents` queries differing only by `agenda_item_id`, you have an N+1 problem.
 
-**Phase:** Address in Phase 1 (project scaffolding). This decision must be locked before any code is written.
+**Phase:** Address in the phase that adds documents to matter pages. Must be solved at the query level before building UI.
 
-**Confidence:** HIGH -- verified repo has no root package.json or workspace config; Cloudflare monorepo issues documented in workers-sdk issue #10941 and community forum reports.
-
-**Sources:**
-- [Cloudflare workers-sdk Issue #10941](https://github.com/cloudflare/workers-sdk/issues/10941) -- pnpm monorepo installs all workspaces
-- [Cloudflare Workers Build Cache + pnpm issues](https://community.cloudflare.com/t/workers-build-cache-not-working-as-expected-in-monorepos-pnpm/803213)
-- [Cloudflare Pages Monorepo Docs](https://developers.cloudflare.com/pages/configuration/monorepos/)
+**Confidence:** HIGH -- verified from `getMatterById` in `apps/web/app/services/matters.ts`: the existing query already nests 3 levels deep (`agenda_items -> motions -> votes`). Adding extracted_documents as a sibling of motions is the correct approach.
 
 ---
 
-### Pitfall 4: fumadocs-mdx ESM-Only Requirement and Configuration Churn
+### Pitfall 3: Markdown Tables Overflow on Mobile, Breaking Document Viewer Layout
 
-**What goes wrong:** fumadocs-mdx is ESM-only. It requires `next.config.mjs` (not `.js` or `.ts` with CommonJS). The configuration API has changed significantly across recent versions: `source.config.ts` replaced earlier patterns, the import path changed from `fumadocs-mdx/config` to `fumadocs-mdx/next`, and `mdx-components.tsx` is no longer used -- MDX components must be passed via the `components` prop explicitly. Blog posts and tutorials from even 6 months ago show outdated patterns.
+**What goes wrong:** The `MarkdownContent` component uses `marked` to convert markdown to HTML, then renders via `dangerouslySetInnerHTML` with Tailwind `prose` classes. Council documents frequently contain wide tables (financial summaries, zoning comparisons, permit conditions) with 6-8 columns. These tables overflow their container on mobile screens, pushing the entire page layout sideways. The prose plugin's default table styling has no `overflow-x: auto` wrapper, so the table bleeds past the viewport edge.
 
-**Why it happens:** fumadocs has evolved rapidly. The project releases frequently (MDX v10, v14; fumadocs v15, v16). Each major version changes configuration patterns. Developers following tutorials or AI-generated code get stale patterns that produce cryptic errors.
+**Why it happens:** Markdown tables render as bare `<table>` elements. The Tailwind `prose` plugin applies basic table styling (borders, padding) but does NOT add overflow handling. The `MarkdownContent` component applies `prose-table:text-xs prose-table:my-3` but no overflow wrapper. Since the HTML is injected via `dangerouslySetInnerHTML`, there's no opportunity to wrap individual `<table>` elements in a scrollable container without post-processing the HTML.
 
 **Consequences:**
-- Build errors: "Cannot use require() in ES module" if using `.js` config.
-- Runtime errors: "Unexpected FunctionDeclaration in code: only import/exports are supported" if MDX config is wrong.
-- Type errors: `tree={source.pageTree}` type mismatches if fumadocs-core version doesn't match fumadocs-mdx version.
-- The `.source` directory must be auto-generated during `next dev` or `next build` -- if missing, pages fail silently.
-- TypeScript path alias `"fumadocs-mdx:collections/*": [".source/*"]` must be in `tsconfig.json` or imports break.
-- Collections are defined in `source.config.ts`, not in the Next.js config -- putting them in the wrong file produces no error but no content.
+- On mobile, horizontal scroll appears on the entire page (not just the table), making the page unusable
+- Users cannot scroll back to the left edge easily, especially on iOS Safari
+- Content after the table is pushed off-screen
+- This affects the document viewer (`document-viewer.tsx`) and the inline document sections in `AgendaOverview`
 
 **Prevention:**
-- Use the official fumadocs CLI (`npx create-fumadocs-app`) to scaffold. This generates correct config for the current version. Do NOT manually set up the project.
-- Pin ALL fumadocs packages to the exact same version: fumadocs-core, fumadocs-mdx, fumadocs-ui, fumadocs-openapi. Mixed versions cause type mismatches (GitHub issue #1875).
-- Add `.source/` to `.gitignore` -- it is a build artifact regenerated on every build.
-- Verify the build works locally (`pnpm build`) before setting up any CI/CD.
+1. Add a `marked` extension or post-processing step that wraps every `<table>` element in `<div class="overflow-x-auto">`. This is a 5-line change to the `MarkdownContent` component:
+   ```typescript
+   const html = (marked.parse(content, { async: false }) as string)
+     .replace(/<table/g, '<div class="overflow-x-auto"><table')
+     .replace(/<\/table>/g, '</table></div>');
+   ```
+2. Add CSS to ensure the wrapper scrolls independently: `overflow-x-auto` with `-webkit-overflow-scrolling: touch` for iOS.
+3. Test with actual council documents that contain wide financial tables (these are common in staff reports).
+4. Consider adding a subtle scroll indicator (gradient shadow on the right edge) so users know the table is scrollable.
 
-**Detection:** Build fails immediately with import errors or type errors. Easy to catch early if you build before deploying.
+**Detection:** Open any document viewer page containing a table on a mobile device or narrow viewport (< 640px). If the page scrolls horizontally, the fix is missing.
 
-**Phase:** Address in Phase 1 (scaffolding). Use the CLI, do not manually configure.
+**Phase:** Address in the document viewer polish phase. This is the single most impactful mobile UX fix.
 
-**Confidence:** HIGH -- verified from fumadocs official docs, MDX v10 blog post, and GitHub issues (#1875, #2456).
+**Confidence:** HIGH -- verified from `apps/web/app/components/markdown-content.tsx`: the component applies `prose-table:text-xs` but has no overflow handling. Council documents routinely contain wide tables.
 
-**Sources:**
-- [fumadocs MDX Getting Started](https://www.fumadocs.dev/docs/mdx)
-- [fumadocs MDX Next.js Setup](https://www.fumadocs.dev/docs/mdx/next) -- ESM requirement, source.config.ts
-- [fumadocs MDX v10 Summary](https://www.fumadocs.dev/blog/mdx-v10-summary) -- configuration changes
-- [fumadocs GitHub Issue #1875](https://github.com/fuma-nama/fumadocs/issues/1875) -- version mismatch type errors
+---
+
+### Pitfall 4: Duplicate Document Titles Creating Confusing Cross-Links
+
+**What goes wrong:** The pipeline's document extraction produces `extracted_documents` with titles derived from PDF headings. Many council PDFs use generic titles like "Staff Report", "Appendix A", "Correspondence", or "Schedule A" across different agenda items and meetings. When displaying "Related Documents" on a matter page, these generic titles appear multiple times without enough context to distinguish them. Users see "Staff Report, Staff Report, Staff Report" with no way to tell which meeting or topic each belongs to.
+
+**Why it happens:** The `extracted_documents.title` field comes from AI extraction of PDF content. The AI extracts the heading it finds, which for standardized municipal documents is often generic. The `document_type` field helps (`staff_report`, `correspondence`, `appendix`) but is not enough disambiguation when multiple documents of the same type relate to the same matter.
+
+**Consequences:**
+- Users cannot identify which document they want without clicking each one
+- The cross-linking feature becomes useless -- it looks like duplicate entries
+- On matter pages, the timeline shows multiple meetings with identically-titled documents
+
+**Prevention:**
+1. When displaying document links outside their original meeting context, always include the meeting date and/or meeting title as disambiguation: "Staff Report (Jan 13, 2025 Regular Council)" instead of just "Staff Report".
+2. If the document has a `summary` field, show the first line as a subtitle beneath the title.
+3. Consider a composite display: `[document_type badge] [title] - [meeting_date]`.
+4. The database already has the data needed (join through `document_id -> documents -> meeting_id -> meetings.meeting_date`). This is a UI formatting problem, not a data problem.
+5. For the document viewer breadcrumb, the current implementation already includes meeting title context. Extend this pattern to all document link displays.
+
+**Detection:** Navigate to a matter that has appeared in 5+ meetings and check if the document links are distinguishable. Common test: any zoning or development matter will have multiple "Staff Report" entries.
+
+**Phase:** Address in the phase that adds documents to matter pages. The UI template for document links must include meeting context from the start.
+
+**Confidence:** HIGH -- verified from the schema: `extracted_documents.title` is a free-text field populated by AI extraction. Generic titles are extremely common in municipal PDFs based on the document_type distribution (staff_report, appendix, correspondence dominate).
 
 ---
 
@@ -142,127 +124,161 @@ Mistakes that cause rewrites, deployment failures, or major integration breakage
 
 ---
 
-### Pitfall 5: Tailwind CSS 4 Configuration Collision Between Apps
+### Pitfall 5: Provenance Indicators Showing Stale or Missing "Last Updated" Timestamps
 
-**What goes wrong:** The existing web app uses Tailwind CSS 4 with `@tailwindcss/vite`, `tw-animate-css`, and shadcn/ui presets. fumadocs v15+ also uses Tailwind CSS 4 but with its own CSS presets (`fumadocs-ui/css/neutral.css`, `fumadocs-ui/css/preset.css`). Copying Tailwind configuration from the existing web app into the docs app causes style conflicts because both use different Tailwind plugin configurations and different CSS variable naming conventions.
+**What goes wrong:** Meeting provenance indicators (Agenda available, Minutes available, Video available) need "last updated" timestamps to show when source material was last refreshed. But the `meetings` table has `created_at` and the boolean flags (`has_agenda`, `has_minutes`, `has_transcript`) but no per-source timestamp tracking when each source was last checked or updated. The `documents` table has `created_at` but this reflects when the pipeline first ingested the document, not when the source was last verified to still exist.
 
-**Why it happens:** Both apps use Tailwind 4 but configure it differently. The web app has custom theme colors, shadcn/ui component styles, and animation utilities. fumadocs has its own design system built on Tailwind that must not be mixed. Since fumadocs v15, it no longer uses `--fd-<color>` CSS variables -- it directly defines colors in `@theme` using `hsl()`.
+**Why it happens:** The pipeline's update detection (v1.2) tracks whether new documents or video exist for a meeting via `audit.py`, but it does not record per-source provenance timestamps in the database. It either re-ingests or skips. The `meetings.meta` JSONB column could theoretically hold this data, but it is not currently populated with source timestamps.
+
+**Consequences:**
+- Provenance indicators show "Agenda: Available" but not when it was last checked
+- Users cannot tell if the data is from yesterday's pipeline run or from 6 months ago
+- If a source URL becomes a 404 after ingestion, the provenance indicator still shows "Available"
+- The "last updated" feature becomes misleading or impossible to implement without schema changes
 
 **Prevention:**
-- Do NOT copy the web app's Tailwind configuration to the docs app. Start fresh.
-- Follow the fumadocs v15 migration guide exactly for CSS setup.
-- Required CSS imports in the docs app's global stylesheet:
-  ```css
-  @import 'tailwindcss';
-  @import 'fumadocs-ui/css/neutral.css';
-  @import 'fumadocs-ui/css/preset.css';
-  @source '../node_modules/fumadocs-ui/dist/**/*.js';
-  ```
-- Do NOT use fumadocs-ui's pre-built `style.css` alongside custom Tailwind -- they conflict.
-- The docs app's Tailwind config is completely independent from the web app's. No sharing.
+1. For v1.5, use the existing `documents.created_at` as a proxy for "when was this source first available." This is honest and avoids schema changes.
+2. Display provenance as "Agenda posted [date]" using the earliest document's `created_at` for that meeting, NOT "Agenda last verified."
+3. For the video source, `meetings.video_url` being non-null indicates availability. The `meetings.created_at` or the pipeline's last successful run date can serve as the timestamp.
+4. Do NOT add a "last verified" feature in v1.5 -- it requires pipeline changes (recording check timestamps) that are out of scope.
+5. If a more precise "freshness" indicator is needed later, add `source_checked_at` columns to the `meetings` table in a future milestone.
 
-**Phase:** Address in Phase 1 (scaffolding, theme setup).
+**Detection:** Review provenance indicators on meetings from 6+ months ago. If the "last updated" date is misleading or missing, the approach needs adjustment.
 
-**Confidence:** HIGH -- fumadocs v15 blog post documents the Tailwind 4 migration explicitly.
+**Phase:** Address in the provenance indicators phase. Define the timestamp source before building the UI.
 
-**Sources:**
-- [fumadocs v15 Blog Post](https://www.fumadocs.dev/blog/v15) -- Tailwind CSS 4 support details
+**Confidence:** HIGH -- verified from the schema: `meetings` has `created_at` but no per-source timestamps. The `documents` table has `created_at` per document. The `meta` JSONB column exists but is not used for provenance.
 
 ---
 
-### Pitfall 6: Static Export Breaks Default fumadocs Search
+### Pitfall 6: dangerouslySetInnerHTML XSS Risk from Unsanitized Markdown
 
-**What goes wrong:** fumadocs defaults to a "server-first approach which always requires a running server." When using `output: 'export'` for static deployment, the built-in search functionality requires explicit reconfiguration for client-side operation. Without this, search appears to work in `next dev` but returns nothing or errors in the production static build.
+**What goes wrong:** The `MarkdownContent` component uses `marked.parse()` and injects the result via `dangerouslySetInnerHTML`. The `marked` library does NOT sanitize HTML by default -- it passes through raw HTML found in markdown source. Since document section text comes from AI extraction of PDFs, the content could contain HTML-like strings that `marked` treats as raw HTML. Additionally, the `inlineImages` function in `document-viewer.tsx` constructs raw HTML strings (`<figure>`, `<img>`, `<a>`) and concatenates them with markdown content before rendering.
 
-**Why it happens:** Default fumadocs search uses server-side route handlers or React Server Components. Static export has no server -- route handlers cannot execute.
+**Why it happens:** The document pipeline extracts text from PDFs using AI (Gemini). The AI output is treated as markdown. If the AI includes HTML tags in its output (which Gemini sometimes does for formatting), or if the original PDF contained HTML-like content (e.g., technical documents discussing HTML), `marked` passes it through to the DOM. The `marked.use({ gfm: true, breaks: false })` configuration does not enable sanitization.
 
-**Consequences:** Search field renders but silently fails in production. Users type queries and get nothing. The developer thinks search is broken and wastes hours debugging.
+**Consequences:**
+- In the worst case, injected `<script>` tags or event handlers could execute in the browser (XSS)
+- More realistically, malformed HTML from AI output breaks the document viewer layout (unclosed tags, unexpected elements)
+- The `inlineImages` function builds HTML strings with user-facing data (image descriptions from AI) that are inserted without escaping
 
 **Prevention:**
-1. During initial setup, configure fumadocs Search Server for static export mode -- this generates a search index at build time.
-2. Configure Search UI/Client for static mode (client-side index).
-3. After setup, search indexes are stored statically and computed client-side in the browser.
-4. Alternative: use Orama Cloud or Algolia which use remote servers and work without configuration changes.
-5. For a developer docs site with fewer than 100 pages, client-side search (built-in Orama) is more than sufficient.
+1. Add DOMPurify sanitization to the `MarkdownContent` component. Since this runs in SSR on Cloudflare Workers (no DOM), use `isomorphic-dompurify` or sanitize the HTML string with a regex-based approach for the server.
+2. Alternatively, use `marked`'s built-in hook system to strip dangerous HTML. Add a custom renderer that escapes HTML tags in text tokens.
+3. For the `inlineImages` function, escape the `desc` variable before inserting it into HTML attributes and content. The current code does `.replace(/"/g, "&quot;")` for the alt attribute but does not escape the figcaption content.
+4. At minimum, configure marked with `{ sanitize: true }` (note: this option was removed in marked v5+, so use the `marked-sanitizer-html` extension or add a post-processing sanitization step).
+5. Since the content comes from a controlled pipeline (not user input), the risk is LOW but the fix is cheap. Do it anyway.
 
-**Phase:** Address in Phase 1 (static export configuration) or Phase 3 (polish/search).
+**Detection:** Search for documents where the AI extraction included HTML-like content. Check if any `<script>`, `<iframe>`, or `<style>` tags pass through to the rendered HTML.
 
-**Confidence:** MEDIUM -- fumadocs static build docs confirm the requirement exists but exact configuration steps should be verified against the current version at build time.
+**Phase:** Address in the document viewer polish phase alongside table overflow fixes. Both are post-processing changes to MarkdownContent.
 
-**Sources:**
-- [fumadocs Static Build Guide](https://www.fumadocs.dev/docs/deploying/static) -- search configuration for static mode
+**Confidence:** MEDIUM -- the risk is reduced because content comes from a controlled AI pipeline, not arbitrary user input. But the fix is cheap and should be implemented as defense-in-depth. Verified from `markdown-content.tsx` that no sanitization is applied.
 
 ---
 
-### Pitfall 7: `generateFiles()` Output Goes Stale as API Evolves
+### Pitfall 7: Meeting-Detail Page Re-Fetching All Documents on Tab Switch
 
-**What goes wrong:** Using fumadocs-openapi's `generateFiles()` to produce MDX files from the OpenAPI spec creates files like `content/docs/api/list-meetings.mdx`. These files get committed to git. When the API changes (new endpoint, renamed parameter, changed response schema), the generated MDX files remain unchanged until someone manually reruns the generation script. Documentation silently drifts from the actual API.
+**What goes wrong:** The meeting-detail page fetches `extractedDocuments` in the loader for the overview tab's document count badge. When the user switches to the Agenda tab, the `AgendaOverview` component receives `extractedDocuments` and `documentSections` as props and filters them per agenda item client-side. This works. But if a developer adds a dedicated "Documents" tab to the meeting-detail page (showing the same content as the `/meetings/:id/documents` route), they might add a new loader fetch for the full document list -- duplicating data already loaded.
 
-**Why it happens:** There is no automatic mechanism to detect API spec changes and regenerate docs. The generation script is manual. Developers update the API, deploy, and forget to regenerate docs.
+**Why it happens:** The meeting-documents route (`/meetings/:id/documents`) has its own loader that fetches documents independently. A developer copying that pattern into a tab on the meeting-detail page creates duplicate fetches. The meeting-detail loader already has `getExtractedDocumentsForMeeting` -- adding another fetch is redundant.
 
-**Consequences:** API reference documentation shows outdated information. Users encounter endpoints that behave differently than documented. Trust in documentation erodes, and the docs site becomes counterproductive.
+**Consequences:**
+- Two identical Supabase queries for every meeting-detail page load
+- Increased loader latency (each query adds 50-100ms)
+- Confusing code where the same data exists in two different shapes
 
 **Prevention:**
-1. Add the generation script to the docs app's `prebuild` npm script so it runs automatically before every build.
-2. Do NOT commit generated MDX files to git. Add the generated API reference directory to `.gitignore`. Only commit the source OpenAPI spec JSON.
-3. The build pipeline should: (a) copy/fetch the latest spec, (b) run `generateFiles()`, (c) run `next build`.
-4. For local dev, run the generation as part of the `dev` script.
-5. Optionally add a CI check that regenerates and diffs, failing if the spec is stale relative to the source of truth.
+1. The meeting-detail loader already fetches `extractedDocuments`. Any tab or section on the meeting-detail page should use this data, not add new fetches.
+2. If more document detail is needed (e.g., parent document info, source URLs), extend the existing `getExtractedDocumentsForMeeting` query rather than adding a parallel query.
+3. For the "view all documents" link, navigate to `/meetings/:id/documents` (the existing dedicated route) rather than building a tab.
 
-**Phase:** Address in Phase 2 (OpenAPI integration).
+**Detection:** Count Supabase queries per meeting-detail page load. If `extracted_documents` appears more than once, there is duplication.
 
-**Confidence:** HIGH -- this is a universal documentation drift problem.
+**Phase:** Relevant to any phase that modifies the meeting-detail page's data fetching.
 
-**Sources:**
-- [fumadocs generateFiles()](https://fumadocs.dev/docs/ui/openapi/generate-files)
+**Confidence:** HIGH -- verified from the existing code: `meeting-detail.tsx` loader calls `getExtractedDocumentsForMeeting`, and `meeting-documents.tsx` loader calls it again independently. The pattern to avoid is replicating the second call inside the first route.
 
 ---
 
-### Pitfall 8: Cloudflare DNS Routing Conflict Between Workers and Pages
+### Pitfall 8: Document Section Links Not Resolving After Agenda Item Expansion Animation
 
-**What goes wrong:** Setting up `docs.viewroyal.ai` as a custom domain on a Cloudflare Pages project requires a CNAME record. The existing web app's `wrangler.toml` has `routes = [{ pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" }]`. If the route pattern were broadened to a wildcard subdomain pattern (e.g., `*.viewroyal.ai/*`), it would intercept requests to `docs.viewroyal.ai` and route them to the main Worker instead of the Pages project.
+**What goes wrong:** The `AgendaOverview` component uses a CSS `grid-rows-[1fr]/grid-rows-[0fr]` animation to expand/collapse agenda items. The `DocumentSections` component inside the expanded area also uses the same animation pattern for individual document accordions. When a user clicks an agenda item that has document sections, the outer accordion animates open while inner content may have anchor links or scroll targets. Hash-based links (e.g., `#section-3`) to document sections inside collapsed accordions do not work because the content has `overflow: hidden` and zero height.
 
-**Why it happens:** Route pattern editing or copy-paste errors. The current pattern `viewroyal.ai/*` correctly matches only the apex domain, but during a Cloudflare dashboard session, it could accidentally be changed. Additionally, Cloudflare requires DNS records to exist before a custom domain is active -- forgetting the CNAME results in `ERR_NAME_NOT_RESOLVED`.
+**Why it happens:** The CSS grid animation pattern sets `overflow: hidden` on the collapsed state. When a link targets an element inside a collapsed accordion, the browser cannot scroll to it because the element has no layout height. This is a known limitation of the progressive disclosure (accordion) pattern.
 
-**Consequences:** Requests to `docs.viewroyal.ai` serve the main web app or return a 404. The docs site is unreachable but the main site works fine, making the issue confusing to diagnose.
+**Consequences:**
+- Deep links to specific document sections within agenda items do not work
+- "Jump to section" links from search results or cross-references fail silently
+- The user lands on the meeting page but cannot find the referenced content
 
 **Prevention:**
-1. Verify the existing Worker route pattern does NOT include a wildcard subdomain before adding the Pages custom domain.
-2. Add CNAME record: `docs` -> `<pages-project>.pages.dev`.
-3. Use Cloudflare Pages custom domain configuration (not Worker routes) for the docs subdomain.
-4. Test subdomain resolution independently: `curl -I https://docs.viewroyal.ai` before and after Pages setup.
-5. The current route `viewroyal.ai/*` is correct as-is. Do not modify it.
+1. If implementing deep links to document sections, auto-expand the parent agenda item and document accordion when the hash matches.
+2. Use a `useEffect` that reads `window.location.hash` on mount and triggers the appropriate expansion.
+3. For cross-linking from matter pages, link to the document viewer route (`/meetings/:id/documents/:docId`) rather than trying to deep-link into the meeting-detail agenda accordion.
+4. This is a progressive disclosure vs. direct linking tension. Accept that accordion content is not directly linkable and route users to the standalone document viewer instead.
 
-**Phase:** Address in the deployment phase (final phase).
+**Detection:** Try linking directly to `#agenda-42` on a meeting-detail page where the agenda item has document sections. Verify whether the content is visible or collapsed.
 
-**Confidence:** HIGH -- existing wrangler.toml verified; Cloudflare routing precedence well-documented.
+**Phase:** Address in the phase that adds cross-linking between documents and agenda items.
 
-**Sources:**
-- [Cloudflare Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/)
-- [Cloudflare Pages Custom Domains](https://developers.cloudflare.com/pages/configuration/custom-domains/)
+**Confidence:** HIGH -- verified from `AgendaOverview.tsx`: the grid animation pattern uses `overflow: hidden` on collapsed state. The `DocumentSections` component nests another accordion inside.
 
 ---
 
-### Pitfall 9: Next.js Version Incompatibility Chain
+### Pitfall 9: Responsive Table Column Hiding Destroys Data Integrity for Civic Documents
 
-**What goes wrong:** Next.js, fumadocs, and (if used) OpenNext all evolve independently with tight coupling. Next.js 16 has known issues with `@opennextjs/cloudflare` (instrumentation hook loading error). fumadocs packages are tightly coupled to specific Next.js versions. Even for static export, a Next.js minor version bump can break fumadocs-mdx's build plugin.
+**What goes wrong:** A common responsive table pattern is hiding "secondary" columns on mobile. For civic documents, every table column is potentially important -- financial amounts, vote counts, property addresses, bylaw references. A developer applies `hidden sm:table-cell` to "secondary" columns, and mobile users lose access to critical data they specifically came to read.
 
-**Why it happens:** fumadocs-mdx hooks deeply into Next.js's build pipeline via `createMDX()`. Each fumadocs release targets specific Next.js versions. Using `^` ranges in package.json allows silent upgrades that break the build.
+**Why it happens:** Standard responsive web design patterns work for marketing sites where some columns are decorative. Civic documents are reference material where every cell matters. The developer applies a web design pattern that is wrong for this content type.
+
+**Consequences:**
+- Citizens on mobile cannot see financial amounts, vote results, or other critical data
+- The platform's core value proposition (transparency) is undermined on the device most people use
+- Users complain that "the data is incomplete" when it is actually hidden by CSS
 
 **Prevention:**
-- Use Next.js 15.x LTS for the docs site. It is stable, well-tested with fumadocs, and avoids Next.js 16 edge cases.
-- Pin the exact Next.js version in `package.json` (e.g., `"next": "15.3.2"`, not `"^15.3.2"`). Next.js minor/patch versions can introduce changes that break fumadocs.
-- Check fumadocs release notes for supported Next.js versions before upgrading either.
-- Use `pnpm --frozen-lockfile` in CI to prevent version drift.
-- Node.js version matters too: fumadocs has reported issues with Node.js 25 (#2456). Use Node.js 22 LTS.
+1. NEVER hide table columns on mobile for civic document content. Instead, use the horizontal scroll wrapper from Pitfall 3 (`overflow-x: auto`).
+2. For very wide tables (8+ columns), consider a card layout transformation where each row becomes a stacked card on mobile. But only do this if the table structure is predictable (e.g., vote tallies always have the same columns).
+3. For the document viewer, the horizontal scroll approach is safest because table structures vary widely across different document types.
+4. Add a visual scroll indicator (subtle gradient or "scroll right" hint) so users know the table extends beyond the viewport.
 
-**Phase:** Address in Phase 1 (scaffolding, dependency decisions).
+**Detection:** Check document viewer pages with tables on a 375px-wide viewport. All data should be accessible via horizontal scroll, not hidden.
 
-**Confidence:** MEDIUM -- Next.js 16 issues documented in OpenNext troubleshooting; fumadocs #2456 documents Node.js version sensitivity. Exact compatibility matrix needs verification at scaffold time.
+**Phase:** Address alongside Pitfall 3 in the document viewer polish phase.
 
-**Sources:**
-- [OpenNext Cloudflare Troubleshooting](https://opennext.js.org/cloudflare/troubleshooting) -- Next.js 16 issues
-- [fumadocs GitHub Issue #2456](https://github.com/fuma-nama/fumadocs/issues/2456) -- Node.js 25 compatibility
+**Confidence:** HIGH -- this is a UX principle, not a technical finding. Civic document tables must preserve all data on all viewports.
+
+---
+
+### Pitfall 10: getDocumentSectionsForMeeting Two-Query Waterfall
+
+**What goes wrong:** The existing `getDocumentSectionsForMeeting` function in `meetings.ts` makes two sequential Supabase queries: first fetching document IDs for the meeting, then fetching sections for those document IDs. This creates a waterfall where the second query cannot start until the first completes. For meetings with many documents, this adds 100-200ms of unnecessary latency.
+
+**Why it happens:** The `document_sections` table has a `document_id` FK but no direct `meeting_id` FK. To find sections for a meeting, you must first find which documents belong to that meeting. The developer wrote the obvious two-step query.
+
+**Consequences:**
+- Every meeting-detail page load has an extra 50-100ms waterfall for document sections
+- This compounds with the existing transcript pagination waterfall in `getMeetingById`
+- As more meetings accumulate documents, the first query returns more IDs, making the second query's `IN` clause larger
+
+**Prevention:**
+1. Create a Supabase RPC (SQL function) that joins `documents` and `document_sections` in a single query:
+   ```sql
+   SELECT ds.* FROM document_sections ds
+   JOIN documents d ON ds.document_id = d.id
+   WHERE d.meeting_id = $1
+   ORDER BY ds.document_id, ds.section_order
+   ```
+2. Alternatively, add a `meeting_id` denormalized column to `document_sections` (populated by trigger or migration). This eliminates the join entirely.
+3. Short-term fix: the current two-query approach works. Prioritize this optimization only if meeting-detail page load times exceed acceptable thresholds (> 1 second total).
+4. The same pattern exists in `getExtractedDocumentsForMeeting`. Both should be optimized together.
+
+**Detection:** Check Supabase query logs for pairs of queries: `SELECT id FROM documents WHERE meeting_id = X` followed by `SELECT * FROM document_sections WHERE document_id IN (...)`. The gap between them is the wasted time.
+
+**Phase:** Address as a performance optimization, either in the document linking phase or as a follow-up polish pass.
+
+**Confidence:** HIGH -- verified from `apps/web/app/services/meetings.ts` lines 278-305 and 327-355: both `getDocumentSectionsForMeeting` and `getExtractedDocumentsForMeeting` use the same two-step waterfall pattern.
 
 ---
 
@@ -270,110 +286,81 @@ Mistakes that cause rewrites, deployment failures, or major integration breakage
 
 ---
 
-### Pitfall 10: Content Directory Missing meta.json Breaks Sidebar
+### Pitfall 11: Image R2 URLs Hardcoded to images.viewroyal.ai
 
-**What goes wrong:** fumadocs uses `meta.json` files in each content directory to control sidebar ordering and page titles. When mixing hand-written MDX guides with auto-generated OpenAPI reference pages, every directory and subdirectory needs its own `meta.json`. Missing `meta.json` in any directory causes pages to appear in alphabetical order or not appear in the sidebar at all.
+**What goes wrong:** The `document-viewer.tsx` component constructs image URLs as `https://images.viewroyal.ai/${img.r2_key}`. When the platform adds multi-municipality support, this domain is incorrect for other towns. Additionally, if the R2 bucket custom domain changes, every reference breaks because the domain is hardcoded inline rather than configured.
 
-**Why it happens:** It's easy to add a new directory (e.g., `content/docs/data-model/`) and forget the `meta.json`. fumadocs does not warn about missing `meta.json` files -- it silently falls back to alphabetical ordering. Developers don't notice until they check the sidebar.
+**Why it happens:** The image domain was set up for View Royal and hardcoded as a string literal in the component. There is no environment variable or configuration for it.
 
 **Prevention:**
-- Plan the content directory structure before writing any content:
-  ```
-  content/docs/
-    meta.json              (top-level section ordering)
-    index.mdx              (docs home)
-    getting-started/
-      meta.json
-      index.mdx
-      authentication.mdx
-    guides/
-      meta.json
-      ...
-    api/                   (generated from OpenAPI)
-      meta.json            (may be auto-generated by generateFiles())
-      ...
-    data-model/
-      meta.json
-      ...
-  ```
-- Include `meta.json` in every content directory from the start.
-- Test sidebar navigation after adding each new directory.
+1. Extract the image base URL to an environment variable or utility function.
+2. For v1.5, this is a minor concern since only View Royal is active. But note it for multi-tenancy readiness.
+3. A simple utility like `getImageUrl(r2Key: string)` that reads from wrangler.toml vars would future-proof this.
 
-**Phase:** Address in Phase 2 (content organization planning).
+**Phase:** Low priority. Can be addressed during document viewer polish or deferred to multi-tenancy milestone.
 
-**Confidence:** MEDIUM -- based on fumadocs GitHub discussion reports about directory renaming breaking meta.json resolution.
+**Confidence:** HIGH -- verified from `document-viewer.tsx` line 183: URL is constructed inline with hardcoded domain.
 
 ---
 
-### Pitfall 11: Image Optimization Disabled in Static Export
+### Pitfall 12: Provenance Source Links Becoming Broken (404 Upstream)
 
-**What goes wrong:** Next.js static export requires `images: { unoptimized: true }` in `next.config.mjs`. This means no automatic image resizing, WebP conversion, or lazy loading optimization from the `next/image` component.
+**What goes wrong:** Meeting provenance indicators link to source URLs (`agenda_url`, `minutes_url`, `source_url` on documents). These URLs point to the Town of View Royal's CivicWeb system, which periodically reorganizes or archives content. A provenance link that worked when the pipeline scraped the document may return 404 six months later.
 
-**Why it happens:** Next.js Image Optimization requires a server-side component unavailable in static export mode.
+**Why it happens:** Municipal CMS systems do not guarantee URL permanence. CivicWeb URLs include session-like path segments that can expire. The pipeline stores the URL at scrape time but never rechecks it.
+
+**Consequences:**
+- Users click "View Original PDF" and get a 404 from the town website
+- Provenance indicators suggest source availability that no longer exists
+- Trust in the platform is undermined when external links break
 
 **Prevention:**
-- Pre-optimize all images before committing (sharp CLI, imagemin, or Squoosh).
-- Use SVGs for architecture diagrams and illustrations.
-- Use standard `<img>` tags or fumadocs's image handling instead of `next/image`.
-- For a developer docs site, this is low-impact -- content is primarily text and code.
+1. Display source links with clear attribution: "Source: Town of View Royal CivicWeb" so users understand it is an external link that may change.
+2. Do NOT verify source URLs in real-time (adds latency, external dependency in the SSR path).
+3. Consider adding a fallback message: "If this link is broken, the original document was published on [date]."
+4. Long-term: store original PDFs in R2 and link to those. But that is a storage/legal consideration beyond v1.5 scope.
 
-**Phase:** Minor concern, address during content creation phases.
+**Phase:** Address during provenance indicators UI design.
 
-**Confidence:** HIGH -- Next.js static export limitation is deterministic and well-documented.
+**Confidence:** MEDIUM -- based on general experience with municipal CMS systems. The actual URL stability of View Royal's CivicWeb has not been measured.
 
 ---
 
-### Pitfall 12: OpenAPI Spec Server URLs Point to Wrong Origin
+### Pitfall 13: marked.parse() Synchronous Blocking on Very Large Documents
 
-**What goes wrong:** The OpenAPI spec generated by chanfana at `/api/v1/openapi.json` may not include an explicit `servers` array, or it may use relative paths. When fumadocs renders API reference pages on `docs.viewroyal.ai`, the "Try it" playground (if enabled) attempts to send requests to the docs domain, not the API domain. Code examples may show incorrect base URLs.
+**What goes wrong:** The `MarkdownContent` component calls `marked.parse(content, { async: false })` synchronously. For very large document sections (10,000+ words of markdown with many tables and lists), this blocks the React rendering thread. In SSR on Cloudflare Workers, this blocks the event loop and can push CPU time toward the limit.
 
-**Why it happens:** chanfana generates the spec based on the request context. When extracted to a static JSON file for the docs build, server context is lost. The spec may default to relative URLs.
+**Why it happens:** Most document sections are small (500-2000 tokens). But some staff reports and bylaw full texts can have very long sections. The sync parse is fine for typical sections but becomes a bottleneck for outliers.
+
+**Consequences:**
+- Occasional slow page loads for documents with very large sections
+- In extreme cases, CPU time limit exceeded on Workers
 
 **Prevention:**
-1. Ensure the extracted OpenAPI spec includes an explicit `servers` array: `[{ "url": "https://viewroyal.ai" }]`. Add this post-extraction if chanfana doesn't generate it.
-2. Configure fumadocs-openapi to use the correct API base URL for code examples.
-3. If the interactive playground causes CORS issues (docs domain calling API domain), either add `docs.viewroyal.ai` to the API's CORS allowed origins or disable the playground in favor of static code examples (curl, JavaScript, Python).
+1. For v1.5, the sync parse is acceptable. Monitor for documents that trigger slow renders.
+2. If a problem is detected, split very large sections in the pipeline (chunking at 5000 tokens) rather than trying to async-parse in the component.
+3. The `marked` library supports async parsing, but using it requires `await` in the component rendering path, which complicates the current synchronous component structure.
 
-**Phase:** Address in Phase 2 (OpenAPI integration).
+**Phase:** Monitor during testing. Optimize only if slow document renders are observed.
 
-**Confidence:** MEDIUM -- depends on how chanfana populates the servers array; fumadocs-openapi playground configuration needs testing.
+**Confidence:** MEDIUM -- the risk depends on the actual distribution of section sizes in the data. Most sections are small based on the pipeline's heading-based chunking approach.
 
 ---
 
-### Pitfall 13: Build Output Directory Misconfigured for Cloudflare Pages
+### Pitfall 14: Inconsistent Date Formatting Across Provenance Indicators
 
-**What goes wrong:** Next.js static export outputs to `out/` by default (not `.next/` or `build/`). Configuring Cloudflare Pages with the wrong build output directory produces a 404 site with no obvious error message.
+**What goes wrong:** The app uses `formatDate` from `utils.ts` in some places and raw date strings in others. Provenance indicators need consistent date formatting ("Agenda posted Jan 13, 2025" vs "2025-01-13" vs "January 13, 2025"). If the developer uses different format functions or options across the three provenance indicators (Agenda, Minutes, Video), the UI looks inconsistent.
 
-**Why it happens:** Confusion between Next.js output modes: `output: 'export'` -> `out/`, `output: 'standalone'` -> `.next/standalone/`, default -> `.next/`. Each mode outputs to a different directory.
-
-**Prevention:**
-- Set Cloudflare Pages build output directory to `out/`.
-- Add `out/` to `.gitignore`.
-- Verify locally after `next build` that HTML files are present in `out/` before configuring CI.
-- If using `trailingSlash: true` (recommended for Cloudflare Pages), routes like `/docs` become `/docs/index.html`.
-
-**Phase:** Address in deployment phase.
-
-**Confidence:** HIGH -- deterministic Next.js behavior.
-
----
-
-### Pitfall 14: fumadocs-openapi CSS Preset Not Imported
-
-**What goes wrong:** The OpenAPI integration has its own CSS styles (`fumadocs-openapi/css/preset.css`) that must be imported separately from the main fumadocs-ui styles. Without this import, API reference pages render without proper styling -- request/response sections look broken, parameter tables are unstyled, and the interactive playground is unusable.
-
-**Why it happens:** The OpenAPI CSS is a separate package import, not bundled with fumadocs-ui. It's easy to miss because the main docs pages look fine without it.
+**Why it happens:** The existing `formatDate` utility accepts an options object for `Intl.DateTimeFormat`. Different components pass different options or no options, producing different formats.
 
 **Prevention:**
-- Add `@import 'fumadocs-openapi/css/preset.css';` to the docs app's global CSS file alongside the fumadocs-ui imports.
-- Check the API reference pages visually after initial setup, not just the hand-written docs pages.
+1. Define a single date format for provenance timestamps and use it consistently.
+2. The existing `formatDate` default (no options) produces a reasonable format. Use it everywhere for provenance dates.
+3. If a relative format is wanted ("3 days ago"), add a separate utility rather than overloading `formatDate`.
 
-**Phase:** Address in Phase 2 (OpenAPI integration setup).
+**Phase:** Address during provenance UI implementation.
 
-**Confidence:** HIGH -- documented in fumadocs OpenAPI integration guide.
-
-**Sources:**
-- [fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi) -- CSS import requirement
+**Confidence:** HIGH -- this is a UI consistency concern, not a technical risk.
 
 ---
 
@@ -381,45 +368,32 @@ Mistakes that cause rewrites, deployment failures, or major integration breakage
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Project scaffolding | Using OpenNext Workers instead of static export (#1) | Static export to Cloudflare Pages from day one |
-| Project scaffolding | Introducing pnpm workspaces, breaking existing apps (#3) | Keep apps independent, no workspace config |
-| Project scaffolding | Wrong fumadocs config from stale tutorials (#4) | Use `create-fumadocs-app` CLI, pin versions |
-| Project scaffolding | Tailwind CSS 4 style conflicts (#5) | Independent Tailwind config per app |
-| Project scaffolding | Next.js version breaks fumadocs (#9) | Pin Next.js 15.x LTS, Node.js 22 LTS |
-| OpenAPI integration | Runtime spec not available at build time (#2) | Prebuild spec extraction script |
-| OpenAPI integration | Generated MDX files go stale (#7) | Prebuild generation, don't commit generated files |
-| OpenAPI integration | Server URLs point to wrong origin (#12) | Explicit servers array in extracted spec |
-| OpenAPI integration | Missing OpenAPI CSS (#14) | Import fumadocs-openapi/css/preset.css |
-| Content organization | Missing meta.json breaks sidebar (#10) | Plan directory structure upfront, meta.json everywhere |
-| Search setup | Static search not configured (#6) | Client-side search setup for static export |
-| Deployment | DNS routing conflict (#8) | Verify Worker route patterns, add CNAME |
-| Deployment | Wrong build output directory (#13) | Set Pages output to `out/` |
-| Content creation | Unoptimized images (#11) | Pre-optimize, prefer SVG |
+| Document viewer typography & spacing | Table overflow on mobile (#3) | Wrap all tables in `overflow-x-auto` div |
+| Document viewer typography & spacing | XSS from unsanitized markdown (#6) | Add sanitization post-processing to MarkdownContent |
+| Document viewer typography & spacing | Column hiding destroys data (#9) | Never hide civic document table columns; use horizontal scroll |
+| Document viewer typography & spacing | Large document blocking render (#13) | Monitor, split large sections if needed |
+| Document links on meeting detail | Loader payload bloat (#1) | Use existing lightweight metadata; no full text in meeting loader |
+| Document links on meeting detail | Duplicate data fetching (#7) | Reuse existing extractedDocuments from loader |
+| Document links on meeting detail | Deep link into accordion fails (#8) | Link to standalone document viewer, not accordion hash |
+| Documents on matter pages | N+1 queries (#2) | Add extracted_documents to nested select in getMatterById |
+| Documents on matter pages | Duplicate titles without context (#4) | Include meeting date in document link display |
+| Meeting provenance indicators | Stale timestamps (#5) | Use document created_at as "posted" date, not "verified" |
+| Meeting provenance indicators | Broken source links (#12) | Clear attribution, fallback messaging |
+| Meeting provenance indicators | Inconsistent date formatting (#14) | Single formatDate call with consistent options |
+| Cross-cutting | Two-query waterfall (#10) | Supabase RPC or denormalized meeting_id on document_sections |
+| Cross-cutting | Hardcoded image domain (#11) | Extract to environment variable |
 
 ---
 
 ## Sources
 
-- [fumadocs Official Documentation](https://www.fumadocs.dev/)
-- [fumadocs OpenAPI Integration](https://www.fumadocs.dev/docs/integrations/openapi)
-- [fumadocs Static Build Guide](https://www.fumadocs.dev/docs/deploying/static)
-- [fumadocs Deployment Docs](https://www.fumadocs.dev/docs/deploying) -- "Fumadocs doesn't work on Edge runtime"
-- [fumadocs v15 Blog (Tailwind CSS 4)](https://www.fumadocs.dev/blog/v15)
-- [fumadocs MDX v10 Summary](https://www.fumadocs.dev/blog/mdx-v10-summary)
-- [fumadocs MDX Next.js Setup](https://www.fumadocs.dev/docs/mdx/next)
-- [fumadocs OpenAPI v10 Blog](https://www.fumadocs.dev/blog/openapi-v10)
-- [fumadocs generateFiles()](https://fumadocs.dev/docs/ui/openapi/generate-files)
-- [fumadocs GitHub Issue #1875](https://github.com/fuma-nama/fumadocs/issues/1875) -- version mismatch type errors
-- [fumadocs GitHub Issue #2456](https://github.com/fuma-nama/fumadocs/issues/2456) -- Node.js 25 compatibility
-- [OpenNext Cloudflare Get Started](https://opennext.js.org/cloudflare/get-started)
-- [OpenNext Cloudflare Troubleshooting](https://opennext.js.org/cloudflare/troubleshooting)
-- [Cloudflare Workers Next.js Guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)
-- [Cloudflare Pages Static Next.js](https://developers.cloudflare.com/pages/framework-guides/nextjs/deploy-a-static-nextjs-site/)
-- [Cloudflare Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/)
-- [Cloudflare workers-sdk Issue #10941](https://github.com/cloudflare/workers-sdk/issues/10941) -- pnpm monorepo installs all workspaces
-- [Cloudflare Workers Build Cache + pnpm](https://community.cloudflare.com/t/workers-build-cache-not-working-as-expected-in-monorepos-pnpm/803213)
-- [Deploy Next.js fumadocs to GitHub Pages](https://zephinax.com/blog/deploy-nextjs-fumadocs-github-pages) -- static export pitfalls
-- [Deploying Next.js on Cloudflare Troubleshooting](https://devinvinson.com/2025/11/deploying-fullstack-next-js-on-cloudflare-my-troubleshooting-guide/)
-- [Cloudflare OpenNext Size Optimization](https://developers.cloudflare.com/changelog/2025-06-05-open-next-size/)
+- [Cloudflare Workers Limits](https://developers.cloudflare.com/workers/platform/limits/) -- 128MB memory, 30s default CPU, SSR typically 10-20ms
+- [Supabase Querying Joins and Nested Tables](https://supabase.com/docs/guides/database/joins-and-nesting) -- PostgREST FK-based auto-joins
+- [Supabase Performance Tuning](https://supabase.com/docs/guides/platform/performance) -- query optimization, index advisor
+- [CSS Responsive Tables Guide](https://dev.to/satyam_gupta_0d1ff2152dcc/css-responsive-tables-complete-guide-with-code-examples-for-2025-225p) -- overflow-x-auto pattern
+- [Responsive Tables in Markdown](https://johnfraney.ca/blog/how-to-write-responsive-html-tables/) -- wrapper div approach
+- [marked.js XSS Vulnerability](https://snyk.io/blog/marked-xss-vulnerability/) -- sanitization not enabled by default
+- [Preventing XSS with dangerouslySetInnerHTML](https://dev.to/jam3/how-to-prevent-xss-attacks-when-using-dangerouslysetinnerhtml-in-react-1464) -- DOMPurify recommendation
+- Codebase analysis: `apps/web/app/components/markdown-content.tsx`, `apps/web/app/routes/document-viewer.tsx`, `apps/web/app/services/meetings.ts`, `apps/web/app/services/matters.ts`, `apps/web/app/routes/meeting-detail.tsx`, `apps/web/app/routes/matter-detail.tsx`
 
-*Last updated: 2026-02-23*
+*Last updated: 2026-02-26*

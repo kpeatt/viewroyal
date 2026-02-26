@@ -1,406 +1,258 @@
-# Technology Stack: v1.4 Developer Documentation Portal
+# Technology Stack: v1.5 Document Experience
 
-**Project:** ViewRoyal.ai v1.4 — fumadocs.dev Documentation Site
-**Researched:** 2026-02-23
-**Scope:** New dependencies for a fumadocs-powered developer documentation portal at docs.viewroyal.ai, deployed as a separate Cloudflare Worker alongside the existing React Router 7 app.
-**Out of scope:** Existing stack (React Router 7, Tailwind 4, Hono + chanfana, Supabase, Cloudflare Workers for apps/web/) -- all validated and unchanged.
-
----
-
-## Deployment Strategy Decision
-
-### Static Export to Cloudflare Workers (RECOMMENDED)
-
-Use Next.js `output: 'export'` to build the docs site as pure static HTML/CSS/JS, deployed as a Cloudflare Worker with static assets. This is the simplest, cheapest, and most reliable path for a documentation site.
-
-**Why static export over OpenNext (@opennextjs/cloudflare):**
-- A documentation site has zero dynamic server-side logic at runtime -- all content is known at build time
-- Static export produces a `./out/` folder of HTML files -- no Worker runtime code, no Node.js compatibility shims, no edge runtime concerns
-- Fumadocs explicitly documents that `output: 'export'` works, including with the OpenAPI integration (pages are pre-rendered via `generateStaticParams`)
-- OpenNext adds complexity (build transforms, `open-next.config.ts`, `WORKER_SELF_REFERENCE` binding, `.open-next/` output) that is unnecessary when the site has no server-side routes
-- Static assets on Cloudflare Workers are free (no billable Worker invocations for asset-only requests)
-
-**Why NOT Cloudflare Pages:** Pages was deprecated by Cloudflare in April 2025. The recommended path for static sites is now Workers with static assets, configured via `[assets]` in `wrangler.toml`.
-
-**Why NOT React Router (fumadocs supports it):** While fumadocs v16 added React Router support, the OpenAPI integration (`fumadocs-openapi`) requires React Server Components. RSC is available in Next.js but not in React Router 7. The OpenAPI auto-generated API reference is a core feature of this milestone, so Next.js is required.
-
-**Confidence:** HIGH -- fumadocs static export docs, Cloudflare Workers static assets docs, Next.js static export docs all confirm this works.
+**Project:** ViewRoyal.ai v1.5 -- Document Viewer Improvements, Provenance Indicators, Document Linking
+**Researched:** 2026-02-26
+**Scope:** Stack changes/additions for polished document typography, responsive table rendering, meeting provenance indicators, and document-to-motion/matter linking UI.
+**Out of scope:** Existing validated stack (React Router 7 SSR, Tailwind CSS 4, shadcn/ui + Radix UI, Supabase PostgreSQL with pgvector, `marked` v17, `@tailwindcss/typography` v0.5.19, `lucide-react`, Cloudflare Workers) -- all unchanged.
 
 ---
 
-## Recommended Stack
+## Executive Finding: No New Dependencies Needed
 
-### Core Framework
+This milestone requires **zero new npm packages**. Every feature can be built with existing dependencies. The work is CSS/component-level, not library-level.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| next | ^16.1.5 | React framework for docs site | fumadocs-ui v16 requires `next: 16.x.x`. Next.js 16 is the current stable release (16.1.6 as of today). Required for RSC support which fumadocs-openapi needs. |
-| react | ^19.2.0 | UI rendering | Required by fumadocs v16 (minimum 19.2.0). |
-| react-dom | ^19.2.0 | DOM rendering | Required by fumadocs v16 (minimum 19.2.0). |
-
-**Note on Next.js 16 vs 15:** fumadocs-ui v16.6.x has a hard peer dependency on `next: 16.x.x`. Next.js 15 is not supported. This is a deliberate fumadocs decision tied to React 19.2 features and the removal of Turbopack/SWC compatibility issues.
-
-**Confidence:** HIGH -- verified via `npm view fumadocs-ui@16.6.5 peerDependencies`.
+**Confidence:** HIGH -- verified by auditing existing `package.json`, the document viewer route, the `MarkdownContent` component, and every feature requirement against current capabilities.
 
 ---
 
-### Documentation Framework
+## Existing Stack Relevant to This Milestone
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| fumadocs-core | ^16.6.5 | Core docs engine: source loading, page trees, search indexing, navigation | Framework-agnostic engine. Handles content ingestion, builds the navigation tree from file structure + `meta.json`, provides search via built-in Orama. |
-| fumadocs-ui | ^16.6.5 | Pre-built UI components: DocsLayout, DocsPage, sidebar, TOC, breadcrumbs, code blocks | Beautiful, accessible docs UI out of the box. Uses Radix UI internally. Tailwind CSS v4 native. Includes dark mode via next-themes. |
-| fumadocs-mdx | ^14.2.8 | MDX compilation plugin for Next.js | Compiles MDX content at build time, extracts frontmatter, generates table-of-contents, produces type-safe page collections in `.source/` directory. Integrates via `createMDX()` wrapper in `next.config.mjs`. |
-| fumadocs-openapi | ^10.3.9 | Auto-generates API reference pages from OpenAPI 3.1 spec | Reads the existing `/api/v1/openapi.json` spec (or a local copy), generates MDX page stubs, renders interactive API documentation via `APIPage` RSC component. Includes playground, code samples, schema browser. |
+### Already Installed and Sufficient
 
-**Confidence:** HIGH -- all versions verified via npm registry on 2026-02-23.
+| Technology | Version | Role in v1.5 | Status |
+|------------|---------|--------------|--------|
+| `@tailwindcss/typography` | ^0.5.19 | Prose styling for document sections | Already loaded via `@plugin` in `app.css`. Provides all `prose-*` modifiers needed for typography polish. |
+| `marked` | ^17.0.3 | Markdown-to-HTML for document sections | Already used in `MarkdownContent` component. Supports GFM tables, custom renderers via `marked.use()`. |
+| `tailwindcss` | ^4.1.13 | Utility classes for responsive layouts, overflow handling | Already the CSS engine. Tailwind 4 CSS variables and responsive utilities cover all layout needs. |
+| `lucide-react` | ^0.562.0 | Icons for provenance indicators (FileText, Video, BookOpen, Clock, Link2, etc.) | Already installed. Has every icon needed for Agenda/Minutes/Video provenance badges. |
+| `@radix-ui/react-tabs` | ^1.1.13 | Tab interfaces (already used in meeting detail) | Already installed. |
+| `class-variance-authority` | ^0.7.1 | Variant-based styling for provenance badges | Already installed via shadcn/ui. |
+| `clsx` + `tailwind-merge` | ^2.1.1 / ^3.4.0 | Class composition (existing `cn()` utility) | Already installed. |
 
----
+### Key Integration Points
 
-### OpenAPI Integration
+**`MarkdownContent` component** (`app/components/markdown-content.tsx`):
+- Currently uses `marked.parse()` with GFM enabled and Tailwind's `prose` classes
+- Already has table styling: `prose-table:text-xs`, `prose-th:bg-zinc-50`, `prose-td:p-2`
+- Improvement needed: responsive table overflow wrapper and tighter spacing
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| fumadocs-openapi | ^10.3.9 | See above | Renders API reference from the existing chanfana-generated OpenAPI 3.1 spec. |
-| shiki | ^3.22.0 | Syntax highlighting for code blocks and API examples | Required peer dependency of fumadocs-openapi. Also used by fumadocs-core for general code highlighting. Already uses the JS regex engine (not WASM Oniguruma) for Cloudflare compatibility. |
+**`document-viewer.tsx` route**:
+- Full document rendering with sections, inline images, breadcrumbs
+- Currently uses `MarkdownContent` for each section
+- Improvement needed: typography spacing refinement, title deduplication, responsive tables
 
-**Integration with existing OpenAPI spec:**
+**`AgendaOverview.tsx` / `DocumentSections.tsx`**:
+- Already renders document sections per agenda item with accordion expansion
+- Already groups by `extracted_document_id`
+- Improvement needed: link to full document viewer, provenance indicators
 
-The existing app serves `GET /api/v1/openapi.json` (auto-generated by chanfana). The docs site will consume this spec in one of two ways:
+**`meeting-detail.tsx` route**:
+- Already loads `extractedDocuments` and `documentSections` in the loader
+- Already shows document count in overview tab
+- Improvement needed: provenance indicator row (Agenda/Minutes/Video badges with source links)
 
-1. **Build-time fetch (recommended):** A pre-build script fetches the live spec and saves it locally:
-   ```bash
-   curl https://viewroyal.ai/api/v1/openapi.json > content/openapi/api-v1.json
-   ```
-   Then `createOpenAPI({ input: ['./content/openapi/api-v1.json'] })` points to the local file.
-
-2. **Direct URL reference:** `createOpenAPI({ input: ['https://viewroyal.ai/api/v1/openapi.json'] })` fetches at build time. Works but couples build to production being up.
-
-Option 1 is better because it makes builds reproducible and allows the spec to be committed to the repo (versioned alongside the docs).
-
-**What fumadocs-openapi generates:**
-- One MDX page per API endpoint (grouped by tag)
-- Interactive request playground (client-side, no server needed)
-- Multi-language code examples (curl, JavaScript, Python)
-- TypeScript type definitions from response schemas
-- Request/response parameter tables from Zod schemas
-
-**Confidence:** HIGH -- verified via fumadocs OpenAPI docs and npm package inspection.
+**`matter-detail.tsx` route**:
+- Timeline of agenda items across meetings
+- Improvement needed: show linked documents per timeline entry, cross-meeting document aggregation
 
 ---
 
-### MDX Tooling
+## Feature-Specific Stack Guidance
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| @types/mdx | ^2.0.13 | TypeScript types for MDX files | Required by fumadocs-mdx for type-safe MDX imports. |
+### 1. Polished Document Typography and Spacing
 
-**Content pipeline (how MDX files become pages):**
+**Approach:** Tailwind `prose-*` modifier classes + CSS custom properties. No new libraries.
 
-1. Author writes `.mdx` files in `content/docs/`
-2. `fumadocs-mdx` compiles them at dev/build time via `createMDX()` Next.js plugin
-3. Output goes to `.source/` directory (gitignored) with type-safe collection exports
-4. `lib/source.ts` creates a fumadocs `loader()` that builds the page tree
-5. App Router `[...slug]/page.tsx` catches all routes, looks up the page, renders with `<DocsPage>`
+The existing `MarkdownContent` component already applies `prose prose-zinc prose-sm` with detailed modifier overrides. The refinement is purely CSS-level:
 
-**MDX features available:**
-- GitHub Flavored Markdown (remark-gfm bundled in fumadocs-core)
-- Code blocks with syntax highlighting (shiki, bundled)
-- Callouts/admonitions via fumadocs-ui components
-- Tabs, accordions, cards (fumadocs-ui includes these)
-- Custom MDX components via `mdx-components.tsx`
-- Frontmatter with title, description, icon fields
-
----
-
-### Styling
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| tailwindcss | ^4.0.0 | CSS framework | Required by fumadocs-ui. Same major version as the existing web app (^4.1.13). |
-| @tailwindcss/vite | N/A | NOT NEEDED | The docs site uses Next.js, not Vite. Tailwind v4 with Next.js uses PostCSS or the `@next/tailwindcss` integration. |
-
-**Tailwind CSS v4 configuration for fumadocs (CSS-first, no tailwind.config.js):**
-
-```css
-/* app/global.css */
-@import 'tailwindcss';
-@import 'fumadocs-ui/css/neutral.css';   /* Color palette */
-@import 'fumadocs-ui/css/preset.css';    /* Required plugins & styles */
-@import 'fumadocs-openapi/css/preset.css'; /* OpenAPI component styles */
-@source '../node_modules/fumadocs-ui/dist/**/*.js';
+```typescript
+// Enhanced prose classes for MarkdownContent (example of the approach)
+"prose prose-zinc prose-sm max-w-none",
+// Tighter vertical rhythm for official documents
+"prose-p:my-2 prose-p:leading-[1.7]",
+// Better heading hierarchy
+"prose-h2:text-lg prose-h2:mt-8 prose-h2:mb-3 prose-h2:border-b prose-h2:border-zinc-100 prose-h2:pb-2",
+"prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2",
+// Lists that feel like official documents
+"prose-li:my-1 prose-ol:list-decimal",
+// Better blockquote for quoted text/resolutions
+"prose-blockquote:border-l-3 prose-blockquote:border-indigo-200 prose-blockquote:bg-indigo-50/30 prose-blockquote:py-1 prose-blockquote:px-4",
 ```
 
-No `tailwind.config.js` file needed. fumadocs-ui v15+ uses Tailwind v4's CSS-first configuration exclusively.
+**Why no CSS-in-JS or typography library:** The `@tailwindcss/typography` plugin combined with Tailwind 4's prose modifiers gives complete control over every HTML element's spacing, fonts, and colors. Council documents are markdown-rendered HTML -- the prose plugin was built for exactly this use case.
 
-**Confidence:** HIGH -- verified via fumadocs v15 blog post and `npm view @fumadocs/tailwind peerDependencies`.
+**Title deduplication:** The document viewer currently renders `ed.title` in the header AND potentially as the first `section.section_title`. This is a logic fix, not a library need -- skip the first section title if it matches or is contained in `ed.title`.
 
----
+**Confidence:** HIGH -- all prose modifiers verified in existing codebase and Tailwind docs.
 
-### Search
+### 2. Responsive Table Rendering
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| @orama/orama | (bundled) | Client-side full-text search | Bundled in fumadocs-core. For static export, search indexes are generated at build time as JSON files, downloaded by clients, and queried in-browser. No server needed. |
+**Approach:** Custom `marked` renderer wrapping `<table>` in a scrollable `<div>`. No new libraries.
 
-**Static search configuration:**
-- fumadocs generates search indexes during `next build`
-- Indexes are included in the static `out/` folder
-- Client loads indexes on first search interaction
-- For a docs site of this size (estimated 50-100 pages), client-side search is fast and appropriate
-- No Algolia or Orama Cloud subscription needed
+The `marked` library (already v17.0.3) supports custom renderers via `marked.use({ renderer: { table(token) {} } })`. The fix is to wrap the default table HTML in a horizontal-scroll container:
 
-**Confidence:** HIGH -- fumadocs static export docs explicitly describe this workflow.
-
----
-
-### Deployment
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| wrangler | ^4.65.0 | Deploy static assets to Cloudflare Workers | Same tool used by apps/web/ and apps/vimeo-proxy/. Deploys the `out/` folder as static assets. |
-
-**wrangler.toml for apps/docs/:**
-
-```toml
-name = "viewroyal-docs"
-compatibility_date = "2026-02-23"
-
-[assets]
-directory = "./out"
-not_found_handling = "404-page"
-html_handling = "auto-trailing-slash"
-```
-
-**next.config.mjs for static export:**
-
-```js
-import { createMDX } from 'fumadocs-mdx/next';
-
-const config = {
-  output: 'export',
-  trailingSlash: true,
-  images: { unoptimized: true },
-};
-
-export default createMDX()(config);
-```
-
-**Custom domain:** `docs.viewroyal.ai` set via Cloudflare dashboard (wrangler CLI does not support custom domain management). This is a separate Worker from the main `viewroyal-web` Worker.
-
-**Build + deploy scripts (apps/docs/package.json):**
-
-```json
-{
-  "scripts": {
-    "dev": "next dev",
-    "prebuild": "node scripts/fetch-openapi.mjs",
-    "build": "next build",
-    "deploy": "next build && wrangler deploy"
+```typescript
+// In MarkdownContent or a shared marked configuration
+marked.use({
+  renderer: {
+    table(token) {
+      // Call the default renderer, then wrap in overflow container
+      const html = this.parser.parse(token.tokens);
+      return `<div class="overflow-x-auto -mx-2 px-2"><table>${html}</table></div>`;
+    }
   }
-}
+});
 ```
 
-**Confidence:** HIGH -- Cloudflare Workers static assets docs, verified configuration options.
-
----
-
-## Monorepo Configuration
-
-### Current State
-
-The repository has NO root-level `pnpm-workspace.yaml` or `package.json`. Each app (`apps/web/`, `apps/vimeo-proxy/`) manages its own dependencies independently. The `pnpm-workspace.yaml` inside `apps/web/` contains only `packages: ["."]`.
-
-### Recommended Approach: Keep Independent
-
-Do NOT create a root-level pnpm workspace. Keep `apps/docs/` as a self-contained Next.js project with its own `package.json`, `node_modules/`, and `pnpm-workspace.yaml`.
-
-**Why:**
-- The existing apps work this way. Consistency matters.
-- Next.js and React Router 7 have different React version pinning strategies (Next.js uses its own React canary channel). Sharing `node_modules` between them causes version conflicts.
-- Independent apps deploy independently -- `apps/docs/` can build and deploy without touching `apps/web/`.
-- No risk of `pnpm install` in one app breaking another.
-
-**New file structure:**
+Combined with these prose classes already partially in place:
 
 ```
-apps/
-  docs/                    # NEW: fumadocs documentation site
-    app/                   #   Next.js App Router pages
-      layout.tsx           #   Root layout with DocsLayout
-      docs/                #   /docs/* routes
-        [[...slug]]/       #   Catch-all for docs pages
-          page.tsx         #   Page component
-      api-reference/       #   /api-reference/* routes
-        [[...slug]]/       #   Catch-all for OpenAPI pages
-          page.tsx
-    content/               #   MDX content
-      docs/                #   Hand-written docs (guides, data model, etc.)
-        index.mdx          #   Landing page
-        getting-started/
-        authentication/
-        data-model/
-        changelog.mdx
-      openapi/             #   OpenAPI spec (fetched at build time)
-        api-v1.json
-    components/            #   Custom components
-      api-page.tsx         #   OpenAPI page wrapper (RSC)
-      api-page.client.tsx  #   OpenAPI client config
-    lib/                   #   Source loaders
-      source.ts            #   Fumadocs source configuration
-      openapi.ts           #   OpenAPI instance
-    scripts/               #   Build scripts
-      fetch-openapi.mjs    #   Pre-build: fetch latest OpenAPI spec
-    public/                #   Static assets (favicon, etc.)
-    source.config.ts       #   Fumadocs MDX collection config
-    next.config.mjs        #   Next.js config with fumadocs-mdx plugin
-    wrangler.toml          #   Cloudflare Workers deployment config
-    tsconfig.json
-    package.json
-    pnpm-workspace.yaml    #   packages: ["."]
-    .gitignore             #   .source/, .next/, out/, node_modules/
-  web/                     # EXISTING: React Router 7 app (unchanged)
-  vimeo-proxy/             # EXISTING: Cloudflare Worker (unchanged)
-  pipeline/                # EXISTING: Python ETL (unchanged)
+"prose-table:text-xs prose-table:my-3 prose-table:w-full"
+"prose-th:bg-zinc-50 prose-th:p-2 prose-th:text-left prose-th:font-semibold prose-th:whitespace-nowrap"
+"prose-td:p-2 prose-td:border-t prose-td:border-zinc-100 prose-td:align-top"
 ```
 
-**Confidence:** HIGH -- matches existing monorepo pattern.
+**Why not a dedicated table component library:** The tables are markdown-rendered GFM tables from PDF extractions. They vary wildly in column count and content. A responsive wrapper with horizontal scroll is the only approach that works universally. Libraries like `@tanstack/react-table` are for interactive data tables with sorting/filtering -- overkill and wrong abstraction for read-only document tables.
 
----
+**Alternative considered:** `remark-gfm` is already a dependency (used in `react-markdown` on other pages), but the document viewer uses `marked` (not `react-markdown`) for SSR hydration stability. Staying with `marked` custom renderer is correct.
 
-## Alternatives Considered
+**Confidence:** HIGH -- `marked.use()` renderer API verified in marked.js docs. This is a ~10-line change.
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Docs framework | fumadocs | Nextra | Nextra v4 is beta; fumadocs is stable, has better OpenAPI integration, and is actively maintained |
-| Docs framework | fumadocs | Docusaurus | React 19 support unclear; no built-in OpenAPI rendering; heavier bundle |
-| Docs framework | fumadocs | Starlight (Astro) | Would introduce Astro as a third framework. Excellent but adds ecosystem complexity. fumadocs stays in the React/Next.js family. |
-| Docs framework | fumadocs | VitePress | Vue-based. The existing codebase is 100% React/TypeScript. |
-| Deployment | Static export + Workers | OpenNext | OpenNext adds runtime complexity unnecessary for a static docs site. Reserve for apps with server-side logic. |
-| Deployment | Static export + Workers | Vercel | Adds another hosting provider. Cloudflare is already the deployment target for everything else. |
-| Deployment | Static export + Workers | Cloudflare Pages | Deprecated April 2025. Workers with static assets is the replacement. |
-| OpenAPI rendering | fumadocs-openapi | Scalar standalone | Scalar is excellent standalone but fumadocs-openapi integrates natively -- same sidebar, search, navigation. No iframe or separate app. |
-| OpenAPI rendering | fumadocs-openapi | Swagger UI standalone | Already served at /api/v1/docs. The fumadocs integration is richer (playground, code samples, schema browser). |
-| Monorepo | Independent apps | Root pnpm workspace | Risk of React version conflicts between Next.js 16 and React Router 7. Not worth the coupling. |
+### 3. Meeting Provenance Indicators
+
+**Approach:** Pure React component using existing lucide-react icons and Tailwind classes. No new libraries.
+
+Provenance indicators show what source materials exist for a meeting: Agenda document, Minutes document, Video recording, and Transcript. The data already exists in the `meetings` table:
+
+| Column | Provenance Signal |
+|--------|-------------------|
+| `has_agenda` | Agenda available |
+| `has_minutes` | Minutes available |
+| `has_transcript` | Transcript available |
+| `video_url` | Video available |
+| `agenda_url` | Direct link to agenda PDF |
+| `minutes_url` | Direct link to minutes PDF |
+
+This is a presentational component -- a row of icon+label badges with links:
+
+```tsx
+// Conceptual -- badges using existing cn(), lucide icons, Tailwind
+<div className="flex flex-wrap gap-2">
+  {meeting.has_agenda && (
+    <a href={meeting.agenda_url} className="inline-flex items-center gap-1.5 ...">
+      <FileText className="w-3.5 h-3.5" /> Agenda
+    </a>
+  )}
+  {meeting.has_minutes && (
+    <a href={meeting.minutes_url} className="inline-flex items-center gap-1.5 ...">
+      <BookOpen className="w-3.5 h-3.5" /> Minutes
+    </a>
+  )}
+  {meeting.video_url && (
+    <span className="inline-flex items-center gap-1.5 ...">
+      <Video className="w-3.5 h-3.5" /> Video
+    </span>
+  )}
+</div>
+```
+
+**Why not a badge/tag component library:** shadcn/ui `Badge` is already installed and used extensively throughout the app (see `AgendaOverview`, `matter-detail`). The `Badge` component with `variant` and `className` overrides provides all the styling flexibility needed. Or raw Tailwind classes for tighter control -- both approaches are already established patterns in the codebase.
+
+**Last-updated timestamp:** The `meetings.created_at` or a future `updated_at` column provides this. If `updated_at` doesn't exist, it's a DB migration, not a library need.
+
+**Confidence:** HIGH -- all data fields verified in existing loader queries and `meetings` table select strings.
+
+### 4. Document Section Links from Meetings and Matters
+
+**Approach:** Extend existing `DocumentSections` component and add links in `matter-detail.tsx`. No new libraries.
+
+**Meeting detail page (agenda items):**
+The `DocumentSections` component already renders linked document sections per agenda item. The improvement is adding a "View full document" link to the document viewer:
+
+```tsx
+// Inside GroupedDocumentSections, add link to each extracted document
+<Link to={`/meetings/${meetingId}/documents/${ed.id}`} className="...">
+  View full document
+</Link>
+```
+
+This requires passing `meetingId` as a prop -- a minor interface change, not a library addition.
+
+**Matter detail page (cross-meeting documents):**
+The matter detail loader (`getMatterById`) currently fetches agenda items with meetings. To show documents across meetings, the loader needs to also fetch extracted documents linked to those agenda items. This is a Supabase query addition:
+
+```typescript
+// Fetch extracted documents for all agenda items in this matter
+const agendaItemIds = matter.agenda_items.map(ai => ai.id);
+const { data: docs } = await supabase
+  .from("extracted_documents")
+  .select("id, document_id, agenda_item_id, title, document_type, summary")
+  .in("agenda_item_id", agendaItemIds);
+```
+
+This is a data-fetching change. The UI rendering uses the same `getDocumentTypeLabel()`, `getDocumentTypeColor()` utilities and `Link` components already in use throughout the codebase.
+
+**Confidence:** HIGH -- existing `extracted_documents` table has `agenda_item_id` FK. Existing `document-types.ts` utilities cover all display needs.
 
 ---
 
 ## What NOT to Add
 
-| Technology | Why Not |
-|------------|---------|
-| @opennextjs/cloudflare | Unnecessary for a static export docs site. Adds build complexity with no benefit. |
-| Vercel | Extra hosting provider. Cloudflare already handles everything. |
-| Algolia / Orama Cloud | Overkill for a docs site with ~50-100 pages. Built-in static Orama search is sufficient and free. |
-| @next/bundle-analyzer | Premature optimization. Add later if bundle size becomes an issue. |
-| next-sitemap | Static export can include a sitemap via `generateStaticParams`. Or add later with a simple build script. |
-| contentlayer | Deprecated. fumadocs-mdx is the content layer. |
-| mdx-bundler | fumadocs-mdx handles MDX compilation. |
-| nextra | Different framework. fumadocs was chosen for its OpenAPI integration. |
-| turbopack | Next.js 16 includes it by default for dev. No explicit dependency needed. |
-| Any database dependencies | The docs site is 100% static. No Supabase client needed. |
-| Any auth dependencies | Public documentation. No login required. |
+| Technology | Why Tempting | Why Wrong |
+|------------|-------------|-----------|
+| `@tailwindcss/container-queries` | Responsive tables based on container width | Overkill. `overflow-x-auto` on a wrapper div handles table overflow. Container queries are for complex layout shifts, not scrollable tables. |
+| `@tanstack/react-table` | "Proper" table component | Wrong abstraction. Document tables are read-only rendered markdown, not interactive data grids. Adding a React table library for static content adds bundle size with zero benefit. |
+| `react-markdown` (for document viewer) | "Better" markdown rendering | Already evaluated and rejected. The document viewer uses `marked` because `react-markdown` causes SSR/hydration mismatches on Cloudflare Workers. `marked` produces static HTML synchronously, which is correct for SSR. `react-markdown` is already used elsewhere in the app for client-rendered content. |
+| `rehype-sanitize` | Sanitize HTML in markdown | The document content comes from the app's own pipeline (Gemini extraction), not user input. Sanitization adds latency with no security benefit for trusted content. |
+| `@radix-ui/react-tooltip` | Tooltips on provenance badges | Unnecessary complexity. Text labels next to icons are clearer than icon-only + tooltip. If tooltips are needed later, shadcn/ui has a Tooltip component that can be added then. |
+| `framer-motion` | Animated transitions for accordion expand | The existing `grid-rows-[1fr]`/`grid-rows-[0fr]` CSS transition pattern (already used in `AgendaOverview`) works well. Adding a 50KB animation library for a single transition is wasteful. |
+| `date-fns` or `dayjs` | Format "last updated" timestamps | The existing `formatDate()` utility in `lib/utils.ts` already handles date formatting using `Intl.DateTimeFormat`. No library needed. |
+| Any font package | "Official document" serif font | The app uses Inter (sans-serif) throughout. The document viewer already uses `font-serif` for section headings via Tailwind's built-in serif stack. Adding a custom font like Charter or Georgia as a separate package would increase load time and break visual consistency with the rest of the app. |
 
 ---
 
-## Installation Summary
+## Database Considerations (Not Stack, But Related)
 
-```bash
-# Create the docs app directory
-mkdir -p apps/docs && cd apps/docs
+These are NOT npm dependencies but may require Supabase migrations:
 
-# Initialize
-pnpm init
+| Change | Purpose | Type |
+|--------|---------|------|
+| `meetings.updated_at` column | "Last updated" timestamp for provenance indicators | Migration (if not already present) |
+| Index on `extracted_documents.agenda_item_id` | Fast lookup for matter-detail document aggregation | Migration (performance, not correctness) |
 
-# Core framework
-pnpm add next@^16.1.5 react@^19.2.0 react-dom@^19.2.0
-
-# Fumadocs
-pnpm add fumadocs-core@^16.6.5 fumadocs-ui@^16.6.5 fumadocs-mdx@^14.2.8 fumadocs-openapi@^10.3.9
-
-# Required peer dependencies
-pnpm add shiki@^3.22.0
-
-# Dev dependencies
-pnpm add -D @types/react@^19.2.0 @types/react-dom@^19.2.0 @types/mdx@^2.0.13 typescript@^5.9.2 wrangler@^4.65.0 tailwindcss@^4.0.0
-```
-
-**Total: 7 production dependencies, 6 dev dependencies.** No overlap with `apps/web/` -- fully independent.
+Verify whether `updated_at` exists before planning the migration. The `created_at` column is confirmed present.
 
 ---
 
-## Version Compatibility Matrix
+## Summary: Existing Stack Is Complete
 
-| Dependency | Version | Requires | Verified |
-|------------|---------|----------|----------|
-| fumadocs-core | ^16.6.5 | react >=19.2.0, next 16.x.x | Yes (npm view) |
-| fumadocs-ui | ^16.6.5 | react >=19.2.0, next 16.x.x, fumadocs-core 16.6.5 | Yes (npm view) |
-| fumadocs-mdx | ^14.2.8 | fumadocs-core >=15.0.0, next >=15.3.0 | Yes (npm view) |
-| fumadocs-openapi | ^10.3.9 | fumadocs-core >=16.5.0, fumadocs-ui >=16.5.0, react >=19.2.0 | Yes (npm view) |
-| next | ^16.1.5 | react >=19.0.0, node >=20.9.0 | Yes (npm view) |
-| shiki | ^3.22.0 | none (standalone) | Yes |
-| tailwindcss | ^4.0.0 | none (standalone) | Yes |
-| wrangler | ^4.65.0 | none | Yes |
-| typescript | ^5.9.2 | none | Yes (same as apps/web/) |
-| Node.js | >=20.9.0 | -- | Yes (system has v25.3.0) |
+| v1.5 Feature | Libraries Needed | Approach |
+|--------------|------------------|----------|
+| Document typography | None | Tailwind `prose-*` modifiers in `MarkdownContent` |
+| Responsive tables | None | `marked.use({ renderer: { table() } })` + `overflow-x-auto` wrapper |
+| Title deduplication | None | Conditional logic in `document-viewer.tsx` |
+| Provenance indicators | None | React component with lucide icons + existing `Badge` or Tailwind classes |
+| Document links from agenda items | None | Add `<Link>` to existing `DocumentSections` component |
+| Documents on matter pages | None | Additional Supabase query in matter-detail loader |
 
----
+**Total new npm packages: 0**
+**Total new dev dependencies: 0**
 
-## Configuration Files Summary
-
-| File | Purpose |
-|------|---------|
-| `source.config.ts` | Define MDX content collections (docs dir, frontmatter schema) |
-| `next.config.mjs` | Static export + fumadocs-mdx plugin |
-| `tsconfig.json` | TypeScript config with fumadocs-mdx path alias |
-| `wrangler.toml` | Cloudflare Workers static asset deployment |
-| `app/global.css` | Tailwind v4 imports + fumadocs presets |
-| `lib/source.ts` | Fumadocs source loader (page tree builder) |
-| `lib/openapi.ts` | OpenAPI instance pointing to local spec file |
-| `mdx-components.tsx` | MDX component overrides (APIPage, custom components) |
-| `pnpm-workspace.yaml` | `packages: ["."]` (self-contained workspace) |
-
----
-
-## Risk Assessment
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| fumadocs v16 peer dep on Next.js 16 breaks with Next.js 16.2+ | Low | Medium | Pin to `^16.1.5` (tilde range in fumadocs ensures compatibility). fumadocs releases track Next.js closely. |
-| OpenAPI APIPage fails with `output: 'export'` | Low | High | APIPage uses RSC which renders at build time with static export. `generateStaticParams` ensures all pages are pre-rendered. If issues arise, fall back to `generateFiles()` MDX-only approach. |
-| Static search indexes too large for client download | Low | Low | ~50-100 pages will produce small indexes. If needed, switch to Orama Cloud later. |
-| Tailwind v4 style conflicts between fumadocs and custom styles | Low | Low | fumadocs uses its own CSS custom properties (`--fd-*`). Isolated by CSS specificity. |
-| Build-time OpenAPI spec fetch fails (production down) | Medium | Low | Commit the spec to the repo. `prebuild` script updates it; build still works with stale copy. |
-| wrangler static assets config quirks (404 handling, trailing slashes) | Low | Medium | `html_handling: auto-trailing-slash` + `not_found_handling: 404-page` matches Next.js static export conventions. Test in preview before production deploy. |
+This is a UI/UX polish milestone. The stack is mature and complete for the work required.
 
 ---
 
 ## Sources
 
-### HIGH Confidence (Official docs, first-party, npm registry)
-- [fumadocs.dev - OpenAPI integration](https://www.fumadocs.dev/docs/integrations/openapi) -- Setup, APIPage, generateFiles
-- [fumadocs.dev - Static Build](https://www.fumadocs.dev/docs/deploying/static) -- output: 'export' configuration
-- [fumadocs.dev - Deployment](https://www.fumadocs.dev/docs/deploying) -- "Use opennext.js.org/cloudflare, Fumadocs doesn't work on Edge runtime"
-- [fumadocs.dev - v16 blog post](https://www.fumadocs.dev/blog/v16) -- Breaking changes, Next.js 16 requirement, Cloudflare JS engine default
-- [fumadocs.dev - MDX setup for Next.js](https://www.fumadocs.dev/docs/mdx/next) -- source.config.ts, next.config.mjs, lib/source.ts
-- [npm: fumadocs-core@16.6.5](https://www.npmjs.com/package/fumadocs-core) -- Peer deps verified via `npm view`
-- [npm: fumadocs-ui@16.6.5](https://www.npmjs.com/package/fumadocs-ui) -- Peer deps: next 16.x.x, react >=19.2.0
-- [npm: fumadocs-openapi@10.3.9](https://www.npmjs.com/package/fumadocs-openapi) -- Dependencies, peer deps
-- [npm: fumadocs-mdx@14.2.8](https://www.npmjs.com/package/fumadocs-mdx) -- Peer deps: next >=15.3.0, vite 6-7
-- [npm: next@16.1.6](https://www.npmjs.com/package/next) -- Peer deps, engine requirements
-- [Cloudflare Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/) -- Configuration, deployment
-- [Cloudflare Workers SSG routing](https://developers.cloudflare.com/workers/static-assets/routing/static-site-generation/) -- html_handling, not_found_handling
-- [OpenNext Cloudflare - Get Started](https://opennext.js.org/cloudflare/get-started) -- Configuration reference (evaluated but NOT recommended for this use case)
-- [GitHub: fuma-nama/fumadocs](https://github.com/fuma-nama/fumadocs) -- 1,505 releases, actively maintained
+### HIGH Confidence
+- [Tailwind CSS Typography Plugin](https://github.com/tailwindlabs/tailwindcss-typography) -- prose modifiers, table styling, v0.5.x API
+- [marked.js Custom Renderers](https://marked.js.org/using_pro) -- `marked.use()` with renderer overrides, table method signature
+- [marked.js npm](https://www.npmjs.com/package/marked) -- v17.0.3 confirmed latest (published Feb 2026)
+- Existing codebase: `apps/web/package.json`, `app/components/markdown-content.tsx`, `app/routes/document-viewer.tsx`, `app/routes/meeting-detail.tsx`, `app/routes/matter-detail.tsx`, `app/components/meeting/DocumentSections.tsx`, `app/components/meeting/AgendaOverview.tsx`
 
-### MEDIUM Confidence (Multiple credible sources agree)
-- [Deploy Next.js 16 + Fumadocs to GitHub Pages](https://zephinax.com/blog/deploy-nextjs-fumadocs-github-pages) -- Confirms static export workflow with trailingSlash, images.unoptimized
-- [DeepWiki: fumadocs architecture](https://deepwiki.com/fuma-nama/fumadocs) -- Build pipeline description, layered architecture
-- [fumadocs Tailwind v4 discussion](https://github.com/fuma-nama/fumadocs/discussions/1338) -- Community confirms CSS-first config
-
-### LOW Confidence (Single source, needs validation during implementation)
-- Cloudflare Pages deprecation date (April 2025) -- referenced in community posts but not in official deprecation announcement
-- Static search performance for OpenAPI-generated pages -- untested at scale with API reference content
+### MEDIUM Confidence
+- [Tailwind responsive tables pattern](https://tailkits.com/blog/tailwind-responsive-tables/) -- `overflow-x-auto` approach confirmed as standard pattern
+- [marked.js table renderer discussion](https://github.com/markedjs/marked/discussions/3409) -- community confirmation of table wrapper pattern
 
 ---
-*Last updated: 2026-02-23*
+*Last updated: 2026-02-26*
