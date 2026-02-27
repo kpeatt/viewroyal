@@ -22,9 +22,9 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 
 ### Meeting Provenance
 
-- [ ] **PROV-01**: User sees source badges (Agenda, Minutes, Video) on the meeting overview indicating which original sources were used
-- [ ] **PROV-02**: User can click provenance badges to navigate to the original source (CivicWeb PDF, Vimeo video)
-- [ ] **PROV-03**: User sees when the meeting data was last updated
+- [x] **PROV-01**: User sees source badges (Agenda, Minutes, Video) on the meeting overview indicating which original sources were used
+- [x] **PROV-02**: User can click provenance badges to navigate to the original source (CivicWeb PDF, Vimeo video)
+- [x] **PROV-03**: User sees when the meeting data was last updated
 
 ## Future Requirements
 
@@ -60,9 +60,9 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 | DOCL-01 | Phase 27 | Pending |
 | DOCL-02 | Phase 27 | Pending |
 | DOCL-03 | Phase 28 | Pending |
-| PROV-01 | Phase 26 | Pending |
-| PROV-02 | Phase 26 | Pending |
-| PROV-03 | Phase 26 | Pending |
+| PROV-01 | Phase 26 | Complete |
+| PROV-02 | Phase 26 | Complete |
+| PROV-03 | Phase 26 | Complete |
 
 **Coverage:**
 - v1.5 requirements: 10 total
