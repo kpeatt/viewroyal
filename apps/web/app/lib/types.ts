@@ -84,6 +84,7 @@ export interface Meeting {
   summary?: string;
   meta?: any;
   created_at: string;
+  updated_at?: string;
   organization?: Organization;
   chair?: Person;
 }

@@ -42,7 +42,7 @@ export async function getMeetings(
   let query = supabase
     .from("meetings")
     .select(
-      "id, organization_id, title, meeting_date, type, status, video_url, minutes_url, agenda_url, video_duration_seconds, summary, has_agenda, has_minutes, has_transcript, created_at, organization:organizations(*)",
+      "id, organization_id, title, meeting_date, type, status, video_url, minutes_url, agenda_url, video_duration_seconds, summary, has_agenda, has_minutes, has_transcript, created_at, updated_at, organization:organizations(*)",
     );
 
   if (status) {
@@ -89,7 +89,7 @@ export async function getMeetingById(supabase: SupabaseClient, id: string) {
     supabase
       .from("meetings")
       .select(
-        "id, organization_id, title, meeting_date, type, status, has_agenda, has_minutes, has_transcript, video_url, minutes_url, agenda_url, video_duration_seconds, chair_person_id, archive_path, summary, meta, created_at, organization:organizations(*), chair:people(*)",
+        "id, organization_id, title, meeting_date, type, status, has_agenda, has_minutes, has_transcript, video_url, minutes_url, agenda_url, video_duration_seconds, chair_person_id, archive_path, summary, meta, created_at, updated_at, organization:organizations(*), chair:people(*)",
       )
       .eq("id", id)
       .single(),
