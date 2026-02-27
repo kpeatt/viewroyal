@@ -41,7 +41,6 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   FileText,
   Sparkles,
   CheckCircle2,
@@ -49,7 +48,7 @@ import {
   Mic,
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
-import { cn, formatDate } from "../lib/utils";
+import { cn, formatDate, formatRelativeTime } from "../lib/utils";
 import {
   getSpeakerColorIndex,
   SPEAKER_COLORS,
@@ -68,6 +67,7 @@ import {
   MeetingTabs,
   type MeetingTabId,
 } from "../components/meeting/MeetingTabs";
+import { ProvenanceBadges } from "../components/meeting/ProvenanceBadges";
 
 export function HydrateFallback() {
   return <MeetingLoadingSkeleton />;
@@ -446,6 +446,20 @@ export default function MeetingDetail({ loaderData }: any) {
                   </>
                 )}
               </div>
+              <div className="flex flex-wrap items-center gap-3 mt-3">
+                <ProvenanceBadges meeting={meeting} />
+                {meeting.updated_at && (
+                  <>
+                    <Separator orientation="vertical" className="h-4" />
+                    <span
+                      className="text-xs text-zinc-400"
+                      title={new Date(meeting.updated_at).toLocaleString()}
+                    >
+                      Updated {formatRelativeTime(meeting.updated_at)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
@@ -457,17 +471,6 @@ export default function MeetingDetail({ loaderData }: any) {
                   <Mic className="h-3.5 w-3.5" />
                   Speaker Aliases
                 </Link>
-              )}
-              {meeting.video_url && !directVideoUrl && (
-                <a
-                  href={meeting.video_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-full transition-all shadow-md hover:shadow-lg hover:scale-105"
-                >
-                  Watch on Vimeo
-                  <ExternalLink className="h-4 w-4" />
-                </a>
               )}
             </div>
           </div>

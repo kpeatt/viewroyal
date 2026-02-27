@@ -4,12 +4,10 @@ import { formatDate, cn } from "../lib/utils";
 import { Badge } from "./ui/badge";
 import {
   Calendar,
-  Video,
-  FileText,
-  MessageSquare,
   Clock,
   ChevronRight,
 } from "lucide-react";
+import { ProvenanceBadges } from "./meeting/ProvenanceBadges";
 
 interface MeetingCardProps {
   meeting: Meeting;
@@ -108,23 +106,7 @@ export function MeetingCard({ meeting }: MeetingCardProps) {
 
         {/* Assets & Actions */}
         <div className="px-5 pb-5 md:pb-0 md:px-6 flex flex-row md:flex-col items-center justify-between md:justify-center gap-4 md:border-l border-zinc-50 md:min-w-[140px]">
-          <div className="flex items-center gap-3">
-            {meeting.has_transcript && (
-              <div title="Transcript available">
-                <MessageSquare className="h-5 w-5 text-emerald-500" />
-              </div>
-            )}
-            {meeting.video_url && (
-              <div title="Video available">
-                <Video className="h-5 w-5 text-blue-500" />
-              </div>
-            )}
-            {(meeting.agenda_url || meeting.has_agenda) && (
-              <div title="Agenda available">
-                <FileText className="h-5 w-5 text-zinc-400" />
-              </div>
-            )}
-          </div>
+          <ProvenanceBadges meeting={meeting} compact />
 
           <div className="flex items-center gap-4">
             {meeting.video_duration_seconds && (
