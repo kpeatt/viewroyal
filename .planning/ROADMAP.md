@@ -97,10 +97,10 @@ Plans:
   1. User sees distinct badges for Agenda, Minutes, and Video on the meeting detail page indicating which sources are available
   2. User can click any provenance badge to navigate directly to the original source (CivicWeb PDF or Vimeo video)
   3. User sees a "last updated" timestamp on the meeting page showing when the data was most recently refreshed
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 26-01: TBD
+- [ ] 26-01: Provenance badges, source links, and last-updated timestamp
 
 ### Phase 27: Document Discoverability
 **Goal**: Users can find and follow document trails from both individual agenda items and the full matter timeline
