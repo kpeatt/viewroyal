@@ -629,6 +629,7 @@ export default function MeetingDetail({ loaderData }: any) {
                 onWatchVideo={(startTime, itemId) => {
                   handleWatchVideo(startTime, itemId);
                 }}
+                meetingId={meeting.id}
               />
             )}
 

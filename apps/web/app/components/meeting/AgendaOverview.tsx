@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Clock,
   DollarSign,
+  FileText,
   Gavel,
   Info,
   MapPin,
@@ -32,6 +33,7 @@ interface AgendaOverviewProps {
   onItemClick: (id: number) => void;
   onWatchVideo: (startTime: number, itemId: number) => void;
   onMotionClick?: (motion: Motion, agendaItem: AgendaItem) => void;
+  meetingId: number;
 }
 
 export function AgendaOverview({
@@ -42,6 +44,7 @@ export function AgendaOverview({
   onItemClick,
   onWatchVideo,
   onMotionClick,
+  meetingId,
 }: AgendaOverviewProps) {
   const groups = groupAgendaItems(items);
 
@@ -77,6 +80,7 @@ export function AgendaOverview({
                   onMotionClick={onMotionClick}
                   variant="parent"
                   hasChildren={group.children.length > 0}
+                  meetingId={meetingId}
                 />
               ) : group.key !== "other" && group.children.length > 0 ? (
                 /* Virtual Parent Header for orphaned items */
@@ -124,6 +128,7 @@ export function AgendaOverview({
                       onMotionClick={onMotionClick}
                       variant={group.key !== "other" ? "child" : "flat"}
                       isLastChild={isLast}
+                      meetingId={meetingId}
                     />
                   );
                 })}
@@ -231,6 +236,7 @@ interface AgendaItemRowProps {
   variant: "parent" | "child" | "flat";
   hasChildren?: boolean;
   isLastChild?: boolean;
+  meetingId: number;
 }
 
 function AgendaItemRow({
@@ -245,6 +251,7 @@ function AgendaItemRow({
   variant,
   hasChildren,
   isLastChild,
+  meetingId,
 }: AgendaItemRowProps) {
   const linkedSections = (documentSections || []).filter(
     (s) => s.agenda_item_id === item.id,
@@ -266,6 +273,7 @@ function AgendaItemRow({
     (item.financial_cost !== undefined && item.financial_cost > 0) ||
     discussionDuration > 0 ||
     motionCount > 0 ||
+    linkedExtractedDocs.length > 0 ||
     (item.keywords && item.keywords.length > 0);
 
   const isParent = variant === "parent";
@@ -402,6 +410,12 @@ function AgendaItemRow({
                 <span className="flex items-center text-[11px] font-semibold text-amber-700">
                   <Gavel className="w-3 h-3 mr-0.5" />
                   {motionCount} {motionCount === 1 ? "motion" : "motions"}
+                </span>
+              )}
+              {linkedExtractedDocs.length > 0 && (
+                <span className="flex items-center text-[11px] font-semibold text-indigo-700">
+                  <FileText className="w-3 h-3 mr-0.5" />
+                  {linkedExtractedDocs.length} {linkedExtractedDocs.length === 1 ? "doc" : "docs"}
                 </span>
               )}
               {item.keywords && item.keywords.length > 0 && (
@@ -593,6 +607,7 @@ function AgendaItemRow({
                 <DocumentSections
                   sections={linkedSections}
                   extractedDocuments={linkedExtractedDocs}
+                  meetingId={meetingId}
                 />
               )}
 
