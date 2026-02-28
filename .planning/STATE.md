@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 25 - Document Viewer Polish
+**Current focus:** Phase 28 - Document Navigation
 
 ## Current Position
 
-Phase: 25 of 28 (Document Viewer Polish)
+Phase: 28 of 28 (Document Navigation)
 Plan: 0 of ? in current phase
 Status: Ready to plan
-Last activity: 2026-02-26 -- v1.5 roadmap created
+Last activity: 2026-02-28 -- Phase 27 completed
 
-Progress: ░░░░░░░░░░ 0% (v1.5)
+Progress: ███████░░░ 75% (v1.5)
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: ░░░░░░░░░░ 0% (v1.5)
 | 23-cross-link-fix | 1 | 2min | 2min |
 | 24-tech-debt-cleanup | 1 | 3min | 3min |
 | Phase 26 P01 | 3min | 3 tasks | 6 files |
+| 27-document-discoverability | 2 | 3min | 2min |
 
 ## Accumulated Context
 
@@ -92,7 +93,7 @@ v1.5 decisions from research:
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
 - Rate Limit binding pricing needs verification before production launch
 - [Phase 26]: Verify `updated_at` is in `getMeetingById` select string before building provenance
-- [Phase 27]: Choose nested select vs. parallel fetch for matter documents before writing code
+- [Phase 27]: Resolved -- chose parallel fetch with separate getDocumentsForAgendaItems function
 
 ### Quick Tasks Completed
 
@@ -112,8 +113,8 @@ v1.5 decisions from research:
 
 ## Session Continuity
 
-Last session: 2026-02-26
-Stopped at: Completed quick-10 (fix image alignment with document_section_id)
+Last session: 2026-02-28
+Stopped at: Completed Phase 27 (Document Discoverability)
 Resume file: None
 
 ### Paused Work: Phase 7.1
