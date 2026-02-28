@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FileText, ChevronDown, BookOpen, Lightbulb } from "lucide-react";
+import { Link } from "react-router";
+import { FileText, ChevronDown, ChevronRight, BookOpen, Lightbulb } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "../markdown-content";
 import type { DocumentSection, ExtractedDocument } from "../../lib/types";
@@ -11,11 +12,13 @@ import {
 interface DocumentSectionsProps {
   sections: DocumentSection[];
   extractedDocuments?: ExtractedDocument[];
+  meetingId: number;
 }
 
 export function DocumentSections({
   sections,
   extractedDocuments,
+  meetingId,
 }: DocumentSectionsProps) {
   if (sections.length === 0) return null;
 
@@ -25,6 +28,7 @@ export function DocumentSections({
       <GroupedDocumentSections
         sections={sections}
         extractedDocuments={extractedDocuments}
+        meetingId={meetingId}
       />
     );
   }
@@ -36,9 +40,11 @@ export function DocumentSections({
 function GroupedDocumentSections({
   sections,
   extractedDocuments,
+  meetingId,
 }: {
   sections: DocumentSection[];
   extractedDocuments: ExtractedDocument[];
+  meetingId: number;
 }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -173,6 +179,13 @@ function GroupedDocumentSections({
                         )}
                       </div>
                     ))}
+                    <Link
+                      to={`/meetings/${meetingId}/documents/${ed.id}`}
+                      className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 mt-3 pt-2 border-t border-zinc-100 transition-colors"
+                    >
+                      View full document
+                      <ChevronRight className="w-3 h-3" />
+                    </Link>
                   </div>
                 </div>
               </div>
