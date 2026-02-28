@@ -53,9 +53,9 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOCV-01 | Phase 25 | Pending |
-| DOCV-02 | Phase 25 | Pending |
-| DOCV-03 | Phase 25 | Pending |
+| DOCV-01 | Phase 25 | Complete |
+| DOCV-02 | Phase 25 | Complete |
+| DOCV-03 | Phase 25 | Complete |
 | DOCV-04 | Phase 28 | Complete |
 | DOCL-01 | Phase 27 | Complete |
 | DOCL-02 | Phase 27 | Complete |
