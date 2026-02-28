@@ -18,7 +18,7 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 
 - [x] **DOCL-01**: User sees linked document sections on each agenda item in the meeting detail page with links to the full document viewer
 - [x] **DOCL-02**: User sees all related documents across every meeting on the matter detail page
-- [ ] **DOCL-03**: User sees cross-references between related documents (e.g., a staff report references a bylaw)
+- [x] **DOCL-03**: User sees cross-references between related documents (e.g., a staff report references a bylaw)
 
 ### Meeting Provenance
 
@@ -59,7 +59,7 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 | DOCV-04 | Phase 28 | Complete |
 | DOCL-01 | Phase 27 | Complete |
 | DOCL-02 | Phase 27 | Complete |
-| DOCL-03 | Phase 28 | Pending |
+| DOCL-03 | Phase 28 | Complete |
 | PROV-01 | Phase 26 | Complete |
 | PROV-02 | Phase 26 | Complete |
 | PROV-03 | Phase 26 | Complete |
