@@ -1,38 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.5
-milestone_name: Document Experience
-status: unknown
-last_updated: "2026-02-28T22:36:14.806Z"
+milestone: v1.6
+milestone_name: Search Experience
+status: defining_requirements
+last_updated: "2026-02-28T23:00:00.000Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-26)
+See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 28 - Document Navigation
+**Current focus:** Defining requirements for v1.6 Search Experience
 
 ## Current Position
 
-Phase: 28 of 28 (Document Navigation)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 28 complete -- v1.5 milestone complete
-Last activity: 2026-02-28 -- Completed 28-02 (Cross-Reference Detection)
-
-Progress: ██████████ 100% (v1.5)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-28 — Milestone v1.6 started
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 60 (across v1.0-v1.4)
+- Total plans completed: 67 (across v1.0-v1.5)
 - Average duration: 4.0min
 - Total execution time: ~5.5 hours
 
@@ -74,25 +72,13 @@ Progress: ██████████ 100% (v1.5)
 
 ### Decisions
 
-All v1.0-v1.4 decisions archived -- see PROJECT.md Key Decisions table.
-v1.5 decisions from research:
-
-- Document viewer uses `marked` (not `react-markdown`) for SSR stability on Workers
-- No new npm packages -- `@tailwindcss/typography`, `marked`, `lucide-react` already installed
-- Meeting/matter loaders fetch document metadata only, never full section text
-- Matter documents use batch `.in()` query, not per-item loops (N+1 prevention)
-- DocumentTOC uses variant prop ("desktop"/"mobile") to avoid duplicate DOM rendering
-- Scroll-spy rootMargin `0px 0px -80% 0px` restricts active zone to top 20% of viewport
-- URL hash updates only on explicit TOC click, not during passive scrolling
-- Cross-reference detection runs server-side in loader, not client-side
-- Purple badge theme for bylaw references matches document-types.ts bylaw color
-- Bylaws query added to existing Promise.all for zero additional latency
+All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
 1. **Let users supply their own Gemini API key** (api) -- Allow power users to provide their own Gemini key for RAG queries
-2. **Extract images before document extraction for Gemini linking** (pipeline) -- Pass extracted images to Gemini during content extraction so it can link them directly instead of positional matching
-3. **Improve RAG search for specific item types** (api) -- Detect item-type intent from queries and filter/boost results by content type (bylaws, motions, correspondence, etc.)
+2. ~~**Extract images before document extraction for Gemini linking** (pipeline)~~ -- DONE
+3. ~~**Improve RAG search for specific item types** (api)~~ -- Absorbed into v1.6 Search Experience milestone
 
 ### Blockers/Concerns
 
@@ -100,8 +86,6 @@ v1.5 decisions from research:
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
 - Rate Limit binding pricing needs verification before production launch
-- [Phase 26]: Verify `updated_at` is in `getMeetingById` select string before building provenance
-- [Phase 27]: Resolved -- chose parallel fetch with separate getDocumentsForAgendaItems function
 
 ### Quick Tasks Completed
 
@@ -122,7 +106,7 @@ v1.5 decisions from research:
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 28-02-PLAN.md (Cross-Reference Detection)
+Stopped at: Starting v1.6 Search Experience milestone
 Resume file: None
 
 ### Paused Work: Phase 7.1
