@@ -89,6 +89,24 @@ export async function getMatterById(supabase: SupabaseClient, id: string) {
   };
 }
 
+export async function getDocumentsForAgendaItems(
+  supabase: SupabaseClient,
+  agendaItemIds: number[],
+) {
+  if (agendaItemIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("extracted_documents")
+    .select("id, document_id, agenda_item_id, title, document_type, page_start, page_end")
+    .in("agenda_item_id", agendaItemIds)
+    .order("agenda_item_id")
+    .order("page_start", { ascending: true, nullsFirst: false });
+  if (error) {
+    console.error("Error fetching documents for agenda items:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
 export async function getHotTopics(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("agenda_items")
