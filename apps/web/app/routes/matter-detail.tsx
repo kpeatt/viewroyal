@@ -1,5 +1,5 @@
 import type { Route } from "./+types/matter-detail";
-import { getMatterById } from "../services/matters";
+import { getMatterById, getDocumentsForAgendaItems } from "../services/matters";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { Link } from "react-router";
 import { SubscribeButton } from "../components/subscribe-button";
@@ -49,6 +49,10 @@ import {
 } from "../components/ui/dialog";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { MotionCard } from "../components/motion-card";
+import {
+  getDocumentTypeLabel,
+  getDocumentTypeColor,
+} from "../lib/document-types";
 import { ClientOnly } from "../components/utils/client-only";
 import { lazy, Suspense } from "react";
 
@@ -64,7 +68,12 @@ export async function loader({ params }: Route.LoaderArgs) {
   try {
     const supabase = getSupabaseAdminClient();
     const matter = await getMatterById(supabase, id);
-    return { matter };
+
+    // Fetch documents for all agenda items in this matter (batch query)
+    const agendaItemIds = (matter.agenda_items || []).map((ai) => ai.id);
+    const matterDocuments = await getDocumentsForAgendaItems(supabase, agendaItemIds);
+
+    return { matter, matterDocuments };
   } catch (error) {
     console.error("Error fetching matter:", error);
     throw new Response("Matter Not Found", { status: 404 });
@@ -72,7 +81,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 }
 
 export default function MatterDetail({ loaderData }: Route.ComponentProps) {
-  const { matter } = loaderData;
+  const { matter, matterDocuments } = loaderData;
 
   // Sort agenda items by meeting date
   const timeline = [...(matter.agenda_items || [])].sort(
@@ -80,6 +89,19 @@ export default function MatterDetail({ loaderData }: Route.ComponentProps) {
       new Date(b.meetings.meeting_date).getTime() -
       new Date(a.meetings.meeting_date).getTime(),
   );
+
+  // Build document lookup by agenda item ID
+  const docsByItem = new Map<number, typeof matterDocuments>();
+  for (const doc of matterDocuments || []) {
+    if (doc.agenda_item_id != null) {
+      const existing = docsByItem.get(doc.agenda_item_id);
+      if (existing) {
+        existing.push(doc);
+      } else {
+        docsByItem.set(doc.agenda_item_id, [doc]);
+      }
+    }
+  }
 
   const lastSeen =
     timeline.length > 0 ? timeline[0].meetings.meeting_date : null;
@@ -358,6 +380,31 @@ export default function MatterDetail({ loaderData }: Route.ComponentProps) {
                           "{item.debate_summary}"
                         </div>
                       )}
+
+                      {/* Document chips */}
+                      {(() => {
+                        const itemDocs = docsByItem.get(item.id) || [];
+                        if (itemDocs.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {itemDocs.map((doc) => (
+                              <Link
+                                key={doc.id}
+                                to={`/meetings/${item.meeting_id}/documents/${doc.id}`}
+                                className="inline-flex items-center gap-1.5 text-xs bg-white border border-zinc-200 rounded-md px-2 py-1 hover:border-blue-200 hover:shadow-sm transition-all"
+                              >
+                                <span className={cn(
+                                  "inline-block px-1 py-0.5 text-[8px] font-bold uppercase rounded border shrink-0",
+                                  getDocumentTypeColor(doc.document_type),
+                                )}>
+                                  {getDocumentTypeLabel(doc.document_type).slice(0, 6)}
+                                </span>
+                                <span className="text-zinc-700 truncate max-w-[200px]">{doc.title}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {item.motions && item.motions.length > 0 && (
                         <div className="space-y-4 mt-6 border-t border-zinc-100 pt-6">
