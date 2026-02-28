@@ -162,4 +162,4 @@ Plans:
 | 25. Document Viewer Polish | 2/2 | Complete    | 2026-02-26 | - |
 | 26. Meeting Provenance | 1/1 | Complete    | 2026-02-27 | - |
 | 27. Document Discoverability | 2/2 | Complete    | 2026-02-28 | - |
-| 28. Document Navigation | v1.5 | 0/? | Not started | - |
+| 28. Document Navigation | 1/2 | In Progress|  | - |
