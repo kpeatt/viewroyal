@@ -65,12 +65,11 @@ function DesktopTOC({
                     scrollToSection(item.id);
                   }}
                   className={cn(
-                    "block border-l-2 py-1.5 pl-3 text-sm transition-colors truncate",
+                    "block border-l-2 py-1.5 pl-3 text-sm leading-snug transition-colors",
                     isActive
                       ? "border-indigo-500 text-indigo-700 font-semibold"
                       : "border-transparent text-zinc-500 hover:text-zinc-700 hover:border-zinc-300",
                   )}
-                  title={item.title}
                 >
                   {item.title}
                 </a>

@@ -365,12 +365,6 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
       {/* Content area - two column on desktop when TOC shown */}
       {showTOC ? (
         <div className="mx-auto max-w-6xl px-6 py-8 lg:flex lg:gap-8">
-          {/* Desktop TOC sidebar */}
-          <div className="hidden lg:block w-[220px] shrink-0">
-            <div className="sticky top-24 max-h-[calc(100vh-6rem)]">
-              <DocumentTOC items={tocItems} activeId={activeId} variant="desktop" />
-            </div>
-          </div>
           {/* Main content */}
           <div className="flex-1 min-w-0">
             <DocumentContent
@@ -385,6 +379,12 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
               parentDocument={parentDocument}
               crossReferences={crossReferences}
             />
+          </div>
+          {/* Desktop TOC sidebar - right side */}
+          <div className="hidden lg:block w-[220px] shrink-0">
+            <div className="sticky top-24 max-h-[calc(100vh-6rem)]">
+              <DocumentTOC items={tocItems} activeId={activeId} variant="desktop" />
+            </div>
           </div>
         </div>
       ) : (
