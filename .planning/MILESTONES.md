@@ -1,5 +1,14 @@
 # Milestones
 
+## v1.5 Document Experience (Shipped: 2026-02-28)
+
+**Phases completed:** 4 phases, 7 plans, 0 tasks
+
+**Key accomplishments:**
+- (none recorded)
+
+---
+
 ## v1.0 Land & Launch (Shipped: 2026-02-17)
 
 **Phases completed:** 6 phases, 11 plans, 25 tasks

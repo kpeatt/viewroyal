@@ -4,9 +4,14 @@
   "parallelization": true,
   "commit_docs": true,
   "model_profile": "quality",
+  "git": {
+    "branching_strategy": "none"
+  },
   "workflow": {
-    "research": false,
+    "research": true,
     "plan_check": true,
-    "verifier": true
+    "verifier": true,
+    "auto_advance": true,
+    "nyquist_validation": true
   }
 }
