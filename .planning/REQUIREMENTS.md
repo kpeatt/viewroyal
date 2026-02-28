@@ -12,7 +12,7 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 - [x] **DOCV-01**: User sees document sections with polished typography — proper font sizes, line heights, and spacing between headings, paragraphs, and lists
 - [x] **DOCV-02**: User can view documents with wide tables on mobile without horizontal page overflow (tables scroll independently)
 - [x] **DOCV-03**: User does not see duplicate document titles when the first section heading matches the document title
-- [ ] **DOCV-04**: User sees a table of contents sidebar for long documents that highlights the current section while scrolling
+- [x] **DOCV-04**: User sees a table of contents sidebar for long documents that highlights the current section while scrolling
 
 ### Document Linking
 
@@ -56,7 +56,7 @@ Requirements for Document Experience milestone. Each maps to roadmap phases.
 | DOCV-01 | Phase 25 | Pending |
 | DOCV-02 | Phase 25 | Pending |
 | DOCV-03 | Phase 25 | Pending |
-| DOCV-04 | Phase 28 | Pending |
+| DOCV-04 | Phase 28 | Complete |
 | DOCL-01 | Phase 27 | Complete |
 | DOCL-02 | Phase 27 | Complete |
 | DOCL-03 | Phase 28 | Pending |
