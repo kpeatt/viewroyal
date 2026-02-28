@@ -78,18 +78,17 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ Data Model page with Mermaid ER diagram — v1.4
 - ✓ OCD Standard Reference with entity mapping guide — v1.4
 - ✓ docs.viewroyal.ai live on Cloudflare Workers with Orama search — v1.4
+- ✓ Document viewer with polished typography, responsive scrollable tables, and deduplicated titles — v1.5
+- ✓ Meeting provenance badges (Agenda, Minutes, Video) with clickable source links and last-updated timestamps — v1.5
+- ✓ Document links on agenda items (count chips + "View full document") and matter timeline (document chips) — v1.5
+- ✓ Table of contents sidebar with IntersectionObserver scroll-spy for long documents — v1.5
+- ✓ Cross-reference detection linking bylaw mentions to bylaw pages with inline badges — v1.5
 
 ### Active
 
-**v1.5 Document Experience:**
-- Document viewer with polished typography, spacing, responsive tables, and deduplicated titles
-- Document section links surfaced on meeting detail pages per agenda item
-- All related documents shown on matter pages across every meeting
-- Meeting provenance indicators (Agenda, Minutes, Video) with source links and last-updated timestamp
+(No active milestone — run `/gsd:new-milestone` to start next)
 
 ### Out of Scope
-
-- Document viewer with official-document styling — v1.5 milestone candidate
 - Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — v2.0 milestone candidate
 - Second town onboarding (Esquimalt, RDOS) — separate milestone after APIs stable
 - Push notifications / native app — overkill for current user base size
@@ -100,9 +99,9 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ## Context
 
-Shipped v1.4 with ~113,800 LOC (TypeScript + Python + MDX), 40+ database tables, 357 automated tests, 5,042 LOC public API, developer docs portal at docs.viewroyal.ai.
+Shipped v1.5 with ~39,000 LOC TypeScript web app, 40+ database tables, developer docs portal at docs.viewroyal.ai.
 Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed, fumadocs v16 + Next.js 16 (docs).
-v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. v1.2: 3 phases, 5 plans in 12 minutes. v1.3: 4 phases, 14 plans in 50 minutes. v1.4: 6 phases, 10 plans in 46 minutes.
+v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.3: 4 phases, 14 plans. v1.4: 6 phases, 10 plans. v1.5: 4 phases, 7 plans.
 
 **Known technical debt:**
 - `bootstrap.sql` is out of date with 30+ applied migrations
@@ -161,4 +160,4 @@ v1.0: 6 phases, 11 plans in 1.65 hours. v1.1: 6 phases, 20 plans in 2.77 hours. 
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-02-26 after v1.5 milestone start*
+*Last updated: 2026-02-28 after v1.5 milestone*
