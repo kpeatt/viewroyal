@@ -380,22 +380,23 @@ The 3-section threshold is well-placed: it excludes the vast majority of short d
 | Full suite command | `cd apps/web && pnpm test -- --run --coverage` |
 
 ### Phase Requirements -> Test Map
-| Req ID | Behavior | Test Type | Automated Command | File Exists? |
-|--------|----------|-----------|-------------------|-------------|
-| DOCV-04 | TOC items generated from sections with 3+ threshold | unit | `cd apps/web && pnpm vitest run tests/lib/document-toc.test.ts -t "TOC" --reporter=verbose` | No -- Wave 0 |
-| DOCV-04 | useScrollSpy hook updates activeId on intersection | unit | `cd apps/web && pnpm vitest run tests/lib/document-toc.test.ts -t "scrollspy" --reporter=verbose` | No -- Wave 0 |
-| DOCL-03 | Cross-reference detection finds bylaw numbers | unit | `cd apps/web && pnpm vitest run tests/lib/cross-references.test.ts -t "bylaw" --reporter=verbose` | No -- Wave 0 |
-| DOCL-03 | Cross-reference detection ignores non-existent bylaws | unit | `cd apps/web && pnpm vitest run tests/lib/cross-references.test.ts -t "filter" --reporter=verbose` | No -- Wave 0 |
-| DOCL-03 | Cross-reference badges link to correct URL | unit | `cd apps/web && pnpm vitest run tests/lib/cross-references.test.ts -t "url" --reporter=verbose` | No -- Wave 0 |
+| Req ID | Behavior | Test Type | Automated Command | Created In |
+|--------|----------|-----------|-------------------|------------|
+| DOCV-04 | TOC items generated from sections with 3+ threshold | unit | `cd apps/web && pnpm vitest run tests/lib/document-toc.test.ts -t "TOC" --reporter=verbose` | 28-01 Task 1 |
+| DOCV-04 | useScrollSpy hook return type contract | unit | `cd apps/web && pnpm vitest run tests/lib/document-toc.test.ts -t "scrollspy" --reporter=verbose` | 28-01 Task 1 |
+| DOCL-03 | Cross-reference detection finds bylaw numbers | unit | `cd apps/web && pnpm vitest run tests/lib/cross-references.test.ts -t "bylaw" --reporter=verbose` | 28-02 Task 1 |
+| DOCL-03 | Cross-reference detection ignores non-existent bylaws | unit | `cd apps/web && pnpm vitest run tests/lib/cross-references.test.ts -t "filter" --reporter=verbose` | 28-02 Task 1 |
+| DOCL-03 | Cross-reference badges link to correct URL | unit | `cd apps/web && pnpm vitest run tests/lib/cross-references.test.ts -t "url" --reporter=verbose` | 28-02 Task 1 |
 
 ### Sampling Rate
 - **Per task commit:** `cd apps/web && pnpm vitest run --reporter=verbose`
 - **Per wave merge:** `cd apps/web && pnpm vitest run --coverage`
 - **Phase gate:** Full suite green before `/gsd:verify-work`
 
-### Wave 0 Gaps
-- [ ] `tests/lib/cross-references.test.ts` -- covers DOCL-03 (regex extraction + URL resolution)
-- [ ] `tests/lib/document-toc.test.ts` -- covers DOCV-04 (TOC generation + threshold logic)
+### Test Creation
+Tests are created inline within implementation tasks (no separate Wave 0):
+- `tests/lib/document-toc.test.ts` -- created in 28-01 Task 1 (covers DOCV-04: TOC generation + threshold logic)
+- `tests/lib/cross-references.test.ts` -- created in 28-02 Task 1 (covers DOCL-03: regex extraction + URL resolution)
 
 ## Open Questions
 
