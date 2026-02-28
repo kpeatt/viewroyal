@@ -25,6 +25,12 @@ import {
 import { ogImageUrl } from "../lib/og";
 import { DocumentTOC, type TOCItem } from "../components/document/DocumentTOC";
 import { useScrollSpy } from "../lib/use-scroll-spy";
+import {
+  detectCrossReferences,
+  type CrossReference,
+} from "../lib/cross-references";
+import { CrossRefBadge } from "../components/document/CrossRefBadge";
+import { RelatedDocuments } from "../components/document/RelatedDocuments";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.extractedDoc)
@@ -72,8 +78,8 @@ export async function loader({ params }: Route.LoaderArgs) {
 
   const extractedDoc = edRes.data as ExtractedDocument;
 
-  // Fetch sections and parent document info in parallel
-  const [sectionsRes, parentDocRes, agendaItemRes, imagesRes] =
+  // Fetch sections, parent document, and bylaws (for cross-ref matching) in parallel
+  const [sectionsRes, parentDocRes, agendaItemRes, imagesRes, bylawsRes] =
     await Promise.all([
       supabase
         .from("document_sections")
@@ -102,7 +108,24 @@ export async function loader({ params }: Route.LoaderArgs) {
         .eq("extracted_document_id", docId)
         .order("page", { ascending: true })
         .order("id", { ascending: true }),
+      supabase
+        .from("bylaws")
+        .select("id, title, bylaw_number")
+        .not("bylaw_number", "is", null),
     ]);
+
+  // Detect bylaw cross-references in section text
+  const crossReferences = detectCrossReferences(
+    (sectionsRes.data || []).map((s) => ({
+      section_text: s.section_text,
+      section_order: s.section_order,
+    })),
+    (bylawsRes.data || []).map((b) => ({
+      id: b.id,
+      title: b.title,
+      bylaw_number: b.bylaw_number,
+    })),
+  );
 
   return {
     extractedDoc,
@@ -111,6 +134,7 @@ export async function loader({ params }: Route.LoaderArgs) {
     parentDocument: parentDocRes.data,
     linkedAgendaItem: agendaItemRes.data,
     documentImages: (imagesRes.data || []) as DocumentImage[],
+    crossReferences,
   };
 }
 
@@ -122,6 +146,7 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
     parentDocument,
     linkedAgendaItem,
     documentImages,
+    crossReferences,
   } = loaderData;
 
   const ed = extractedDoc as ExtractedDocument;
@@ -358,6 +383,7 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
               inlineImages={inlineImages}
               galleryImages={galleryImages}
               parentDocument={parentDocument}
+              crossReferences={crossReferences}
             />
           </div>
         </div>
@@ -373,6 +399,7 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
             inlineImages={inlineImages}
             galleryImages={galleryImages}
             parentDocument={parentDocument}
+            crossReferences={crossReferences}
           />
         </div>
       )}
@@ -394,6 +421,7 @@ function DocumentContent({
   inlineImages,
   galleryImages,
   parentDocument,
+  crossReferences,
 }: {
   ed: ExtractedDocument;
   keyFacts: string[];
@@ -404,6 +432,7 @@ function DocumentContent({
   inlineImages: (markdown: string, images: DocumentImage[]) => string;
   galleryImages: DocumentImage[];
   parentDocument: any;
+  crossReferences: CrossReference[];
 }) {
   return (
     <>
@@ -458,6 +487,9 @@ function DocumentContent({
             const content = hasImageTags
               ? inlineImages(section.section_text, sectionImages)
               : section.section_text;
+            const sectionCrossRefs = crossReferences.filter((ref) =>
+              ref.sectionOrders.includes(section.section_order),
+            );
             return (
               <div
                 key={section.id}
@@ -465,6 +497,19 @@ function DocumentContent({
                 className={cn("relative scroll-mt-20", idx > 0 && "mt-2")}
               >
                 <MarkdownContent content={content} />
+
+                {sectionCrossRefs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {sectionCrossRefs.map((ref) => (
+                      <CrossRefBadge
+                        key={ref.targetId}
+                        pattern={ref.pattern}
+                        url={ref.targetUrl}
+                        title={ref.targetTitle}
+                      />
+                    ))}
+                  </div>
+                )}
 
                 {section.page_start != null && (
                   <div className="mt-1 text-[10px] text-zinc-400">
@@ -525,6 +570,11 @@ function DocumentContent({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Related Documents: cross-referenced bylaws */}
+      {crossReferences.length > 0 && (
+        <RelatedDocuments crossReferences={crossReferences} />
       )}
 
       {/* Source document footer */}
