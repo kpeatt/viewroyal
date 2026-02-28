@@ -71,7 +71,7 @@
 - [x] **Phase 25: Document Viewer Polish** - Polished typography, responsive tables, and title deduplication for the document viewer (completed 2026-02-26)
 - [x] **Phase 26: Meeting Provenance** - Source availability badges with links and last-updated timestamps on meeting pages (completed 2026-02-27)
 - [x] **Phase 27: Document Discoverability** - Document links on agenda items and full document trails on matter pages (completed 2026-02-28)
-- [ ] **Phase 28: Document Navigation** - Table of contents sidebar and cross-references between related documents
+- [x] **Phase 28: Document Navigation** - Table of contents sidebar and cross-references between related documents (completed 2026-02-28)
 
 ## Phase Details
 
@@ -162,4 +162,4 @@ Plans:
 | 25. Document Viewer Polish | 2/2 | Complete    | 2026-02-26 | - |
 | 26. Meeting Provenance | 1/1 | Complete    | 2026-02-27 | - |
 | 27. Document Discoverability | 2/2 | Complete    | 2026-02-28 | - |
-| 28. Document Navigation | 1/2 | In Progress|  | - |
+| 28. Document Navigation | 2/2 | Complete   | 2026-02-28 | - |

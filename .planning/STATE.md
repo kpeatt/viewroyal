@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Document Experience
-status: executing
-last_updated: "2026-02-28T22:00:25.000Z"
+status: complete
+last_updated: "2026-02-28T22:07:23.582Z"
 progress:
-  total_phases: 3
-  completed_phases: 3
+  total_phases: 4
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-02-26)
 ## Current Position
 
 Phase: 28 of 28 (Document Navigation)
-Plan: 1 of 2 in current phase
-Status: Executing phase 28
-Last activity: 2026-02-28 -- Completed 28-01 (Document TOC Navigation)
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase 28 complete -- v1.5 milestone complete
+Last activity: 2026-02-28 -- Completed 28-02 (Cross-Reference Detection)
 
-Progress: █████████░ 86% (v1.5)
+Progress: ██████████ 100% (v1.5)
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: █████████░ 86% (v1.5)
 | Phase 26 P01 | 3min | 3 tasks | 6 files |
 | 27-document-discoverability | 2 | 3min | 2min |
 | 28-document-navigation P01 | 3min | 2 tasks | 4 files |
+| 28-document-navigation P02 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,9 @@ v1.5 decisions from research:
 - DocumentTOC uses variant prop ("desktop"/"mobile") to avoid duplicate DOM rendering
 - Scroll-spy rootMargin `0px 0px -80% 0px` restricts active zone to top 20% of viewport
 - URL hash updates only on explicit TOC click, not during passive scrolling
+- Cross-reference detection runs server-side in loader, not client-side
+- Purple badge theme for bylaw references matches document-types.ts bylaw color
+- Bylaws query added to existing Promise.all for zero additional latency
 
 ### Pending Todos
 
@@ -118,7 +122,7 @@ v1.5 decisions from research:
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Completed 28-01-PLAN.md (Document TOC Navigation)
+Stopped at: Completed 28-02-PLAN.md (Cross-Reference Detection)
 Resume file: None
 
 ### Paused Work: Phase 7.1
