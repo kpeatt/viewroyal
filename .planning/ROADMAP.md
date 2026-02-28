@@ -110,11 +110,11 @@ Plans:
   1. User sees linked document sections on each agenda item in the meeting detail page with a link to the full document viewer
   2. User sees all related documents on the matter detail page grouped by meeting date with document type and title
   3. User can follow a document trail for a matter (e.g., a bylaw or rezoning) across every meeting where it appeared
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 27-01: TBD
-- [ ] 27-02: TBD
+- [ ] 27-01: Document links and count chips on meeting detail agenda items
+- [ ] 27-02: Document chips on matter detail timeline
 
 ### Phase 28: Document Navigation
 **Goal**: Users can navigate long documents efficiently and discover related documents across the platform
