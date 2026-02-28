@@ -86,7 +86,16 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start next)
+## Current Milestone: v1.6 Search Experience
+
+**Goal:** Transform search and RAG into a polished, Perplexity/Kagi-inspired experience with better agent transparency, citation UX, search controls, and follow-up emphasis.
+
+**Target features:**
+- RAG agent improvements (better reasoning, result summaries, bylaw search tool)
+- Citation UX overhaul (grouped source badges per sentence, hover/tap pager cards, mobile-friendly)
+- Source panel collapsed by default, document markdown previews rendering
+- Keyword search controls (time filtering, sort/filter options)
+- Perplexity-style follow-up suggestions
 
 ### Out of Scope
 - Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — v2.0 milestone candidate
@@ -100,6 +109,7 @@ Citizens can understand what their council decided, why, and who said what — w
 ## Context
 
 Shipped v1.5 with ~39,000 LOC TypeScript web app, 40+ database tables, developer docs portal at docs.viewroyal.ai.
+v1.5: 4 phases, 7 plans.
 Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed, fumadocs v16 + Next.js 16 (docs).
 v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.3: 4 phases, 14 plans. v1.4: 6 phases, 10 plans. v1.5: 4 phases, 7 plans.
 
@@ -160,4 +170,4 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-02-28 after v1.5 milestone*
+*Last updated: 2026-02-28 after v1.6 milestone started*
