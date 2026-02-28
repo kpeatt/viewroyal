@@ -23,6 +23,8 @@ import {
   getDocumentTypeColor,
 } from "../lib/document-types";
 import { ogImageUrl } from "../lib/og";
+import { DocumentTOC, type TOCItem } from "../components/document/DocumentTOC";
+import { useScrollSpy } from "../lib/use-scroll-spy";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   if (!data?.extractedDoc)
@@ -126,6 +128,16 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
   const allSections = sections as DocumentSection[];
   const keyFacts = ed.key_facts || [];
 
+  // Build TOC data from sections
+  const tocItems: TOCItem[] = allSections.map((s) => ({
+    id: `section-${s.section_order}`,
+    title: s.section_title ?? `Section ${s.section_order}`,
+    order: s.section_order,
+  }));
+  const showTOC = tocItems.length >= 3;
+  const sectionIds = tocItems.map((t) => t.id);
+  const activeId = useScrollSpy(sectionIds);
+
   // Minimum area to consider an image "substantial" (filters logos/artifacts)
   const MIN_IMAGE_AREA = 80_000; // ~283x283
   // Junk [Image:] tag patterns — strip these tags without consuming an image
@@ -167,10 +179,10 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
   for (const section of allSections) {
     if (imagesBySection.has(section.id)) continue;
 
-    const tags = section.section_text.match(/\[Image:\s*[^\]]+\]/g) || [];
+    const tags = section.section_text.match(/\[Image(?:\s+\d+)?:\s*[^\]]+\]/g) || [];
     const sectionImgs: DocumentImage[] = [];
     for (const tag of tags) {
-      const desc = tag.replace(/^\[Image:\s*/, "").replace(/\]$/, "");
+      const desc = tag.replace(/^\[Image(?:\s+\d+)?:\s*/, "").replace(/\]$/, "");
       if (JUNK_TAG_RE.test(desc)) continue; // skip junk tags
       if (fallbackCursor < unmappedImages.length) {
         sectionImgs.push(unmappedImages[fallbackCursor++]);
@@ -198,12 +210,13 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
     images: DocumentImage[],
   ): string {
     let imgIdx = 0;
-    return markdown.replace(/\[Image:\s*([^\]]+)\]/g, (_match, desc) => {
+    return markdown.replace(/\[Image(?:\s+\d+)?:\s*([^\]]+)\]/g, (_match, desc) => {
       if (JUNK_TAG_RE.test(desc)) return ""; // strip junk tags
       if (imgIdx >= images.length) return ""; // strip unmatched tags
+
       const img = images[imgIdx++];
-      const src = `https://images.viewroyal.ai/${img.r2_key}`;
       const alt = desc.replace(/"/g, "&quot;");
+      const src = `https://images.viewroyal.ai/${img.r2_key}`;
       const widthAttr = img.width ? ` width="${img.width}"` : "";
       const heightAttr = img.height ? ` height="${img.height}"` : "";
       return (
@@ -251,7 +264,7 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <div className="border-b border-zinc-200 bg-zinc-50">
-        <div className="mx-auto max-w-4xl px-6 py-4">
+        <div className={cn("mx-auto px-6 py-4", showTOC ? "max-w-6xl" : "max-w-4xl")}>
           <div className="flex items-center gap-2 text-sm text-zinc-500 mb-3">
             <Link
               to={`/meetings/${meeting?.id}`}
@@ -317,143 +330,217 @@ export default function DocumentViewer({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
-      <div className="mx-auto max-w-4xl px-6 py-8">
-        {/* Summary + key facts + linked agenda item */}
-        {(ed.summary || keyFacts.length > 0 || linkedAgendaItem) && (
-          <div className="mb-8 space-y-4">
-            {ed.summary && (
-              <div className="flex items-start gap-2.5">
-                <BookOpen className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-zinc-600 leading-relaxed">
-                  {ed.summary}
-                </p>
-              </div>
-            )}
+      {/* Mobile TOC bar - shown below lg breakpoint */}
+      {showTOC && (
+        <div className="lg:hidden">
+          <DocumentTOC items={tocItems} activeId={activeId} variant="mobile" />
+        </div>
+      )}
 
-            {linkedAgendaItem && meeting && (
-              <Link
-                to={`/meetings/${meeting.id}#agenda-${(linkedAgendaItem as any).id}`}
-                className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 bg-indigo-50 rounded-md px-2.5 py-1 transition-colors"
-              >
-                <Hash className="w-3 h-3" />
-                {(linkedAgendaItem as any).item_order}{" "}
-                {(linkedAgendaItem as any).title}
-              </Link>
-            )}
-
-            {keyFacts.length > 0 && (
-              <div className="flex items-start gap-2.5">
-                <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <div className="flex flex-wrap gap-1.5">
-                  {keyFacts.map((fact, i) => (
-                    <span
-                      key={i}
-                      className="text-xs text-zinc-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5"
-                    >
-                      {fact}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Section content with inline images */}
-        {allSections.length > 0 ? (
-          <div>
-            {allSections.map((section, idx) => {
-              const sectionImages = imagesBySection.get(section.id) || [];
-              const hasImageTags = /\[Image:\s*[^\]]+\]/.test(
-                section.section_text,
-              );
-              const content = hasImageTags
-                ? inlineImages(section.section_text, sectionImages)
-                : section.section_text;
-              return (
-                <div
-                  key={section.id}
-                  id={`section-${section.section_order}`}
-                  className={cn("relative", idx > 0 && "mt-2")}
-                >
-                  <MarkdownContent content={content} />
-
-                  {section.page_start != null && (
-                    <div className="mt-1 text-[10px] text-zinc-400">
-                      Page {section.page_start}
-                      {section.page_end &&
-                      section.page_end !== section.page_start
-                        ? `\u2013${section.page_end}`
-                        : ""}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-zinc-500 py-12 text-center">
-            No sections available for this document.
-          </p>
-        )}
-
-        {/* Gallery: images not consumed by inline matching */}
-        {galleryImages.length > 0 && (
-          <div className="mt-10">
-            <div className="flex items-center gap-2 mb-4">
-              <Images className="w-4 h-4 text-zinc-400" />
-              <h2 className="text-sm font-semibold text-zinc-700">
-                Document Images
-              </h2>
-              <span className="text-xs text-zinc-400">
-                ({galleryImages.length})
-              </span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {galleryImages.map((img) => (
-                <a
-                  key={img.id}
-                  href={`https://images.viewroyal.ai/${img.r2_key}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group block"
-                >
-                  <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-shadow group-hover:shadow-md">
-                    <img
-                      src={`https://images.viewroyal.ai/${img.r2_key}`}
-                      alt={img.description || "Document image"}
-                      loading="lazy"
-                      width={img.width ?? undefined}
-                      height={img.height ?? undefined}
-                      className="w-full h-auto object-contain"
-                    />
-                  </div>
-                  {img.description && (
-                    <p className="mt-1 text-xs text-zinc-500 leading-snug line-clamp-2">
-                      {img.description}
-                    </p>
-                  )}
-                </a>
-              ))}
+      {/* Content area - two column on desktop when TOC shown */}
+      {showTOC ? (
+        <div className="mx-auto max-w-6xl px-6 py-8 lg:flex lg:gap-8">
+          {/* Desktop TOC sidebar */}
+          <div className="hidden lg:block w-[220px] shrink-0">
+            <div className="sticky top-24 max-h-[calc(100vh-6rem)]">
+              <DocumentTOC items={tocItems} activeId={activeId} variant="desktop" />
             </div>
           </div>
-        )}
-
-        {/* Source document footer */}
-        {parentDocument && (
-          <div className="mt-12 pt-6 border-t border-zinc-100">
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <FileText className="w-3.5 h-3.5" />
-              <span>
-                Extracted from: {(parentDocument as any).title}
-              </span>
-              {(parentDocument as any).page_count && (
-                <span>({(parentDocument as any).page_count} pages total)</span>
-              )}
-            </div>
+          {/* Main content */}
+          <div className="flex-1 min-w-0">
+            <DocumentContent
+              ed={ed}
+              keyFacts={keyFacts}
+              linkedAgendaItem={linkedAgendaItem}
+              meeting={meeting}
+              allSections={allSections}
+              imagesBySection={imagesBySection}
+              inlineImages={inlineImages}
+              galleryImages={galleryImages}
+              parentDocument={parentDocument}
+            />
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="mx-auto max-w-4xl px-6 py-8">
+          <DocumentContent
+            ed={ed}
+            keyFacts={keyFacts}
+            linkedAgendaItem={linkedAgendaItem}
+            meeting={meeting}
+            allSections={allSections}
+            imagesBySection={imagesBySection}
+            inlineImages={inlineImages}
+            galleryImages={galleryImages}
+            parentDocument={parentDocument}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * Shared document content (summary, sections, gallery, footer).
+ * Extracted to avoid duplicating JSX in the two-column vs single-column branches.
+ */
+function DocumentContent({
+  ed,
+  keyFacts,
+  linkedAgendaItem,
+  meeting,
+  allSections,
+  imagesBySection,
+  inlineImages,
+  galleryImages,
+  parentDocument,
+}: {
+  ed: ExtractedDocument;
+  keyFacts: string[];
+  linkedAgendaItem: any;
+  meeting: any;
+  allSections: DocumentSection[];
+  imagesBySection: Map<number, DocumentImage[]>;
+  inlineImages: (markdown: string, images: DocumentImage[]) => string;
+  galleryImages: DocumentImage[];
+  parentDocument: any;
+}) {
+  return (
+    <>
+      {/* Summary + key facts + linked agenda item */}
+      {(ed.summary || keyFacts.length > 0 || linkedAgendaItem) && (
+        <div className="mb-8 space-y-4">
+          {ed.summary && (
+            <div className="flex items-start gap-2.5">
+              <BookOpen className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-zinc-600 leading-relaxed">
+                {ed.summary}
+              </p>
+            </div>
+          )}
+
+          {linkedAgendaItem && meeting && (
+            <Link
+              to={`/meetings/${meeting.id}#agenda-${linkedAgendaItem.id}`}
+              className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 bg-indigo-50 rounded-md px-2.5 py-1 transition-colors"
+            >
+              <Hash className="w-3 h-3" />
+              {linkedAgendaItem.item_order} {linkedAgendaItem.title}
+            </Link>
+          )}
+
+          {keyFacts.length > 0 && (
+            <div className="flex items-start gap-2.5">
+              <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex flex-wrap gap-1.5">
+                {keyFacts.map((fact: string, i: number) => (
+                  <span
+                    key={i}
+                    className="text-xs text-zinc-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5"
+                  >
+                    {fact}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Section content with inline images */}
+      {allSections.length > 0 ? (
+        <div>
+          {allSections.map((section, idx) => {
+            const sectionImages = imagesBySection.get(section.id) || [];
+            const hasImageTags = /\[Image(?:\s+\d+)?:\s*[^\]]+\]/.test(
+              section.section_text,
+            );
+            const content = hasImageTags
+              ? inlineImages(section.section_text, sectionImages)
+              : section.section_text;
+            return (
+              <div
+                key={section.id}
+                id={`section-${section.section_order}`}
+                className={cn("relative scroll-mt-20", idx > 0 && "mt-2")}
+              >
+                <MarkdownContent content={content} />
+
+                {section.page_start != null && (
+                  <div className="mt-1 text-[10px] text-zinc-400">
+                    Page {section.page_start}
+                    {section.page_end &&
+                    section.page_end !== section.page_start
+                      ? `\u2013${section.page_end}`
+                      : ""}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-500 py-12 text-center">
+          No sections available for this document.
+        </p>
+      )}
+
+      {/* Gallery: images not consumed by inline matching */}
+      {galleryImages.length > 0 && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <Images className="w-4 h-4 text-zinc-400" />
+            <h2 className="text-sm font-semibold text-zinc-700">
+              Document Images
+            </h2>
+            <span className="text-xs text-zinc-400">
+              ({galleryImages.length})
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {galleryImages.map((img) => (
+              <a
+                key={img.id}
+                href={`https://images.viewroyal.ai/${img.r2_key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block"
+              >
+                <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-shadow group-hover:shadow-md">
+                  <img
+                    src={`https://images.viewroyal.ai/${img.r2_key}`}
+                    alt={img.description || "Document image"}
+                    loading="lazy"
+                    width={img.width ?? undefined}
+                    height={img.height ?? undefined}
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+                {img.description && (
+                  <p className="mt-1 text-xs text-zinc-500 leading-snug line-clamp-2">
+                    {img.description}
+                  </p>
+                )}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Source document footer */}
+      {parentDocument && (
+        <div className="mt-12 pt-6 border-t border-zinc-100">
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <FileText className="w-3.5 h-3.5" />
+            <span>
+              Extracted from: {(parentDocument as any).title}
+            </span>
+            {(parentDocument as any).page_count && (
+              <span>({(parentDocument as any).page_count} pages total)</span>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
