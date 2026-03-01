@@ -5,6 +5,7 @@ import {
   Gavel,
   MessageSquare,
   ExternalLink,
+  Book,
 } from "lucide-react";
 import {
   HoverCard,
@@ -25,6 +26,7 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   agenda_item: "Agenda Item",
   document_section: "Document",
   key_statement: "Statement",
+  bylaw: "Bylaw",
 };
 
 export function SourceIcon({
@@ -40,6 +42,7 @@ export function SourceIcon({
   if (type === "motion" || type === "vote") return <Gavel className={cls} />;
   if (type === "document_section") return <FileText className={cls} />;
   if (type === "key_statement") return <MessageSquare className={cls} />;
+  if (type === "bylaw") return <Book className={cls} />;
   return <FileText className={cls} />;
 }
 
@@ -55,15 +58,18 @@ export function CitationBadge({
   source: any;
 }) {
   const label = SOURCE_TYPE_LABEL[source?.type] || "Source";
-  const meetingLink = source?.meeting_id
-    ? `/meetings/${source.meeting_id}`
-    : "#";
+  const link =
+    source?.type === "bylaw" && source?.bylaw_id
+      ? `/bylaws/${source.bylaw_id}`
+      : source?.meeting_id
+        ? `/meetings/${source.meeting_id}`
+        : "#";
 
   return (
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
         <Link
-          to={meetingLink}
+          to={link}
           className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold leading-none !no-underline hover:!no-underline hover:bg-blue-200 transition-colors align-super ml-0.5 cursor-pointer"
         >
           {num}
@@ -93,10 +99,10 @@ export function CitationBadge({
           {source?.title || "View source"}
         </p>
         <Link
-          to={meetingLink}
+          to={link}
           className="flex items-center gap-1 mt-2 text-[10px] font-medium text-blue-600 hover:text-blue-700 no-underline"
         >
-          View in meeting <ExternalLink className="h-2.5 w-2.5" />
+          {source?.type === "bylaw" ? "View bylaw" : "View in meeting"} <ExternalLink className="h-2.5 w-2.5" />
         </Link>
       </HoverCardContent>
     </HoverCard>

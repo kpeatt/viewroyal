@@ -39,9 +39,11 @@ export function SourceCards({ sources, isOpen, onToggle }: SourceCardsProps) {
               <Link
                 key={`${source.type}-${source.id}-${i}`}
                 to={
-                  source.meeting_id
-                    ? `/meetings/${source.meeting_id}`
-                    : "#"
+                  source.type === "bylaw" && source.bylaw_id
+                    ? `/bylaws/${source.bylaw_id}`
+                    : source.meeting_id
+                      ? `/meetings/${source.meeting_id}`
+                      : "#"
                 }
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-zinc-200 hover:border-blue-200 hover:bg-blue-50/50 transition-colors group text-xs"
               >
