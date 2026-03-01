@@ -21,9 +21,9 @@
 
 ### Agent
 
-- [ ] **AGNT-01**: Agent reasoning steps explain why it is choosing each search tool, not just which tool it is calling
-- [ ] **AGNT-02**: Tool result summaries show what was found and why it matters (count, relevance) instead of raw observation text
-- [ ] **AGNT-03**: Agent can search bylaws directly when questions ask about regulations, zoning rules, fees, or bylaw provisions
+- [x] **AGNT-01**: Agent reasoning steps explain why it is choosing each search tool, not just which tool it is calling
+- [x] **AGNT-02**: Tool result summaries show what was found and why it matters (count, relevance) instead of raw observation text
+- [x] **AGNT-03**: Agent can search bylaws directly when questions ask about regulations, zoning rules, fees, or bylaw provisions
 
 ### Answer UX
 
@@ -59,9 +59,9 @@
 | SRCH-02 | Phase 31 | Pending |
 | SRCH-03 | Phase 31 | Pending |
 | SRCH-04 | Phase 31 | Pending |
-| AGNT-01 | Phase 29 | Pending |
-| AGNT-02 | Phase 29 | Pending |
-| AGNT-03 | Phase 29 | Pending |
+| AGNT-01 | Phase 29 | Complete |
+| AGNT-02 | Phase 29 | Complete |
+| AGNT-03 | Phase 29 | Complete |
 | ANSR-01 | Phase 31 | Pending |
 | ANSR-02 | Phase 31 | Pending |
 
