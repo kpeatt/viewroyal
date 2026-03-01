@@ -5,6 +5,7 @@ import {
   getSearchResultCache,
   saveSearchResultCache,
 } from "../services/hybrid-search.server";
+import { getDateRange } from "../lib/search-params";
 import { runQuestionAgent, type AgentEvent } from "../services/rag.server";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getMunicipality } from "../services/municipality";
@@ -116,10 +117,16 @@ export async function loader({ request }: Route.LoaderArgs) {
     const filterTypes = url.searchParams.getAll("type") as Array<
       "motion" | "key_statement" | "document_section" | "transcript_segment"
     >;
+    const timeRange = url.searchParams.get("time") || "";
+    const sortParam = url.searchParams.get("sort") || "";
+    const { from: dateFrom, to: dateTo } = getDateRange(timeRange);
 
     const results = await hybridSearchAll(query, {
       types: filterTypes.length > 0 ? filterTypes : undefined,
       limit: 30,
+      dateFrom,
+      dateTo,
+      sort: (sortParam as "relevance" | "newest" | "oldest") || undefined,
     });
 
     return Response.json({ results, query, intent: "keyword" });

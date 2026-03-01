@@ -53,6 +53,8 @@ async function hybridSearchMotions(
   queryText: string,
   embedding: number[],
   limit: number,
+  dateFrom?: string | null,
+  dateTo?: string | null,
 ): Promise<UnifiedSearchResult[]> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase.rpc("hybrid_search_motions", {
@@ -62,6 +64,8 @@ async function hybridSearchMotions(
     full_text_weight: 1.0,
     semantic_weight: 1.0,
     rrf_k: 50,
+    date_from: dateFrom || null,
+    date_to: dateTo || null,
   });
 
   if (error) {
@@ -87,6 +91,8 @@ async function hybridSearchKeyStatements(
   queryText: string,
   embedding: number[],
   limit: number,
+  dateFrom?: string | null,
+  dateTo?: string | null,
 ): Promise<UnifiedSearchResult[]> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase.rpc("hybrid_search_key_statements", {
@@ -96,6 +102,8 @@ async function hybridSearchKeyStatements(
     full_text_weight: 1.0,
     semantic_weight: 1.0,
     rrf_k: 50,
+    date_from: dateFrom || null,
+    date_to: dateTo || null,
   });
 
   if (error) {
@@ -120,6 +128,8 @@ async function hybridSearchDocumentSections(
   queryText: string,
   embedding: number[],
   limit: number,
+  dateFrom?: string | null,
+  dateTo?: string | null,
 ): Promise<UnifiedSearchResult[]> {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase.rpc(
@@ -131,6 +141,8 @@ async function hybridSearchDocumentSections(
       full_text_weight: 1.0,
       semantic_weight: 1.0,
       rrf_k: 50,
+      date_from: dateFrom || null,
+      date_to: dateTo || null,
     },
   );
 
@@ -145,7 +157,7 @@ async function hybridSearchDocumentSections(
     type: "document_section" as const,
     title: row.section_title || "Document Section",
     content: (row.content || "").slice(0, 200),
-    meeting_id: null, // document_sections link via documents, not directly
+    meeting_id: row.meeting_id || null, // Now returned by updated RPC via documents JOIN
     meeting_date: null,
     rank_score: row.rank_score,
   }));
@@ -159,6 +171,8 @@ async function hybridSearchDocumentSections(
 async function ftsSearchTranscriptSegments(
   queryText: string,
   limit: number,
+  dateFrom?: string | null,
+  dateTo?: string | null,
 ): Promise<UnifiedSearchResult[]> {
   const supabase = getSupabaseAdminClient();
 
@@ -170,13 +184,22 @@ async function ftsSearchTranscriptSegments(
 
   if (!tsQuery) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("transcript_segments")
     .select(
       "id, meeting_id, speaker_name, text_content, start_time, meetings!inner(meeting_date)",
     )
-    .textSearch("text_search", tsQuery)
-    .limit(limit);
+    .textSearch("text_search", tsQuery);
+
+  // Apply date filtering via the joined meetings table
+  if (dateFrom) {
+    query = query.gte("meetings.meeting_date", dateFrom);
+  }
+  if (dateTo) {
+    query = query.lte("meetings.meeting_date", dateTo);
+  }
+
+  const { data, error } = await query.limit(limit);
 
   if (error) {
     console.error("FTS search transcript_segments error:", error);
@@ -241,6 +264,46 @@ async function enrichWithMeetingDates(
 }
 
 // ---------------------------------------------------------------------------
+// Sort helper (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sort unified search results by the given criteria.
+ * - "newest": meeting_date descending, nulls last
+ * - "oldest": meeting_date ascending, nulls last
+ * - default/empty/"relevance": rank_score descending
+ */
+export function sortResults(
+  results: UnifiedSearchResult[],
+  sort?: "relevance" | "newest" | "oldest" | string,
+): UnifiedSearchResult[] {
+  if (results.length <= 1) return [...results];
+
+  const sorted = [...results];
+
+  if (sort === "newest") {
+    sorted.sort((a, b) => {
+      if (!a.meeting_date && !b.meeting_date) return 0;
+      if (!a.meeting_date) return 1;
+      if (!b.meeting_date) return -1;
+      return b.meeting_date.localeCompare(a.meeting_date);
+    });
+  } else if (sort === "oldest") {
+    sorted.sort((a, b) => {
+      if (!a.meeting_date && !b.meeting_date) return 0;
+      if (!a.meeting_date) return 1;
+      if (!b.meeting_date) return -1;
+      return a.meeting_date.localeCompare(b.meeting_date);
+    });
+  } else {
+    // Default: rank_score descending
+    sorted.sort((a, b) => b.rank_score - a.rank_score);
+  }
+
+  return sorted;
+}
+
+// ---------------------------------------------------------------------------
 // Main unified search function
 // ---------------------------------------------------------------------------
 
@@ -249,10 +312,15 @@ export async function hybridSearchAll(
   options?: {
     types?: ContentType[];
     limit?: number;
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    sort?: "relevance" | "newest" | "oldest";
   },
 ): Promise<UnifiedSearchResult[]> {
   const limit = options?.limit ?? 30;
   const types = options?.types;
+  const dateFrom = options?.dateFrom ?? null;
+  const dateTo = options?.dateTo ?? null;
 
   // Generate embedding for hybrid search (vector + FTS)
   const embedding = await generateQueryEmbedding(query);
@@ -263,19 +331,19 @@ export async function hybridSearchAll(
   const shouldSearch = (type: ContentType) => !types || types.includes(type);
 
   if (shouldSearch("motion") && embedding) {
-    promises.push(hybridSearchMotions(query, embedding, 15));
+    promises.push(hybridSearchMotions(query, embedding, 15, dateFrom, dateTo));
   }
 
   if (shouldSearch("key_statement") && embedding) {
-    promises.push(hybridSearchKeyStatements(query, embedding, 15));
+    promises.push(hybridSearchKeyStatements(query, embedding, 15, dateFrom, dateTo));
   }
 
   if (shouldSearch("document_section") && embedding) {
-    promises.push(hybridSearchDocumentSections(query, embedding, 10));
+    promises.push(hybridSearchDocumentSections(query, embedding, 10, dateFrom, dateTo));
   }
 
   if (shouldSearch("transcript_segment")) {
-    promises.push(ftsSearchTranscriptSegments(query, 15));
+    promises.push(ftsSearchTranscriptSegments(query, 15, dateFrom, dateTo));
   }
 
   // Run all searches in parallel
@@ -285,8 +353,8 @@ export async function hybridSearchAll(
   // Enrich with meeting dates
   await enrichWithMeetingDates(allResults);
 
-  // Sort by rank_score descending
-  allResults.sort((a, b) => b.rank_score - a.rank_score);
+  // Sort by requested criteria (default: rank_score descending)
+  allResults = sortResults(allResults, options?.sort);
 
   // Deduplicate by type+id
   const seen = new Set<string>();
