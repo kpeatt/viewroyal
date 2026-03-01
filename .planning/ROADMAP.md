@@ -82,7 +82,7 @@
 **Milestone Goal:** Transform search and RAG into a polished, Perplexity/Kagi-inspired experience with better agent transparency, citation UX, search controls, and follow-up emphasis.
 
 - [x] **Phase 29: Backend Foundation** - Bylaw search tool, enriched source objects, and agent reasoning improvements (completed 2026-03-01)
-- [ ] **Phase 30: Citation UX** - Grouped citation badges with source preview cards and markdown rendering
+- [x] **Phase 30: Citation UX** - Grouped citation badges with source preview cards and markdown rendering (completed 2026-03-01)
 - [ ] **Phase 31: Search Controls + Polish** - Time/type filters, URL state, collapsed source panel, follow-up redesign
 
 ## Phase Details
@@ -142,5 +142,5 @@ Phases execute in numeric order: 29 -> 30 -> 31
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 29. Backend Foundation | v1.6 | Complete    | 2026-03-01 | - |
-| 30. Citation UX | v1.6 | 2/3 | In progress | - |
+| 30. Citation UX | v1.6 | 3/3 | Complete | 2026-03-01 |
 | 31. Search Controls + Polish | v1.6 | 0/2 | Not started | - |
