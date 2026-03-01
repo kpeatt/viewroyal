@@ -1005,6 +1005,8 @@ interface NormalizedSource {
   title: string;
   speaker_name?: string;
   bylaw_id?: number;
+  content?: string;   // Up to 500 chars of source text for preview cards
+  result?: string;    // Motion/vote result (e.g., "Carried", "Defeated")
 }
 
 function normalizeTranscriptSources(
@@ -1017,6 +1019,7 @@ function normalizeTranscriptSources(
     meeting_date: s.meetings?.meeting_date || "Unknown",
     title: (s.text_content || "").slice(0, 120),
     speaker_name: s.speaker_name,
+    content: (s.text_content || "").slice(0, 500),
   }));
 }
 
@@ -1029,6 +1032,8 @@ function normalizeMotionSources(motions: any[]): NormalizedSource[] {
       meeting_id: meeting?.id || m.meeting_id || 0,
       meeting_date: meeting?.meeting_date || "Unknown",
       title: m.plain_english_summary || (m.text_content || "").slice(0, 120),
+      content: (m.text_content || "").slice(0, 500),
+      result: m.result,
     };
   });
 }
@@ -1043,6 +1048,7 @@ function normalizeKeyStatementSources(statements: any[]): NormalizedSource[] {
       meeting_date: meeting?.meeting_date || "Unknown",
       title: `[${s.statement_type}] ${(s.statement_text || "").slice(0, 100)}`,
       speaker_name: s.speaker_name,
+      content: (s.statement_text || "").slice(0, 500),
     };
   });
 }
@@ -1058,6 +1064,8 @@ function normalizeVoteSources(votes: Vote[]): NormalizedSource[] {
       title:
         v.motions!.plain_english_summary ||
         (v.motions!.text_content || "").slice(0, 120),
+      content: (v.motions!.text_content || "").slice(0, 500),
+      result: v.motions!.result,
     }));
 }
 
@@ -1068,6 +1076,7 @@ function normalizeMatterSources(matters: any[]): NormalizedSource[] {
     meeting_id: 0,
     meeting_date: m.last_seen || m.first_seen || "Unknown",
     title: m.title || (m.plain_english_summary || "").slice(0, 120),
+    content: (m.plain_english_summary || m.title || "").slice(0, 500),
   }));
 }
 
@@ -1147,6 +1156,7 @@ function normalizeDocumentSectionSources(sections: any[]): NormalizedSource[] {
     meeting_id: s.meeting_id || 0,
     meeting_date: s.meeting_date || "Unknown",
     title: `[Doc] ${s.heading || s.document_title || "Document Section"}`,
+    content: (s.content || "").slice(0, 500),
   }));
 }
 
@@ -1191,6 +1201,7 @@ function normalizeBylawSources(results: any[]): NormalizedSource[] {
     meeting_id: 0,
     meeting_date: "N/A",
     title: `[Bylaw ${r.bylaw_number || ""}] ${r.bylaw_title || "Bylaw"} — ${(r.text_content || "").slice(0, 80)}`,
+    content: (r.text_content || "").slice(0, 500),
   }));
 }
 
@@ -1201,6 +1212,7 @@ function normalizeAgendaItemSources(items: any[]): NormalizedSource[] {
     meeting_id: item.meeting_id || 0,
     meeting_date: item.meetings?.meeting_date || "Unknown",
     title: item.plain_english_summary || item.title || "",
+    content: (item.plain_english_summary || item.title || "").slice(0, 500),
   }));
 }
 
