@@ -8,7 +8,7 @@ progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-28)
 ## Current Position
 
 Phase: 2 of 3 (Phase 30: Citation UX)
-Plan: 1 of 3 in current phase
-Status: Executing Wave 2
-Last activity: 2026-03-01 -- Plan 30-01 completed (citation parser + foundations)
+Plan: 2 of 3 in current phase
+Status: Executing Wave 3
+Last activity: 2026-03-01 -- Plan 30-02 completed (grouped badges with preview cards)
 
 Progress: [███░░░░░░░] 29%
 
