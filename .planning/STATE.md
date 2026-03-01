@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Search Experience
-status: defining_requirements
-last_updated: "2026-02-28T23:00:00.000Z"
+status: ready_to_plan
+last_updated: "2026-02-28T23:30:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 7
   completed_plans: 0
 ---
 
@@ -18,14 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Defining requirements for v1.6 Search Experience
+**Current focus:** Phase 29 -- Backend Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-28 — Milestone v1.6 started
+Phase: 1 of 3 (Phase 29: Backend Foundation)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-02-28 -- Roadmap created for v1.6 Search Experience
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -77,8 +79,6 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 ### Pending Todos
 
 1. **Let users supply their own Gemini API key** (api) -- Allow power users to provide their own Gemini key for RAG queries
-2. ~~**Extract images before document extraction for Gemini linking** (pipeline)~~ -- DONE
-3. ~~**Improve RAG search for specific item types** (api)~~ -- Absorbed into v1.6 Search Experience milestone
 
 ### Blockers/Concerns
 
@@ -86,6 +86,9 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
 - Rate Limit binding pricing needs verification before production launch
+- Research flag: Verify `bylaws` table has `embedding` column populated before building `match_bylaws` RPC (Phase 29)
+- Research flag: Test Gemini citation format reliability -- parser must handle format variations (Phase 30)
+- Research flag: Profile hybrid search RPC performance with date filters before deciding on denormalization (Phase 31)
 
 ### Quick Tasks Completed
 
@@ -106,7 +109,7 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 ## Session Continuity
 
 Last session: 2026-02-28
-Stopped at: Starting v1.6 Search Experience milestone
+Stopped at: Roadmap created for v1.6 Search Experience, ready to plan Phase 29
 Resume file: None
 
 ### Paused Work: Phase 7.1

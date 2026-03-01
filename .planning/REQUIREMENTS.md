@@ -51,25 +51,25 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CITE-01 | — | Pending |
-| CITE-02 | — | Pending |
-| CITE-03 | — | Pending |
-| CITE-04 | — | Pending |
-| SRCH-01 | — | Pending |
-| SRCH-02 | — | Pending |
-| SRCH-03 | — | Pending |
-| SRCH-04 | — | Pending |
-| AGNT-01 | — | Pending |
-| AGNT-02 | — | Pending |
-| AGNT-03 | — | Pending |
-| ANSR-01 | — | Pending |
-| ANSR-02 | — | Pending |
+| CITE-01 | Phase 30 | Pending |
+| CITE-02 | Phase 30 | Pending |
+| CITE-03 | Phase 30 | Pending |
+| CITE-04 | Phase 30 | Pending |
+| SRCH-01 | Phase 31 | Pending |
+| SRCH-02 | Phase 31 | Pending |
+| SRCH-03 | Phase 31 | Pending |
+| SRCH-04 | Phase 31 | Pending |
+| AGNT-01 | Phase 29 | Pending |
+| AGNT-02 | Phase 29 | Pending |
+| AGNT-03 | Phase 29 | Pending |
+| ANSR-01 | Phase 31 | Pending |
+| ANSR-02 | Phase 31 | Pending |
 
 **Coverage:**
 - v1.6 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after initial definition*
+*Last updated: 2026-02-28 after roadmap creation*
