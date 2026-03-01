@@ -83,7 +83,7 @@
 
 - [x] **Phase 29: Backend Foundation** - Bylaw search tool, enriched source objects, and agent reasoning improvements (completed 2026-03-01)
 - [x] **Phase 30: Citation UX** - Grouped citation badges with source preview cards and markdown rendering (completed 2026-03-01)
-- [ ] **Phase 31: Search Controls + Polish** - Time/type filters, URL state, collapsed source panel, follow-up redesign
+- [x] **Phase 31: Search Controls + Polish** - Time/type filters, URL state, collapsed source panel, follow-up redesign (completed 2026-03-01)
 
 ## Phase Details
 
@@ -143,4 +143,4 @@ Phases execute in numeric order: 29 -> 30 -> 31
 |-------|-----------|----------------|--------|-----------|
 | 29. Backend Foundation | v1.6 | Complete    | 2026-03-01 | - |
 | 30. Citation UX | v1.6 | 3/3 | Complete | 2026-03-01 |
-| 31. Search Controls + Polish | 1/2 | In Progress|  | - |
+| 31. Search Controls + Polish | 2/2 | Complete   | 2026-03-01 | - |
