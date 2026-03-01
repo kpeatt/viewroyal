@@ -142,5 +142,5 @@ Phases execute in numeric order: 29 -> 30 -> 31
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 29. Backend Foundation | v1.6 | Complete    | 2026-03-01 | - |
-| 30. Citation UX | v1.6 | 0/3 | Not started | - |
+| 30. Citation UX | v1.6 | 1/3 | In progress | - |
 | 31. Search Controls + Polish | v1.6 | 0/2 | Not started | - |
