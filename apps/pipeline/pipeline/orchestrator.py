@@ -522,6 +522,8 @@ class Archiver:
             config.SUPABASE_URL, supabase_key, config.GEMINI_API_KEY,
             municipality_id=municipality_id,
         )
+        if not config.GEMINI_API_KEY:
+            print("  [WARNING] GEMINI_API_KEY is not set. AI refinement will fail and meetings will be partially ingested (no agenda items/motions). Set GEMINI_API_KEY to enable full processing.")
         diarized_folders = diarized_folders or set()
 
         # Single-folder targeted mode
@@ -773,6 +775,90 @@ class Archiver:
             _time.sleep(1)
 
         print(f"\n  Backfill complete: {processed} documents extracted, {skipped} skipped, {errors} errors")
+
+    def prepare_reextract_images(self):
+        """Clear extraction data for documents that have images, so they get re-extracted
+        with Gemini-powered image-to-section matching.
+
+        Deletes extracted_documents rows (CASCADE cleans document_sections + document_images),
+        then removes those meeting IDs from backfill_progress.json so backfill picks them up.
+        """
+        supabase_key = config.SUPABASE_SECRET_KEY or config.SUPABASE_KEY
+        if not config.SUPABASE_URL or not supabase_key:
+            print("  [!] SUPABASE_URL/KEY not set, aborting.")
+            return
+
+        supabase = create_client(config.SUPABASE_URL, supabase_key)
+
+        # 1. Find extracted_documents that have images
+        print("  Finding documents with images...")
+        image_doc_ids = set()
+        offset = 0
+        page_size = 1000
+        while True:
+            result = (
+                supabase.table("document_images")
+                .select("extracted_document_id")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            if not result.data:
+                break
+            for row in result.data:
+                image_doc_ids.add(row["extracted_document_id"])
+            if len(result.data) < page_size:
+                break
+            offset += page_size
+
+        if not image_doc_ids:
+            print("  No documents with images found. Nothing to do.")
+            return
+
+        # 2. Get the document_id and meeting_id for each extracted_document
+        print(f"  Found {len(image_doc_ids)} extracted documents with images")
+        meeting_ids = set()
+        extracted_doc_list = list(image_doc_ids)
+        # Query in batches to avoid URL length limits
+        batch_size = 100
+        for i in range(0, len(extracted_doc_list), batch_size):
+            batch = extracted_doc_list[i : i + batch_size]
+            result = (
+                supabase.table("extracted_documents")
+                .select("id, document_id")
+                .in_("id", batch)
+                .execute()
+            )
+            if result.data:
+                doc_ids = [row["document_id"] for row in result.data]
+                # Look up meeting_ids from documents table
+                doc_result = (
+                    supabase.table("documents")
+                    .select("meeting_id")
+                    .in_("id", doc_ids)
+                    .execute()
+                )
+                if doc_result.data:
+                    for row in doc_result.data:
+                        meeting_ids.add(row["meeting_id"])
+
+        print(f"  Spans {len(meeting_ids)} meetings")
+
+        # 3. Delete extracted_documents (CASCADE removes sections + images)
+        print("  Deleting extraction data (CASCADE: sections + images)...")
+        for i in range(0, len(extracted_doc_list), batch_size):
+            batch = extracted_doc_list[i : i + batch_size]
+            supabase.table("extracted_documents").delete().in_("id", batch).execute()
+        print(f"  Deleted {len(image_doc_ids)} extracted_documents")
+
+        # 4. Remove those meeting IDs from backfill progress
+        progress = self._load_backfill_progress()
+        processed = set(progress.get("processed_meeting_ids", []))
+        removed = processed & meeting_ids
+        processed -= meeting_ids
+        self._save_backfill_progress(processed, progress.get("errors", {}))
+        print(f"  Removed {len(removed)} meeting IDs from backfill progress")
+
+        print(f"\n  Ready: {len(meeting_ids)} meetings queued for re-extraction")
 
     def backfill_extracted_documents(self, force=False, limit=None, concurrency=1):
         """Backfill document extraction for all meetings with agenda PDFs from the local archive.

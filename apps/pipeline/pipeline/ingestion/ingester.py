@@ -456,6 +456,13 @@ class MeetingIngester:
 
         return agenda_text, minutes_text, transcript_text
 
+    def _slugify(self, text):
+        if not text:
+            return ""
+        s = str(text).lower().strip()
+        s = re.sub(r'[^\w\s-]', '', s)
+        return re.sub(r'[-\s]+', '-', s).strip('-_')
+
     def extract_identifier_from_text(self, text):
         if not text:
             return None
@@ -855,13 +862,31 @@ class MeetingIngester:
         if not dry_run and not force_update and not precomputed_refinement:
             res = (
                 self.supabase.table("meetings")
-                .select("id")
+                .select("id, has_agenda")
                 .eq("archive_path", normalized_path)
                 .execute()
             )
             if res.data:
-                print("  [->] Meeting already ingested. Skipping.")
-                return None
+                meeting_row = res.data[0]
+                # Self-healing: if meeting claims has_agenda but has 0 agenda items,
+                # it was half-ingested (e.g. GEMINI_API_KEY was missing). Re-process it.
+                if meeting_row.get("has_agenda"):
+                    items_res = (
+                        self.supabase.table("agenda_items")
+                        .select("id", count="exact")
+                        .eq("meeting_id", meeting_row["id"])
+                        .execute()
+                    )
+                    if items_res.count == 0:
+                        print(f"  [!] Meeting {meeting_row['id']} has has_agenda=true but 0 agenda items. Re-processing (self-healing).")
+                        force_update = True
+                        # Fall through to re-process instead of returning
+                    else:
+                        print("  [->] Meeting already ingested. Skipping.")
+                        return None
+                else:
+                    print("  [->] Meeting already ingested. Skipping.")
+                    return None
 
         meta = parser.extract_meeting_metadata(
             folder_path
@@ -1770,9 +1795,15 @@ class MeetingIngester:
 
             tags = self.normalize_address_list(item.get("tags"))
 
+            base_slug = self._slugify(item.get("title") or "untitled")
+            slug = f"{meeting_id}-{self._slugify(item.get('item_order') or '0')}-{base_slug}"
+            if len(slug) > 200:
+                slug = slug[:200]
+
             item_data = {
                 "meeting_id": meeting_id,
                 "matter_id": matter_id,
+                "slug": slug,
                 "item_order": item.get("item_order"),
                 "title": item.get("title"),
                 "description": item.get("description"),
