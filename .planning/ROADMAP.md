@@ -143,4 +143,4 @@ Phases execute in numeric order: 29 -> 30 -> 31
 |-------|-----------|----------------|--------|-----------|
 | 29. Backend Foundation | v1.6 | Complete    | 2026-03-01 | - |
 | 30. Citation UX | v1.6 | 3/3 | Complete | 2026-03-01 |
-| 31. Search Controls + Polish | 2/2 | Complete   | 2026-03-01 | - |
+| 31. Search Controls + Polish | 2/2 | Complete    | 2026-03-01 | - |
