@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import {
   FileText,
@@ -12,6 +13,14 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "../ui/hover-card";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "../ui/drawer";
+import { useMediaQuery } from "../../lib/use-media-query";
+import { SourcePreviewContent } from "./source-preview-content";
 
 // ---------------------------------------------------------------------------
 // Source type helpers
@@ -119,8 +128,9 @@ export function CitationBadge({
 }
 
 // ---------------------------------------------------------------------------
-// GroupedCitationBadge component (pill showing source count)
-// Preview card content will be added in Plan 02.
+// GroupedCitationBadge component (pill with responsive preview)
+// Desktop (>=768px): HoverCard with SourcePreviewContent
+// Mobile (<768px): Drawer (bottom sheet) with SourcePreviewContent
 // ---------------------------------------------------------------------------
 
 export function GroupedCitationBadge({
@@ -130,13 +140,54 @@ export function GroupedCitationBadge({
   nums: number[];
   sources: any[];
 }) {
-  return (
-    <button
-      type="button"
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold leading-none align-super ml-0.5 cursor-pointer hover:bg-blue-200 transition-colors"
-    >
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  const [open, setOpen] = useState(false);
+
+  const pillContent = (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold leading-none align-super ml-0.5 cursor-pointer hover:bg-blue-200 transition-colors">
       {sources.length} sources
-    </button>
+    </span>
+  );
+
+  if (isDesktop) {
+    return (
+      <HoverCard openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <button type="button" className="inline align-super">
+            {pillContent}
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent
+          side="top"
+          align="center"
+          className="w-80 max-h-[300px] overflow-y-auto p-0"
+        >
+          <SourcePreviewContent sources={sources} />
+        </HoverCardContent>
+      </HoverCard>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="inline align-super"
+        onClick={() => setOpen(true)}
+      >
+        {pillContent}
+      </button>
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerContent className="max-h-[50vh]">
+          <DrawerHeader>
+            <DrawerTitle>{sources.length} Sources</DrawerTitle>
+          </DrawerHeader>
+          <div className="overflow-y-auto px-4 pb-4">
+            <SourcePreviewContent sources={sources} />
+          </div>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }
 
