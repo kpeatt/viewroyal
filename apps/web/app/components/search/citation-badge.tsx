@@ -160,12 +160,13 @@ export function groupCitationParts(
     const m = part.match(/^\[(\d+)\]$/);
     if (m) {
       currentGroup.push(parseInt(m[1], 10));
-    } else {
-      // Flush current group
+    } else if (part !== "") {
+      // Non-empty text: flush any accumulated citation group, then emit text
       flushGroup(currentGroup, sources, tokens);
       currentGroup = [];
-      if (part !== "") tokens.push({ type: "text", text: part });
+      tokens.push({ type: "text", text: part });
     }
+    // Skip empty strings produced by split between consecutive citations
   }
   // Flush remaining group
   flushGroup(currentGroup, sources, tokens);
