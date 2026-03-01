@@ -167,13 +167,13 @@ describe("Content fallback logic", () => {
   });
 
   it("source without content falls back to title", () => {
-    const source = { type: "transcript", title: "Meeting transcript" };
+    const source: Record<string, string> = { type: "transcript", title: "Meeting transcript" };
     expect(source.content).toBeUndefined();
     expect(source.title).toBeTruthy();
   });
 
   it("source with neither content nor title shows fallback", () => {
-    const source = { type: "transcript" };
+    const source: Record<string, string> = { type: "transcript" };
     const title = source.title || "View source";
     expect(title).toBe("View source");
   });
