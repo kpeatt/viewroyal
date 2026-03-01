@@ -873,6 +873,12 @@ const tools: Tool<any, any>[] = [
       search_document_sections({ query, after_date }),
   },
   {
+    name: "search_bylaws",
+    description:
+      'search_bylaws(query: string) — Searches municipal bylaws and bylaw sections using hybrid search (semantic + keyword). Returns relevant bylaw provisions, regulations, fee schedules, and zoning rules. Use when the user asks about specific rules, regulations, bylaws, fees, zoning, permits, or municipal governance provisions.',
+    call: async ({ query }: { query: string }) => search_bylaws({ query }),
+  },
+  {
     name: "get_current_date",
     description:
       "get_current_date() — Returns the current date in YYYY-MM-DD format. Use this as the first step for any question involving a recent timeframe like 'recent', 'latest', 'this year', 'last month', etc.",
@@ -909,6 +915,7 @@ A separate synthesis model will write the final user-facing answer from your gat
 - \`search_motions\` — Best for "What decisions has council made about [topic]?" or "Has council voted on [topic]?" Use short, specific queries (e.g. "affordable housing", "tree bylaw", "speed limits").
 - \`search_key_statements\` — Best for finding specific claims, proposals, objections, and recommendations made during debate. Returns attributed statements with speaker name and type. Use when you need to know who said what about a topic.
 - \`search_document_sections\` — Best for finding specific details from official PDF documents like staff reports, bylaws, and policy documents. Returns section headings and content. Use when the user asks about specific document content, detailed background information, or when other tools don't provide enough detail about a policy or report.
+- \`search_bylaws\` — Best for finding specific bylaw provisions, regulations, fee schedules, zoning rules, and permit requirements. Use when the user asks about rules, regulations, bylaws, fees, or governance. Returns relevant text from bylaw sections with the parent bylaw number and title.
 - \`search_transcript_segments\` — Full-text search for transcript segments. Use when you need verbatim quotes or context around discussions.
 - \`get_current_date\` — Call this FIRST if the question contains temporal words like "recent", "latest", "this year", "last month", "past 6 months". Then use the date as after_date on subsequent calls.
 
@@ -980,12 +987,13 @@ You will receive a citizen's question and raw evidence gathered from official co
  * Normalize raw tool results into a consistent source shape for the client.
  */
 interface NormalizedSource {
-  type: "transcript" | "motion" | "vote" | "key_statement" | "matter" | "agenda_item" | "document_section";
+  type: "transcript" | "motion" | "vote" | "key_statement" | "matter" | "agenda_item" | "document_section" | "bylaw";
   id: number;
   meeting_id: number;
   meeting_date: string;
   title: string;
   speaker_name?: string;
+  bylaw_id?: number;
 }
 
 function normalizeTranscriptSources(
@@ -1128,6 +1136,50 @@ function normalizeDocumentSectionSources(sections: any[]): NormalizedSource[] {
     meeting_id: s.meeting_id || 0,
     meeting_date: s.meeting_date || "Unknown",
     title: `[Doc] ${s.heading || s.document_title || "Document Section"}`,
+  }));
+}
+
+/**
+ * Hybrid search for bylaw chunks (municipal bylaws, regulations, fee schedules).
+ */
+async function search_bylaws({ query }: { query: string }): Promise<any[]> {
+  const embedding = await generateQueryEmbedding(query);
+  if (!embedding) return [];
+
+  try {
+    const { data } = await getSupabase().rpc("hybrid_search_bylaw_chunks", {
+      query_text: query,
+      query_embedding: JSON.stringify(embedding),
+      match_count: 10,
+      full_text_weight: 1.0,
+      semantic_weight: 1.0,
+      rrf_k: 50,
+    });
+
+    if (!data || data.length === 0) return [];
+
+    return data.map((d: any) => ({
+      id: d.id,
+      bylaw_id: d.bylaw_id,
+      bylaw_title: d.bylaw_title,
+      bylaw_number: d.bylaw_number,
+      chunk_index: d.chunk_index,
+      text_content: d.text_content,
+    }));
+  } catch (error) {
+    console.error("Bylaw search failed:", error);
+    return [];
+  }
+}
+
+function normalizeBylawSources(results: any[]): NormalizedSource[] {
+  return results.map((r) => ({
+    type: "bylaw" as const,
+    id: r.bylaw_id,
+    bylaw_id: r.bylaw_id,
+    meeting_id: 0,
+    meeting_date: "N/A",
+    title: `[Bylaw ${r.bylaw_number || ""}] ${r.bylaw_title || "Bylaw"} — ${(r.text_content || "").slice(0, 80)}`,
   }));
 }
 
@@ -1275,6 +1327,8 @@ Respond with a single JSON object. No markdown fences.`;
         allSources.push(...normalizeKeyStatementSources(toolResult));
       } else if (tool_name === "search_document_sections") {
         allSources.push(...normalizeDocumentSectionSources(toolResult));
+      } else if (tool_name === "search_bylaws") {
+        allSources.push(...normalizeBylawSources(toolResult));
       } else {
         const first = toolResult[0];
         if (first.text_content !== undefined) {
