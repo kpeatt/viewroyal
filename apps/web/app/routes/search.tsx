@@ -278,6 +278,9 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data) as AgentEvent | { type: string; id?: string; followups?: string[] };
       switch (data.type) {
+        case "thought":
+          setAgentSteps((prev) => [...prev, data as AgentEvent]);
+          break;
         case "tool_call":
           setAgentSteps((prev) => [...prev, data as AgentEvent]);
           break;
