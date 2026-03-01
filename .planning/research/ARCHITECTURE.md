@@ -1,240 +1,217 @@
-# Architecture Patterns: v1.5 Document Experience
+# Architecture Patterns: v1.6 Search Experience
 
-**Domain:** Document viewer improvements, document-to-motion/matter linking, meeting provenance indicators
-**Researched:** 2026-02-26
+**Domain:** Citation UX overhaul, search filter controls, RAG agent transparency improvements
+**Researched:** 2026-02-28
 
 ---
 
 ## 1. Current Architecture Summary
 
-### Existing Data Model (Document-Related Tables)
+### RAG Agent (rag.server.ts — 1,344 lines)
 
 ```
-meetings
-  |-- has_agenda, has_minutes, has_transcript (boolean flags)
-  |-- agenda_url, minutes_url, video_url (source links)
-  |-- updated_at (timestamp)
-  |
-  |-- documents (source PDFs)
-  |     |-- meeting_id FK
-  |     |-- title, category, source_url, file_path, page_count
-  |     |
-  |     |-- extracted_documents (logical docs within a PDF)
-  |     |     |-- document_id FK, agenda_item_id FK
-  |     |     |-- title, document_type, page_start, page_end
-  |     |     |-- summary, key_facts (jsonb)
-  |     |     |
-  |     |     |-- document_images
-  |     |     |     |-- extracted_document_id FK
-  |     |     |     |-- r2_key, page, description, dimensions
-  |     |     |
-  |     |     |-- document_sections (content chunks)
-  |     |           |-- extracted_document_id FK, document_id FK
-  |     |           |-- agenda_item_id FK
-  |     |           |-- section_title, section_text (markdown)
-  |     |           |-- section_order, page_start, page_end
-  |     |           |-- embedding halfvec(384), text_search tsvector
-  |
-  |-- agenda_items
-  |     |-- meeting_id FK, matter_id FK
-  |     |-- title, category, source_file
-  |     |
-  |     |-- motions
-  |           |-- agenda_item_id FK, meeting_id FK
-  |
-  |-- matters
-        |-- agenda_items (via matter_id FK on agenda_items)
+User Query → Intent Classifier (keyword/question)
+  ↓ keyword → Hybrid Search (hybrid-search.server.ts)
+  ↓ question → RAG Agent Loop (rag.server.ts)
+    ↓
+    Orchestration Phase (Gemini):
+      thought → tool_call → tool_observation → repeat (max 6 steps)
+    ↓
+    Synthesis Phase (Gemini streaming):
+      Build evidence [1]..[N] → Stream final answer with [1][2] citations
+      → Generate follow-ups → Cache answer (30-day TTL)
+    ↓
+    SSE Events → Frontend (search.tsx)
 ```
 
-### Existing Routes and Components
+### 8 Current Search Tools
 
-| Route | File | Purpose |
-|-------|------|---------|
-| `/meetings/:id` | `meeting-detail.tsx` | Meeting page with tabs: overview, agenda, motions, participants |
-| `/meetings/:id/documents` | `meeting-documents.tsx` | Document listing page for a meeting |
-| `/meetings/:id/documents/:docId` | `document-viewer.tsx` | Individual extracted document viewer |
-| `/matters/:id` | `matter-detail.tsx` | Matter detail with lifecycle timeline |
+| Tool | Search Type | Table |
+|------|------------|-------|
+| search_motions | Vector semantic | motions |
+| search_transcript_segments | Full-text (tsvector) | transcript_segments |
+| search_matters | Vector semantic | matters |
+| search_agenda_items | Full-text (tsvector) | agenda_items |
+| search_key_statements | Vector semantic | key_statements |
+| search_document_sections | Hybrid (vec+FTS) | document_sections |
+| get_voting_history | SQL aggregates | votes |
+| get_statements_by_person | SQL + aliases | key_statements |
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| `AgendaOverview` | `meeting/AgendaOverview.tsx` | Agenda item list with expansion |
-| `DocumentSections` | `meeting/DocumentSections.tsx` | Inline doc sections within agenda items |
-| `MarkdownContent` | `markdown-content.tsx` | Lightweight markdown-to-HTML renderer |
-| `FormattedText` | `formatted-text.tsx` | Official document styling (minutes) |
-| `MeetingTabs` | `meeting/MeetingTabs.tsx` | Tab navigation on meeting detail |
+**Missing:** Bylaws (have embeddings + tsvector but no agent tool)
 
-### Existing Service Functions
+### Streaming SSE Protocol (Current)
 
-| Function | File | What It Fetches |
-|----------|------|----------------|
-| `getMeetingById` | `services/meetings.ts` | Meeting + agenda items + motions + votes + transcript + attendance |
-| `getDocumentSectionsForMeeting` | `services/meetings.ts` | All document_sections for a meeting's documents |
-| `getExtractedDocumentsForMeeting` | `services/meetings.ts` | All extracted_documents for a meeting |
-| `getMatterById` | `services/matters.ts` | Matter + agenda_items with meetings + motions + votes |
+```
+data: { type: "thought", thought: "..." }
+data: { type: "tool_call", name: "search_motions", args: {...} }
+data: { type: "tool_observation", name: "search_motions", result: "Found 5 results" }
+data: { type: "final_answer_chunk", chunk: "Council decided..." }
+data: { type: "sources", sources: [...] }
+data: { type: "suggested_followups", followups: ["Q1", "Q2", "Q3"] }
+data: { type: "cache_id", id: "abc12345" }
+data: { type: "done" }
+```
 
-### Key Linking Paths Already in Place
+### Keyword Search (hybrid-search.server.ts — 351 lines)
 
-1. **Document -> Agenda Item**: `extracted_documents.agenda_item_id` and `document_sections.agenda_item_id` (both FKs exist)
-2. **Agenda Item -> Matter**: `agenda_items.matter_id` FK
-3. **Agenda Item -> Meeting**: `agenda_items.meeting_id` FK
-4. **Document -> Meeting**: `documents.meeting_id` FK
-5. **Motion -> Agenda Item**: `motions.agenda_item_id` FK
+```
+Query → generateQueryEmbedding() → OpenAI 384-dim vector
+  ↓
+  Parallel RPC calls:
+    hybrid_search_motions(query_text, query_embedding, ...)
+    hybrid_search_key_statements(...)
+    hybrid_search_document_sections(...)
+    fts_search_transcript_segments(...)  (FTS only, no embeddings)
+  ↓
+  Reciprocal Rank Fusion (k=50) → UnifiedSearchResult[]
+```
 
-**The linking chain document -> agenda_item -> matter and document -> agenda_item -> motion already exists in the database.** The v1.5 work is about surfacing these links in the UI, not creating new schema.
+### Search UI (search.tsx — 675 lines)
+
+```
+URL params: ?q=...&mode=keyword|ai&type=motion|key_statement|...
+  ↓
+  Keyword mode: JSON response → result cards with rank_score
+  AI mode: SSE stream → streaming answer with [1][2] citations
+    → Source list (expanded)
+    → Follow-up chips (small, bottom)
+```
 
 ---
 
-## 2. Architecture for v1.5 Features
+## 2. Architecture for v1.6 Features
 
-### Feature 1: Document Viewer Improvements
+### Feature 1: Grouped Citation Badges + Source Preview Cards
 
-**Current state:** `document-viewer.tsx` renders sections with `MarkdownContent`, which uses Tailwind's `prose` utility classes. Tables and headings work but lack polish.
+**Current state:** Gemini synthesis generates text with `[1]`, `[2]`, etc. Frontend regex-parses these and renders them as superscript numbers. Sources render as a numbered list below the answer.
 
-**Architecture approach:** Enhance `MarkdownContent` component -- no new components needed.
+**v1.6 approach:** Change the citation pipeline end-to-end.
 
-```
-document-viewer.tsx
-  |-- MarkdownContent (enhanced prose classes, responsive table wrapper)
-  |-- [existing] breadcrumb, header, summary, key facts, gallery
-```
+**Backend changes (rag.server.ts):**
 
-**What changes:**
+1. **Synthesis prompt change:** Instead of `[1]`, instruct Gemini to emit `[sources:1,3,7]` markers — a comma-separated list of source indices per claim/sentence.
 
-| Change | Where | Type |
-|--------|-------|------|
-| Table responsiveness | `MarkdownContent` | Wrap tables in `overflow-x-auto` container |
-| Typography polish | `MarkdownContent` | Refine prose heading scales, spacing, font-weight |
-| Title deduplication | `document-viewer.tsx` | Compare `extractedDoc.title` with first section title, skip if duplicate |
-| Responsive tables | `MarkdownContent` | Add `prose-table:w-full` and horizontal scroll wrapper via CSS or post-processing |
+2. **Source enrichment:** Current `NormalizedSource` objects include `title`, `type`, `url`, `snippet`. Add `content_preview` (first 200 chars of rendered content) and `meeting_date` for temporal context.
 
-**Why modify `MarkdownContent` not create a new component:** `MarkdownContent` is used in both `document-viewer.tsx` and `DocumentSections.tsx` (inline agenda item docs). Improvements to the shared component benefit both contexts. The current component uses `marked` for SSR-safe synchronous rendering -- this approach should be preserved.
+3. **SSE protocol:** The `sources` event already sends the full source array. No change needed for the source data itself. The `final_answer_chunk` events now contain `[sources:X,Y,Z]` markers instead of `[1][2]`.
 
-**Title deduplication strategy:** The pipeline sometimes extracts the document title as the first section's `section_title`. The viewer should compare `extractedDoc.title` against `sections[0].section_title` and skip rendering the section title if they match (case-insensitive, trimmed). This is a presentation-layer fix, not a data fix.
+**Frontend changes (search.tsx + new components):**
 
-### Feature 2: Document Section Links on Meeting Detail (Per Agenda Item)
+1. **Citation parser:** Replace the current `[N]` regex with a `[sources:X,Y,Z]` parser that:
+   - Extracts source index arrays per marker
+   - Renders a `<CitationBadge count={3} sourceIds={[1,3,7]} />` component inline
+   - The badge shows `[3 sources]` text
 
-**Current state:** `AgendaOverview` already filters `documentSections` and `extractedDocuments` by `agenda_item_id` and renders them via `DocumentSections` component inside the expanded agenda item. Documents are shown as expandable accordions with content inline.
+2. **CitationBadge component:**
+   - Desktop: `onMouseEnter` opens Radix Popover with `SourcePreviewCard`
+   - Mobile: `onClick` opens Radix Dialog (bottom sheet) with `SourcePreviewCard`
+   - Detect mobile via `matchMedia('(hover: none)')` or pointer-type check
 
-**What needs to change:** Add links from the inline document sections to the full document viewer. Currently, `DocumentSections` shows the content inline but does not link to `/meetings/:id/documents/:docId`.
+3. **SourcePreviewCard component:**
+   - Shows one source at a time with paging (left/right arrows or swipe)
+   - Content: type icon, title, date, content preview (markdown-rendered for documents), "View source" link
+   - Pager: `1 of 3` indicator with arrow buttons
 
-```
-AgendaOverview
-  |-- AgendaItemRow (expanded)
-        |-- DocumentSections (already rendered)
-              |-- GroupedDocumentSections
-                    |-- [NEW] "View Full Document" link per extracted doc
-                    |-- [existing] section title, summary, content accordion
-```
-
-**Architecture approach:** Add a `meetingId` prop to `DocumentSections` and render a `Link` to `/meetings/${meetingId}/documents/${ed.id}` in each extracted document header row. This is a small prop-threading change.
-
-| Change | Where | Type |
-|--------|-------|------|
-| Add `meetingId` prop | `DocumentSections` interface | Prop addition |
-| Render Link to viewer | `GroupedDocumentSections` | Add Link element per extracted doc |
-| Thread prop from parent | `AgendaOverview` -> `AgendaItemRow` -> `DocumentSections` | Prop threading |
-| Pass `meetingId` from loader | `meeting-detail.tsx` | Already available as `meeting.id` |
-
-**Data flow (unchanged):** The meeting-detail loader already fetches `documentSections` and `extractedDocuments` in parallel via `getDocumentSectionsForMeeting` and `getExtractedDocumentsForMeeting`. No new queries needed.
-
-### Feature 3: All Related Documents on Matter Pages
-
-**Current state:** `matter-detail.tsx` shows a lifecycle timeline of agenda items per meeting. It does NOT show documents at all. The `getMatterById` service fetches `agenda_items` with `meetings` and `motions` but not documents.
-
-**Architecture approach:** Fetch documents related to a matter's agenda items and render them in the timeline.
+**Data flow:**
 
 ```
-matter-detail.tsx (loader)
-  |-- getMatterById (existing)
-  |-- [NEW] getDocumentsForMatter (new service function)
-  |
-matter-detail.tsx (component)
-  |-- Timeline
-        |-- TimelineItem (existing agenda item card)
-              |-- [NEW] DocumentLinks section per agenda item
+Gemini synthesis → "Council approved [sources:1,3] the rezoning [sources:2,4,5]."
+  ↓ SSE stream
+Frontend parser → [
+  { text: "Council approved ", citations: null },
+  { text: "", citations: { count: 2, ids: [1,3] } },
+  { text: " the rezoning ", citations: null },
+  { text: "", citations: { count: 3, ids: [2,4,5] } },
+  { text: ".", citations: null }
+]
+  ↓ render
+"Council approved [2 sources] the rezoning [3 sources]."
 ```
 
-**New service function:**
+### Feature 2: Search Filter Controls
 
-```typescript
-// services/matters.ts (or services/documents.ts)
-export async function getDocumentsForMatter(
-  supabase: SupabaseClient,
-  matterId: string
-): Promise<Map<number, ExtractedDocument[]>> {
-  // Step 1: Get agenda_item_ids for this matter
-  const { data: items } = await supabase
-    .from("agenda_items")
-    .select("id")
-    .eq("matter_id", matterId);
+**Current state:** Keyword search has a `type` query param for content type filtering (already supported by the API). No time filtering, no sort control.
 
-  if (!items || items.length === 0) return new Map();
+**Backend changes:**
 
-  const itemIds = items.map(i => i.id);
+1. **hybrid-search.server.ts:** Add `afterDate` and `beforeDate` params to all hybrid search functions. Pass through to Supabase RPCs.
 
-  // Step 2: Get extracted_documents linked to those agenda items
-  const { data: docs } = await supabase
-    .from("extracted_documents")
-    .select("id, document_id, agenda_item_id, title, document_type, page_start, page_end, summary, key_facts, created_at")
-    .in("agenda_item_id", itemIds)
-    .order("created_at", { ascending: true });
+2. **Supabase RPCs:** Modify `hybrid_search_motions`, `hybrid_search_key_statements`, `hybrid_search_document_sections` to accept `after_date` and `before_date` params. Add `WHERE meeting_date >= after_date` clauses (joining through meeting_id where needed).
 
-  // Step 3: Group by agenda_item_id
-  const grouped = new Map<number, ExtractedDocument[]>();
-  for (const doc of docs || []) {
-    const existing = grouped.get(doc.agenda_item_id!) || [];
-    existing.push(doc as ExtractedDocument);
-    grouped.set(doc.agenda_item_id!, existing);
-  }
-  return grouped;
-}
-```
+3. **Sort:** Add `sort` param to hybrid search. Options: `relevance` (default — RRF score), `newest` (meeting_date DESC), `oldest` (meeting_date ASC). When sorting by date, skip RRF and sort directly.
 
-**Why a separate function, not modifying `getMatterById`:** The existing query is already complex (nested joins for agenda_items -> meetings -> organizations, motions -> votes -> people). Adding document joins would make it unwieldy. A parallel fetch is cleaner and keeps the loader fast.
+4. **api.search.tsx:** Accept new query params: `after`, `before`, `sort`.
 
-**Component change:** In each timeline item in `matter-detail.tsx`, render document links when they exist. This needs the meeting_id to construct the viewer URL. The meeting_id is already available from `item.meeting_id` in the timeline data.
+**Frontend changes (search.tsx):**
 
-| Change | Where | Type |
-|--------|-------|------|
-| `getDocumentsForMatter` | `services/matters.ts` | New function |
-| Loader parallel fetch | `matter-detail.tsx` loader | Add to Promise.all |
-| Document links in timeline | `matter-detail.tsx` component | New section in timeline card |
+1. **FilterBar component:** Renders above keyword search results:
+   - Time range `Select`: Any time, Past week, Past month, Past year, Custom
+   - Content type chips: Motions, Documents, Statements, Transcripts (toggle on/off)
+   - Sort `Select`: Relevance, Newest, Oldest
 
-### Feature 4: Meeting Provenance Indicators
+2. **URL state:** All filter values stored in URL search params via `useSearchParams()`. Changing a filter triggers a new search via form resubmission or `navigate()`.
 
-**Current state:** The meeting detail page shows `has_agenda`, `has_minutes`, `has_transcript` booleans, `agenda_url`, `minutes_url`, `video_url` links, and `updated_at` timestamp. However, these are not surfaced as explicit provenance indicators -- they are scattered across the header and tab navigation.
+3. **Custom date range:** When "Custom" is selected, show two date inputs (from/to).
 
-**Architecture approach:** Create a new `MeetingProvenance` component that shows data source badges with links.
+### Feature 3: Agent Reasoning Improvements
 
-```
-meeting-detail.tsx
-  |-- header section
-        |-- [NEW] MeetingProvenance component
-              |-- Agenda badge (links to agenda_url if present)
-              |-- Minutes badge (links to minutes_url if present)
-              |-- Video badge (links to video_url if present)
-              |-- "Last updated" timestamp
-```
+**Backend changes (rag.server.ts):**
 
-**Data required (already loaded):** The `meeting` object from `getMeetingById` already contains `has_agenda`, `has_minutes`, `has_transcript`, `agenda_url`, `minutes_url`, `video_url`, and `updated_at`.
+1. **Orchestration prompt:** Add instructions for Gemini to explain reasoning:
+   - Instead of: `"I'll search for motions about this topic"`
+   - Generate: `"Looking for official council decisions on this topic — motions will show what was voted on and the outcome."`
 
-No new queries needed. This is a pure presentation component.
+2. **Structured tool observations:** After each tool call, generate a summary:
+   ```
+   { type: "tool_observation",
+     name: "search_motions",
+     summary: "Found 5 motions about rezoning, 3 from 2025",
+     count: 5,
+     relevance: "high" }
+   ```
+   Instead of raw result text dumps.
 
-| Change | Where | Type |
-|--------|-------|------|
-| `MeetingProvenance` | New: `components/meeting/MeetingProvenance.tsx` | New component |
-| Render in header | `meeting-detail.tsx` | Add below existing header |
+**Frontend changes (search.tsx):**
 
-**Badge design:**
+1. **Reasoning cards:** Each thought/tool_call/observation renders as a styled card with:
+   - Tool-type icon (Search, Vote, User, FileText, Scale)
+   - Concise reasoning text
+   - Result summary with count badge
 
-```
-[Agenda icon] Agenda    [Minutes icon] Minutes    [Video icon] Video
- green if has_agenda     green if has_minutes      green if has_transcript
- links to agenda_url     links to minutes_url      links to video_url
- gray if not present     gray if not present       gray if not present
+### Feature 4: Bylaw Search Tool
 
-Last updated: Feb 24, 2026
-```
+**Backend changes:**
+
+1. **Supabase RPC:** Create `match_bylaws(query_embedding, match_threshold, match_count)` mirroring `match_motions` pattern.
+
+2. **rag.server.ts:** Add `search_bylaws` tool:
+   - Parameters: `query` (search text), `after_date` (optional)
+   - Generates embedding, calls `match_bylaws` RPC
+   - Returns bylaw number, title, plain_english_summary, matching text
+
+3. **Tool description for Gemini:** "Search bylaws for specific regulations, zoning rules, fees, or legal requirements. Use when the question asks about rules, regulations, permitted uses, or bylaw provisions."
+
+### Feature 5: Source Panel Collapse + Follow-up Emphasis
+
+**Frontend changes (search.tsx):**
+
+1. **Source panel:** Wrap in Radix `Collapsible`:
+   ```
+   <Collapsible defaultOpen={false}>
+     <CollapsibleTrigger>
+       16 sources used ▸
+     </CollapsibleTrigger>
+     <CollapsibleContent>
+       [existing source list]
+     </CollapsibleContent>
+   </Collapsible>
+   ```
+
+2. **Follow-up section:** Redesign as a prominent "Related questions" section:
+   - Collapsible, expanded by default
+   - Pill-shaped buttons, full-width on mobile
+   - Each pill shows the follow-up question text
+   - Clicking fills the search input and submits with conversation context
 
 ---
 
@@ -242,300 +219,101 @@ Last updated: Feb 24, 2026
 
 ### New Components
 
-| Component | File | Responsibility | Props |
-|-----------|------|---------------|-------|
-| `MeetingProvenance` | `components/meeting/MeetingProvenance.tsx` | Source indicator badges | `meeting: Meeting` |
+| Component | File | Responsibility |
+|-----------|------|---------------|
+| `CitationBadge` | `components/search/CitationBadge.tsx` | Renders `[N sources]` badge, triggers popover/drawer |
+| `SourcePreviewCard` | `components/search/SourcePreviewCard.tsx` | Single source preview with metadata + content |
+| `SourcePager` | `components/search/SourcePager.tsx` | Pager wrapping SourcePreviewCard for multi-source badges |
+| `SearchFilters` | `components/search/SearchFilters.tsx` | Time, type, sort filter controls |
+| `ReasoningStep` | `components/search/ReasoningStep.tsx` | Styled thought/tool_call/observation card |
+| `FollowUpSection` | `components/search/FollowUpSection.tsx` | Perplexity-style follow-up pills |
 
-### Modified Components
+### Modified Components/Files
 
-| Component | File | Change |
-|-----------|------|--------|
-| `MarkdownContent` | `components/markdown-content.tsx` | Enhanced prose classes, table responsiveness |
-| `DocumentSections` | `components/meeting/DocumentSections.tsx` | Add `meetingId` prop, render viewer links |
-| `AgendaOverview` | `components/meeting/AgendaOverview.tsx` | Thread `meetingId` to DocumentSections |
-
-### Modified Routes
-
-| Route | File | Change |
-|-------|------|--------|
-| `document-viewer.tsx` | `routes/document-viewer.tsx` | Title deduplication logic |
-| `meeting-detail.tsx` | `routes/meeting-detail.tsx` | Add MeetingProvenance component |
-| `matter-detail.tsx` | `routes/matter-detail.tsx` | Fetch documents, render in timeline |
-
-### Modified Services
-
-| Function | File | Change |
-|----------|------|--------|
-| `getDocumentsForMatter` | `services/matters.ts` | New function |
-
-### Unchanged
-
-| Component/File | Why Unchanged |
-|----------------|--------------|
-| `meeting-documents.tsx` | Document listing page is unaffected |
-| `services/meetings.ts` | All needed queries already exist |
-| `MeetingTabs` | Tab structure unchanged |
-| `FormattedText` | Minutes renderer, separate from document viewer |
-| Database schema | All FKs already in place |
+| File | Change |
+|------|--------|
+| `search.tsx` | Citation parsing, source panel collapse, follow-up redesign, filter integration |
+| `rag.server.ts` | Synthesis prompt, tool observation formatting, bylaw tool, reasoning prompts |
+| `hybrid-search.server.ts` | Date filtering, sort params |
+| `api.search.tsx` | New query params (after, before, sort), updated SSE events |
+| `embeddings.server.ts` | No change (embedding generation unchanged) |
 
 ---
 
-## 4. Data Flow
+## 4. SSE Protocol Changes (v1 → v1.6)
 
-### Meeting Detail Page (Existing + Changes)
+| Event | v1 | v1.6 |
+|-------|-----|------|
+| `thought` | `{ thought: string }` | `{ thought: string, intent?: string }` |
+| `tool_call` | `{ name: string, args: object }` | `{ name: string, args: object, reason?: string }` |
+| `tool_observation` | `{ name: string, result: string }` | `{ name: string, summary: string, count?: number }` |
+| `final_answer_chunk` | Text with `[1][2]` refs | Text with `[sources:1,3,7]` grouped markers |
+| `sources` | `Source[]` | `Source[]` with added `content_preview`, `meeting_date` |
+| `suggested_followups` | `string[]` | `string[]` (unchanged) |
 
-```
-Loader:
-  Promise.all([
-    getMeetingById(supabase, id),              // unchanged
-    getDocumentSectionsForMeeting(supabase, id), // unchanged
-    getExtractedDocumentsForMeeting(supabase, id) // unchanged
-  ])
-
-Component:
-  <header>
-    [existing title, date, organization]
-    <MeetingProvenance meeting={meeting} />       // NEW
-  </header>
-  <MeetingTabs />                                  // unchanged
-  <AgendaOverview
-    items={agendaItems}
-    documentSections={documentSections}
-    extractedDocuments={extractedDocuments}
-    meetingId={meeting.id}                         // NEW prop
-    ...
-  />
-    |-- AgendaItemRow (expanded)
-          |-- DocumentSections
-                meetingId={meetingId}               // NEW prop
-                |-- Link to /meetings/{id}/documents/{docId}  // NEW
-```
-
-### Matter Detail Page (Existing + Changes)
-
-```
-Loader:
-  Promise.all([
-    getMatterById(supabase, id),                   // unchanged
-    getDocumentsForMatter(supabase, id)            // NEW
-  ])
-
-Component:
-  <Timeline>
-    {timeline.map(item => (
-      <TimelineItem>
-        [existing: title, summary, debate_summary, motions]
-        {documentsForItem && documentsForItem.length > 0 && (
-          <DocumentLinks                             // NEW section
-            documents={documentsForItem}
-            meetingId={item.meeting_id}
-          />
-        )}
-      </TimelineItem>
-    ))}
-  </Timeline>
-```
-
-### Document Viewer (Existing + Changes)
-
-```
-Loader: unchanged
-
-Component:
-  <header>
-    [existing breadcrumb, title, metadata]
-  </header>
-  <sections>
-    {sections.map((section, idx) => {
-      // NEW: skip first section title if it matches document title
-      const skipTitle = idx === 0 &&
-        section.section_title?.trim().toLowerCase() ===
-        extractedDoc.title.trim().toLowerCase();
-
-      return (
-        <div>
-          {section.section_title && !skipTitle && (
-            <h2>{section.section_title}</h2>
-          )}
-          <MarkdownContent content={content} />    // enhanced styling
-        </div>
-      );
-    })}
-  </sections>
-```
+**Backwards compatibility:** The cached answers (30-day TTL) use the old format. Either: (a) bust the cache on deploy, or (b) support both formats in the frontend parser (detect `[sources:` vs `[N]`).
 
 ---
 
-## 5. Patterns to Follow
+## 5. Build Order
 
-### Pattern 1: Parallel Loader Fetches with Promise.all
+### Phase 1: Backend Foundation
+- Bylaw search tool + RPC
+- Enriched source objects (content_preview, meeting_date)
+- Search filter params (date range, sort) in RPCs + API
+- Agent reasoning prompt improvements
 
-**What:** All independent Supabase queries run in parallel in the route loader.
-**When:** Always -- this is the existing pattern throughout the codebase.
-**Why:** SSR response time is bounded by the slowest query, not the sum.
+### Phase 2: Citation UX
+- SSE protocol update (grouped citation markers)
+- Frontend citation parser
+- CitationBadge + SourcePreviewCard + SourcePager components
+- Mobile drawer variant
+- Document markdown rendering in previews
 
-The matter-detail page should add `getDocumentsForMatter` to its existing `Promise.all` rather than making it sequential.
+### Phase 3: Search Controls + Polish
+- SearchFilters component (time, type, sort)
+- URL param state management
+- Source panel collapse
+- Follow-up section redesign
+- Reasoning step cards
 
-### Pattern 2: Prop Threading for Meeting Context
-
-**What:** Pass `meetingId` down through component hierarchy rather than using context or fetching again.
-**When:** Components need to construct URLs like `/meetings/:id/documents/:docId`.
-**Why:** Explicit props are the established pattern. No React context providers exist in the codebase. The component tree is shallow (3 levels max).
-
-```
-meeting-detail -> AgendaOverview -> AgendaItemRow -> DocumentSections
-                  meetingId={meeting.id}             meetingId={meetingId}
-```
-
-### Pattern 3: Service Function Per Query, Not Per Page
-
-**What:** Create reusable service functions (like `getDocumentsForMatter`) that multiple pages can share.
-**When:** The same data might be needed on different pages.
-**Why:** Follows existing pattern -- `getExtractedDocumentsForMeeting` is used by both `meeting-detail.tsx` and `meeting-documents.tsx`.
-
-### Pattern 4: Presentation-Layer Fixes Over Schema Changes
-
-**What:** Fix display issues (title deduplication, spacing) in components, not by changing database content.
-**When:** The data is technically correct but displays awkwardly.
-**Why:** Avoids pipeline re-runs and data migrations. The pipeline ingests hundreds of meetings -- changing extraction logic requires expensive reprocessing. A component-level check (`if title matches, skip`) is instant and reversible.
-
-### Pattern 5: Component Composition Over Configuration
-
-**What:** Build provenance indicators as a focused component (`MeetingProvenance`) rather than adding flags to `MeetingTabs`.
-**When:** New UI elements that represent a distinct concern.
-**Why:** `MeetingTabs` handles tab navigation. Provenance is informational display. Mixing them would violate single responsibility. A new component can be independently tested and repositioned.
+**Why this order:**
+- Phase 1 is pure backend — no UI changes, can be tested independently
+- Phase 2 depends on Phase 1's enriched sources and updated SSE protocol
+- Phase 3 is independent UI work that can build on the styled component patterns from Phase 2
 
 ---
 
-## 6. Anti-Patterns to Avoid
+## 6. Patterns to Follow
 
-### Anti-Pattern 1: Fetching Documents Inside Components
+### Pattern 1: Responsive Interaction (Hover vs Tap)
+Use `@media (hover: hover)` to detect devices with hover capability. Desktop gets Popover with hover trigger. Touch devices get Dialog/Drawer with tap trigger. One component, two interaction modes.
 
-**What:** Using `useEffect` or client-side fetches to load documents after page render.
-**Why bad:** The entire app uses SSR via React Router 7 loaders. Client-side fetching creates layout shift, loses SSR benefits, and adds network waterfalls.
-**Instead:** Fetch everything in the route loader using `Promise.all`.
+### Pattern 2: URL-Driven Filter State
+All search filters live in URL search params. Changing a filter triggers navigation (not client state). This preserves SSR, enables shareable filtered URLs, and follows the React Router 7 pattern used throughout the app.
 
-### Anti-Pattern 2: Creating a documents.ts Service for Matter Documents
+### Pattern 3: Streaming Citation Parsing
+Parse citation markers incrementally as `final_answer_chunk` events arrive. Don't wait for the full answer — render citation badges as soon as a `[sources:...]` marker is complete. This maintains the streaming feel.
 
-**What:** Creating a new `services/documents.ts` file for the matter documents query.
-**Why bad:** The function needs matter context (fetching agenda_item_ids by matter_id). Splitting across files obscures the domain relationship.
-**Instead:** Add `getDocumentsForMatter` to `services/matters.ts` where matter-related queries belong.
-
-### Anti-Pattern 3: Modifying the MarkdownContent Component Per-Context
-
-**What:** Creating `DocumentMarkdownContent` and `InlineMarkdownContent` variants.
-**Why bad:** The styling differences between document-viewer and agenda-item contexts are minor (font size, spacing). Variants create maintenance burden.
-**Instead:** Use the `className` prop on `MarkdownContent` for context-specific overrides. The component already accepts a `className` prop.
-
-### Anti-Pattern 4: Joining Documents in getMatterById
-
-**What:** Adding document joins to the already-complex `getMatterById` Supabase query.
-**Why bad:** The query already has 3 levels of nesting (matter -> agenda_items -> meetings -> organizations, agenda_items -> motions -> votes -> people). Supabase client has a default 1000-row limit on nested selects. Adding documents would risk hitting limits and would make the query harder to debug.
-**Instead:** Separate parallel fetch via `getDocumentsForMatter`.
-
-### Anti-Pattern 5: Adding Updated_at to the Meetings Query
-
-**What:** Modifying `getMeetingById` to add `updated_at` to the select string for provenance.
-**Why unnecessary:** The meeting object from `getMeetingById` already includes the full meeting row via `select("id, ... meta, created_at, ...")`. Check if `updated_at` is already included. If not, it is a one-field addition to the select string, not a structural change.
+### Pattern 4: Source-Indexed Architecture
+Sources are indexed by position in the sources array (0-based internally, 1-based in display). Citation markers reference these indices. The sources array is built during the orchestration phase and finalized before synthesis begins.
 
 ---
 
-## 7. Integration Points Summary
+## 7. Anti-Patterns to Avoid
 
-### Database Tables Touched (Read-Only)
+### Anti-Pattern 1: Client-Side Re-Ranking
+Don't re-rank or re-sort search results on the client. All ranking (RRF, date sort) must happen in Supabase RPCs. Client-side sorting creates inconsistency with pagination and breaks SSR.
 
-| Table | How Used | By |
-|-------|----------|-----|
-| `meetings` | Existing: provenance flags + URLs | MeetingProvenance component |
-| `documents` | Existing: already fetched for meeting docs pages | No change needed |
-| `extracted_documents` | Existing + new query by agenda_item_id | getDocumentsForMatter |
-| `document_sections` | Existing: already rendered in AgendaOverview | MarkdownContent enhancement |
-| `agenda_items` | Existing: IDs used to look up documents for matter | getDocumentsForMatter |
+### Anti-Pattern 2: Hover-Only Source Cards
+Don't rely on CSS `:hover` for source preview cards. Mobile users can't hover. Always provide a click/tap interaction path. Use Radix Popover's `onOpenChange` which handles both hover and click.
 
-**No schema migrations required.** All FKs and indexes already exist.
+### Anti-Pattern 3: Inline Content Fetching for Source Previews
+Don't fetch source content when a citation badge is hovered. The content must be included in the SSE `sources` event. Network requests on hover create latency and flicker. Pre-load all source previews with the answer.
 
-### Supabase Queries
-
-| Query | New/Existing | Notes |
-|-------|-------------|-------|
-| `getMeetingById` | Existing | May need `updated_at` in select if missing |
-| `getDocumentSectionsForMeeting` | Existing | No change |
-| `getExtractedDocumentsForMeeting` | Existing | No change |
-| `getMatterById` | Existing | No change |
-| `getDocumentsForMatter` | **NEW** | 2 queries: agenda_item IDs + extracted_documents by those IDs |
-
-### New/Modified Files Inventory
-
-```
-NEW:
-  components/meeting/MeetingProvenance.tsx
-
-MODIFIED:
-  components/markdown-content.tsx         (prose classes, table wrapper)
-  components/meeting/DocumentSections.tsx  (meetingId prop, viewer links)
-  components/meeting/AgendaOverview.tsx    (thread meetingId prop)
-  routes/document-viewer.tsx              (title dedup logic)
-  routes/meeting-detail.tsx               (add MeetingProvenance)
-  routes/matter-detail.tsx                (fetch + render documents)
-  services/matters.ts                     (getDocumentsForMatter)
-```
+### Anti-Pattern 4: Changing Intent Detection
+Don't modify the intent classifier for v1.6. It works well. The improvements are all in how results are displayed, not how queries are classified.
 
 ---
 
-## 8. Build Order Considering Dependencies
-
-The features have clear dependency ordering:
-
-### Phase 1: Document Viewer Polish (Independent)
-
-No dependencies on other features. Can be built first because:
-- `MarkdownContent` is a shared component used by both the viewer and inline sections
-- Title deduplication is viewer-only logic
-- Changes here benefit all downstream document rendering
-
-### Phase 2: Document Links on Agenda Items (Depends on Phase 1)
-
-Requires enhanced `MarkdownContent` to be in place, but the link functionality itself is independent. Could technically be built in parallel with Phase 1, but building after means the linked-to viewer already looks polished.
-
-### Phase 3: Meeting Provenance Indicators (Independent)
-
-Entirely independent of Phase 1 and 2. Pure new component, no shared dependencies. Could be built in any position.
-
-### Phase 4: Matter Page Documents (Depends on Phase 2 conceptually)
-
-Requires `getDocumentsForMatter` service function (new). The document links rendered in the matter timeline use the same URL pattern as Phase 2 (`/meetings/:id/documents/:docId`). Building after Phase 2 ensures the viewer target is already enhanced with links.
-
-**Recommended order: 1 -> 2 -> 3 -> 4** (or 1 -> [2, 3 parallel] -> 4)
-
----
-
-## 9. Scalability Considerations
-
-| Concern | Current Scale (180 meetings) | At 500 Meetings | At 2000+ Meetings |
-|---------|-------------------------------|-----------------|-------------------|
-| Matter documents query | < 10 agenda items per matter | Up to 30 items; 2 simple indexed queries | Consider RPC or materialized view |
-| MarkdownContent rendering | <50 sections per document | Same | No concern -- sections are chunked |
-| Provenance component | Trivial -- reads from already-loaded meeting | Same | Same |
-| Document viewer | <30 sections, <20 images | Same | Consider lazy-loading images |
-
-At current and projected scale, all proposed architecture is well within performance bounds.
-
----
-
-## Sources
-
-- Codebase analysis of existing routes, services, components, and schema (HIGH confidence -- direct code reading)
-- Database schema from `sql/bootstrap.sql` and `supabase/migrations/` (HIGH confidence)
-- Existing data model relationships verified from migration files (HIGH confidence)
-
-### Confidence Levels
-
-| Finding | Confidence | Source |
-|---------|------------|--------|
-| All FKs already exist for document linking | HIGH | Migration files + bootstrap.sql |
-| No schema changes needed | HIGH | Direct column/FK verification |
-| MeetingProvenance uses already-loaded data | HIGH | getMeetingById select string analysis |
-| getDocumentsForMatter needs 2 queries | HIGH | Supabase client .in() requires IDs first |
-| MarkdownContent className prop exists | HIGH | Component source code |
-| Title deduplication is presentation-only fix | MEDIUM | Based on observed pipeline behavior |
-| Matter documents query performance sufficient | MEDIUM | Assumes < 100 agenda items per matter |
+*Last updated: 2026-02-28*
