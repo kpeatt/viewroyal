@@ -107,11 +107,12 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 | 9 | Fix TypeError in update_detector.py .not_() call | 2026-02-26 | 24dbd665 | [9-fix-typeerror-in-update-detector-py-not-](./quick/9-fix-typeerror-in-update-detector-py-not-/) |
 | 10 | Fix image alignment with document_section_id-based mapping | 2026-02-26 | 568cc358 | [10-fix-image-alignment-with-document-sectio](./quick/10-fix-image-alignment-with-document-sectio/) |
 | 11 | Fix pipeline image-to-section matcher (skip same-page extras) + re-extract 3649 | 2026-02-26 | 1bf3d245 | [11-fix-pipeline-image-to-section-matcher-an](./quick/11-fix-pipeline-image-to-section-matcher-an/) |
+| 12 | Fix half-ingested meetings: self-healing check + GEMINI_API_KEY warning | 2026-03-01 | c7dbe9b0 | [12-investigate-and-fix-missing-agenda-items](./quick/12-investigate-and-fix-missing-agenda-items/) |
 
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Phase 29 Backend Foundation complete, ready to plan Phase 30
+Stopped at: Completed quick task 12 (fix half-ingested meetings)
 Resume file: None
 
 ### Paused Work: Phase 7.1
