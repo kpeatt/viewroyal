@@ -301,3 +301,72 @@ class TestNormalizeArchivePath:
         result = self.ingester._normalize_archive_path("some/random/path")
         # Should return as-is or normalized form
         assert result is not None
+
+
+# --- Self-healing check ---
+
+
+class TestSelfHealingCheck:
+    """Tests for the self-healing 'already ingested' check in process_meeting."""
+
+    @pytest.fixture(autouse=True)
+    def setup_ingester(self):
+        self.ingester = MeetingIngester("http://test.url", "test-key", gemini_key=None)
+
+    def test_skip_when_no_agenda(self):
+        """Meeting with has_agenda=false should be skipped normally."""
+        mock_table = MagicMock()
+        self.ingester.supabase.table = MagicMock(return_value=mock_table)
+        mock_table.select.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.return_value = MagicMock(data=[{"id": 1, "has_agenda": False}])
+
+        result = self.ingester.process_meeting("/fake/path")
+        assert result is None  # Should skip
+
+    def test_skip_when_has_agenda_and_items_exist(self):
+        """Meeting with has_agenda=true AND agenda items should be skipped."""
+        mock_table = MagicMock()
+        self.ingester.supabase.table = MagicMock(return_value=mock_table)
+        mock_table.select.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+
+        # First call: meetings table returns has_agenda=true
+        # Second call: agenda_items table returns count > 0
+        mock_table.execute.side_effect = [
+            MagicMock(data=[{"id": 1, "has_agenda": True}]),
+            MagicMock(count=5, data=[]),
+        ]
+
+        result = self.ingester.process_meeting("/fake/path")
+        assert result is None  # Should skip (items exist)
+
+    def test_reprocess_when_has_agenda_but_no_items(self, tmp_path):
+        """Meeting with has_agenda=true but 0 items should be re-processed."""
+        # Create minimal meeting folder structure so process_meeting can proceed
+        agenda_dir = tmp_path / "Agenda"
+        agenda_dir.mkdir()
+
+        mock_table = MagicMock()
+        self.ingester.supabase.table = MagicMock(return_value=mock_table)
+        mock_table.select.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.is_.return_value = mock_table
+
+        # First call: meetings table returns has_agenda=true
+        # Second call: agenda_items count returns 0
+        mock_table.execute.side_effect = [
+            MagicMock(data=[{"id": 1, "has_agenda": True}]),
+            MagicMock(count=0, data=[]),
+        ]
+
+        # We expect it NOT to return None at the "already ingested" check.
+        # It will proceed further and likely fail on metadata parsing,
+        # which is fine -- the point is it didn't short-circuit with "Skipping".
+        with patch("pipeline.ingestion.ingester.parser") as mock_parser:
+            mock_parser.extract_meeting_metadata.return_value = None
+            result = self.ingester.process_meeting(str(tmp_path))
+
+        # Result is None because metadata parsing failed, but we verify it
+        # got PAST the "already ingested" check by confirming parser was called
+        mock_parser.extract_meeting_metadata.assert_called_once()
