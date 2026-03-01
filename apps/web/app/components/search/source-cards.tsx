@@ -20,7 +20,7 @@ export function SourceCards({ sources, isOpen, onToggle }: SourceCardsProps) {
         className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-600 transition-colors mb-2"
       >
         <FileText className="h-3.5 w-3.5" />
-        <span>Sources ({sources.length})</span>
+        <span>{sources.length} sources used</span>
         <ChevronDown
           className={cn(
             "h-3.5 w-3.5 transition-transform duration-200",

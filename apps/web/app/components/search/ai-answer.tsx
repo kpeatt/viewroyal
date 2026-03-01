@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import {
@@ -160,7 +160,14 @@ export function AiAnswer({
   copied,
 }: AiAnswerProps) {
   const [stepsOpen, setStepsOpen] = useState(true);
-  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+
+  // Reset sourcesOpen when a new answer starts streaming
+  useEffect(() => {
+    if (isStreaming) {
+      setSourcesOpen(false);
+    }
+  }, [isStreaming]);
 
   const isResearching = isStreaming && !answer;
   const stepCount = agentSteps.filter((s) => s.type === "tool_call").length;
