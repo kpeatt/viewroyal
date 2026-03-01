@@ -919,15 +919,26 @@ A separate synthesis model will write the final user-facing answer from your gat
 - \`search_transcript_segments\` — Full-text search for transcript segments. Use when you need verbatim quotes or context around discussions.
 - \`get_current_date\` — Call this FIRST if the question contains temporal words like "recent", "latest", "this year", "last month", "past 6 months". Then use the date as after_date on subsequent calls.
 
-**3. Craft good search queries.** The search tools use semantic/vector search. Short, specific phrases work best:
+**3. Show your reasoning in thoughts.** In your "thought" field, explain your REASONING — not just your plan:
+- WHY you are choosing this specific tool. What aspect of the question does it address?
+- What you EXPECT to find. What evidence gap does this fill?
+- How this builds on previous results (if not the first call).
+
+Examples:
+- Bad thought: "I'll search motions"
+- Good thought: "The user is asking about parking fees, which would be set by bylaw. I'll search bylaws first to find the specific fee schedule, then check motions for any recent changes."
+- Bad thought: "Searching transcripts now"
+- Good thought: "The motions show council voted to increase permit fees in March 2025, but I need to find who spoke in favor and against. Searching transcript segments for the debate."
+
+**4. Craft good search queries.** The search tools use semantic/vector search. Short, specific phrases work best:
 - Good: "affordable housing development"
 - Bad: "What has the council discussed regarding affordable housing developments in the town?"
 - Good: "tree cutting bylaw"
 - Bad: "Tell me about trees"
 
-**4. Know when to stop.** 2-3 tool calls is typical. After each result, assess: do you have enough specific evidence (dates, names, quotes, vote counts) to answer the question? If yes, finalize. Don't call tools just to be thorough — extra noise hurts answer quality.
+**5. Know when to stop.** 2-3 tool calls is typical. After each result, assess: do you have enough specific evidence (dates, names, quotes, vote counts) to answer the question? If yes, finalize. Don't call tools just to be thorough — extra noise hurts answer quality.
 
-**5. Handle edge cases:**
+**6. Handle edge cases:**
 - If a person is not found, try alternate name spellings or just their last name.
 - If search returns few results, try rephrasing with different keywords.
 - Never call the same tool with the same arguments twice.
@@ -1194,6 +1205,95 @@ function normalizeAgendaItemSources(items: any[]): NormalizedSource[] {
 }
 
 /**
+ * Extract a human-readable date range string from an array of results.
+ * Looks for meeting_date in both `r.meetings?.meeting_date` and `r.meeting_date`.
+ */
+function extractDateRange(results: any[]): string {
+  const dates = results
+    .map((r: any) => r.meetings?.meeting_date || r.meeting_date)
+    .filter(Boolean)
+    .sort();
+  if (dates.length >= 2) return ` from ${dates[0]} to ${dates[dates.length - 1]}`;
+  if (dates.length === 1) return ` from ${dates[0]}`;
+  return "";
+}
+
+/**
+ * Build a human-readable summary string for tool results displayed in the UI.
+ * Returns contextual information based on the tool type rather than generic "Found N results".
+ */
+export function buildToolSummary(toolName: string, toolResult: any): string {
+  // Empty / falsy
+  if (!toolResult) return "No results found";
+  if (Array.isArray(toolResult) && toolResult.length === 0) return "No results found";
+
+  // String passthrough
+  if (typeof toolResult === "string") {
+    if (toolResult.length <= 200) return toolResult;
+    return toolResult.slice(0, 200) + "...";
+  }
+
+  // Array results — tool-specific summaries
+  if (Array.isArray(toolResult)) {
+    const n = toolResult.length;
+
+    switch (toolName) {
+      case "search_motions": {
+        const dateRange = extractDateRange(toolResult);
+        return `Found ${n} motion${n !== 1 ? "s" : ""}${dateRange}`;
+      }
+      case "search_bylaws": {
+        const uniqueNums = [...new Set(toolResult.map((r: any) => r.bylaw_number).filter(Boolean))];
+        const bylawInfo = uniqueNums.length > 0 ? ` from Bylaw${uniqueNums.length !== 1 ? "s" : ""} ${uniqueNums.join(", ")}` : "";
+        return `Found ${n} bylaw section${n !== 1 ? "s" : ""}${bylawInfo}`;
+      }
+      case "search_key_statements": {
+        const speakers = [...new Set(toolResult.map((r: any) => r.speaker_name).filter(Boolean))];
+        const speakerInfo = speakers.length > 0 ? ` from ${speakers.join(", ")}` : "";
+        const dateRange = extractDateRange(toolResult);
+        return `Found ${n} statement${n !== 1 ? "s" : ""}${speakerInfo}${dateRange}`;
+      }
+      case "search_transcript_segments": {
+        const speakers = [...new Set(toolResult.map((r: any) => r.speaker_name).filter(Boolean))];
+        const speakerInfo = speakers.length > 0 ? ` from ${speakers.join(", ")}` : "";
+        const dateRange = extractDateRange(toolResult);
+        return `Found ${n} transcript segment${n !== 1 ? "s" : ""}${speakerInfo}${dateRange}`;
+      }
+      case "search_document_sections": {
+        const dateRange = extractDateRange(toolResult);
+        return `Found ${n} document section${n !== 1 ? "s" : ""}${dateRange}`;
+      }
+      case "search_agenda_items": {
+        const dateRange = extractDateRange(toolResult);
+        return `Found ${n} agenda item${n !== 1 ? "s" : ""}${dateRange}`;
+      }
+      case "search_matters": {
+        const statuses = [...new Set(toolResult.map((r: any) => r.status).filter(Boolean))];
+        const statusInfo = statuses.length > 0 ? ` (${statuses.join(", ")})` : "";
+        return `Found ${n} matter${n !== 1 ? "s" : ""}${statusInfo}`;
+      }
+      default:
+        return `Found ${n} result${n !== 1 ? "s" : ""}`;
+    }
+  }
+
+  // Object results (non-array)
+  if (typeof toolResult === "object" && toolResult !== null) {
+    if (toolName === "get_voting_history" && toolResult.stats) {
+      const s = toolResult.stats;
+      return `Found voting record: ${s.total} votes (${s.yes} yes, ${s.no} no)`;
+    }
+    if (toolName === "get_statements_by_person") {
+      const segments = toolResult.transcript_segments?.length || 0;
+      const statements = toolResult.key_statements?.length || 0;
+      return `Found ${segments + statements} statement${(segments + statements) !== 1 ? "s" : ""}`;
+    }
+  }
+
+  return "Results retrieved";
+}
+
+/**
  * Truncate tool result JSON to a reasonable size for the context window.
  * Keeps the first `maxItems` items for arrays, or truncates raw strings.
  */
@@ -1308,12 +1408,7 @@ Respond with a single JSON object. No markdown fences.`;
     history.push(observation);
 
     // Build a short display summary for the client UI
-    const displaySummary =
-      typeof toolResult === "string"
-        ? toolResult.slice(0, 200)
-        : Array.isArray(toolResult)
-          ? `Found ${toolResult.length} results`
-          : "Results retrieved";
+    const displaySummary = buildToolSummary(tool_name, toolResult);
 
     yield { type: "tool_observation", name: tool_name, result: displaySummary };
 
