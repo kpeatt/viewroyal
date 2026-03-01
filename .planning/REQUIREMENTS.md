@@ -14,10 +14,10 @@
 
 ### Search Controls
 
-- [ ] **SRCH-01**: User can filter keyword search results by time range (Any time, Past week, Past month, Past year)
-- [ ] **SRCH-02**: User can filter keyword search results by content type (Motions, Documents, Statements, Transcripts)
-- [ ] **SRCH-03**: User can sort keyword search results by relevance, newest first, or oldest first
-- [ ] **SRCH-04**: Search filter selections persist in URL params so filtered views are shareable
+- [x] **SRCH-01**: User can filter keyword search results by time range (Any time, Past week, Past month, Past year)
+- [x] **SRCH-02**: User can filter keyword search results by content type (Motions, Documents, Statements, Transcripts)
+- [x] **SRCH-03**: User can sort keyword search results by relevance, newest first, or oldest first
+- [x] **SRCH-04**: Search filter selections persist in URL params so filtered views are shareable
 
 ### Agent
 
@@ -27,8 +27,8 @@
 
 ### Answer UX
 
-- [ ] **ANSR-01**: Source panel is collapsed by default showing a count header (e.g., "16 sources used") with expand toggle
-- [ ] **ANSR-02**: Follow-up suggestions appear as a prominent collapsible "Related" section with full-width pill buttons below the answer
+- [x] **ANSR-01**: Source panel is collapsed by default showing a count header (e.g., "16 sources used") with expand toggle
+- [x] **ANSR-02**: Follow-up suggestions appear as a prominent collapsible "Related" section with full-width pill buttons below the answer
 
 ## Future Requirements
 
@@ -55,15 +55,15 @@
 | CITE-02 | Phase 30 | Pending |
 | CITE-03 | Phase 30 | Pending |
 | CITE-04 | Phase 30 | Pending |
-| SRCH-01 | Phase 31 | Pending |
-| SRCH-02 | Phase 31 | Pending |
-| SRCH-03 | Phase 31 | Pending |
-| SRCH-04 | Phase 31 | Pending |
+| SRCH-01 | Phase 31 | Complete |
+| SRCH-02 | Phase 31 | Complete |
+| SRCH-03 | Phase 31 | Complete |
+| SRCH-04 | Phase 31 | Complete |
 | AGNT-01 | Phase 29 | Complete |
 | AGNT-02 | Phase 29 | Complete |
 | AGNT-03 | Phase 29 | Complete |
-| ANSR-01 | Phase 31 | Pending |
-| ANSR-02 | Phase 31 | Pending |
+| ANSR-01 | Phase 31 | Complete |
+| ANSR-02 | Phase 31 | Complete |
 
 **Coverage:**
 - v1.6 requirements: 13 total
@@ -72,4 +72,4 @@
 
 ---
 *Requirements defined: 2026-02-28*
-*Last updated: 2026-02-28 after roadmap creation*
+*Last updated: 2026-03-01 after Phase 31 completion*
