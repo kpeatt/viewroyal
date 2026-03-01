@@ -17,7 +17,7 @@ import {
 // Source type helpers
 // ---------------------------------------------------------------------------
 
-const SOURCE_TYPE_LABEL: Record<string, string> = {
+export const SOURCE_TYPE_LABEL: Record<string, string> = {
   transcript: "Transcript",
   transcript_segment: "Transcript",
   motion: "Motion",
@@ -47,7 +47,16 @@ export function SourceIcon({
 }
 
 // ---------------------------------------------------------------------------
-// CitationBadge component
+// Citation token types
+// ---------------------------------------------------------------------------
+
+export type CitationToken =
+  | { type: "text"; text: string }
+  | { type: "single"; num: number; source: any }
+  | { type: "group"; nums: number[]; sources: any[] };
+
+// ---------------------------------------------------------------------------
+// CitationBadge component (single numbered circle)
 // ---------------------------------------------------------------------------
 
 export function CitationBadge({
@@ -110,12 +119,85 @@ export function CitationBadge({
 }
 
 // ---------------------------------------------------------------------------
+// GroupedCitationBadge component (pill showing source count)
+// Preview card content will be added in Plan 02.
+// ---------------------------------------------------------------------------
+
+export function GroupedCitationBadge({
+  nums,
+  sources,
+}: {
+  nums: number[];
+  sources: any[];
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold leading-none align-super ml-0.5 cursor-pointer hover:bg-blue-200 transition-colors"
+    >
+      {sources.length} sources
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Citation grouping algorithm (pure function, testable)
+// ---------------------------------------------------------------------------
+
+/**
+ * Groups consecutive citation tokens from a split text array.
+ * Adjacent [N] patterns (no text between them) become a single group.
+ * Single citations remain individual. Text fragments pass through.
+ */
+export function groupCitationParts(
+  parts: string[],
+  sources: any[],
+): CitationToken[] {
+  const tokens: CitationToken[] = [];
+  let currentGroup: number[] = [];
+
+  for (const part of parts) {
+    const m = part.match(/^\[(\d+)\]$/);
+    if (m) {
+      currentGroup.push(parseInt(m[1], 10));
+    } else {
+      // Flush current group
+      flushGroup(currentGroup, sources, tokens);
+      currentGroup = [];
+      if (part !== "") tokens.push({ type: "text", text: part });
+    }
+  }
+  // Flush remaining group
+  flushGroup(currentGroup, sources, tokens);
+
+  return tokens;
+}
+
+function flushGroup(
+  group: number[],
+  sources: any[],
+  tokens: CitationToken[],
+): void {
+  if (group.length === 0) return;
+  if (group.length === 1) {
+    const num = group[0];
+    const source = sources[num - 1];
+    if (source) tokens.push({ type: "single", num, source });
+  } else {
+    const groupSources = group.map((n) => sources[n - 1]).filter(Boolean);
+    if (groupSources.length > 0) {
+      tokens.push({ type: "group", nums: [...group], sources: groupSources });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Citation text processing utilities
 // ---------------------------------------------------------------------------
 
 /**
  * Walk react-markdown children and replace "[N]" text fragments
- * with CitationBadge components.
+ * with CitationBadge or GroupedCitationBadge components.
  */
 export function processCitationsInChildren(
   children: React.ReactNode,
@@ -135,16 +217,25 @@ export function processCitationNode(
   // Split string on citation patterns like [1], [2], [1][2]
   const parts = node.split(/(\[\d+\])/g);
   if (parts.length === 1) return node;
-  return parts.map((part, i) => {
-    const m = part.match(/^\[(\d+)\]$/);
-    if (m) {
-      const num = parseInt(m[1], 10);
-      const source = sources[num - 1];
-      if (source)
-        return (
-          <CitationBadge key={`${key}-cite-${i}`} num={num} source={source} />
-        );
-    }
-    return part;
+
+  const tokens = groupCitationParts(parts, sources);
+
+  return tokens.map((token, i) => {
+    if (token.type === "text") return token.text;
+    if (token.type === "single")
+      return (
+        <CitationBadge
+          key={`${key}-cite-${i}`}
+          num={token.num}
+          source={token.source}
+        />
+      );
+    return (
+      <GroupedCitationBadge
+        key={`${key}-group-${i}`}
+        nums={token.nums}
+        sources={token.sources}
+      />
+    );
   });
 }
