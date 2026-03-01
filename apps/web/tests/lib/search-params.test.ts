@@ -3,6 +3,7 @@ import {
   getDateRange,
   parseSearchFilters,
   serializeSearchFilters,
+  type SearchFilters,
 } from "~/lib/search-params";
 
 // ---------------------------------------------------------------------------
@@ -140,7 +141,7 @@ describe("round-trip", () => {
   it("preserves filter state through serialize -> parse", () => {
     const original = {
       time: "week",
-      types: ["motion", "document_section"] as const,
+      types: ["motion", "document_section"] as ("motion" | "document_section")[],
       sort: "newest",
     };
     const serialized = serializeSearchFilters(original);
@@ -149,7 +150,7 @@ describe("round-trip", () => {
   });
 
   it("preserves defaults through serialize -> parse", () => {
-    const original = { time: "", types: [] as const, sort: "" };
+    const original: SearchFilters = { time: "", types: [], sort: "" };
     const serialized = serializeSearchFilters(original);
     const parsed = parseSearchFilters(serialized);
     expect(parsed).toEqual(original);

@@ -9,10 +9,16 @@ import { SearchInput } from "../components/search/search-input";
 import { SearchTabs } from "../components/search/search-tabs";
 import { AiAnswer } from "../components/search/ai-answer";
 import { SearchResults } from "../components/search/search-results";
+import { SearchFilters } from "../components/search/search-filters";
 import { FollowUp } from "../components/search/follow-up";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { ogImageUrl, ogUrl } from "../lib/og";
+import {
+  parseSearchFilters,
+  serializeSearchFilters,
+  type ContentType,
+} from "../lib/search-params";
 
 // ---------------------------------------------------------------------------
 // Meta
@@ -351,9 +357,12 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     resultsFetched.current = true;
 
     try {
-      const res = await fetch(
-        `/api/search?q=${encodeURIComponent(query)}&mode=keyword`,
-      );
+      // Build fetch URL including current filter params
+      const filterParams = new URLSearchParams(searchParams);
+      filterParams.set("q", query);
+      filterParams.set("mode", "keyword");
+
+      const res = await fetch(`/api/search?${filterParams.toString()}`);
       if (res.ok) {
         const data = (await res.json()) as { results?: UnifiedSearchResult[] };
         setSearchResults(data.results || []);
@@ -437,8 +446,16 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     aiFetched.current = false;
     resultsFetched.current = false;
 
-    // Update URL
-    setSearchParams({ q: query }, { replace: true });
+    // Update URL preserving filter params (time, type, sort)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("q", query);
+        next.delete("id");
+        return next;
+      },
+      { replace: true },
+    );
 
     // Detect intent and set default tab
     const intent = classifyIntent(query);
@@ -486,6 +503,71 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     if (q.length >= 2 && !isStreaming) {
       setFollowUpQuery("");
       performSearch(q);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Filter state (URL-driven)
+  // ---------------------------------------------------------------------------
+
+  const filters = parseSearchFilters(searchParams);
+
+  function handleTimeChange(time: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (time) {
+          next.set("time", time);
+        } else {
+          next.delete("time");
+        }
+        return next;
+      },
+      { replace: true },
+    );
+    // Re-fetch results with new filter
+    resultsFetched.current = false;
+    if (activeQuery && activeTab === "results") {
+      // Use setTimeout to ensure searchParams are updated before fetch
+      setTimeout(() => fetchKeywordResults(activeQuery), 0);
+    }
+  }
+
+  function handleTypesChange(types: ContentType[]) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("type");
+        for (const t of types) {
+          next.append("type", t);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+    resultsFetched.current = false;
+    if (activeQuery && activeTab === "results") {
+      setTimeout(() => fetchKeywordResults(activeQuery), 0);
+    }
+  }
+
+  function handleSortChange(sort: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (sort) {
+          next.set("sort", sort);
+        } else {
+          next.delete("sort");
+        }
+        return next;
+      },
+      { replace: true },
+    );
+    resultsFetched.current = false;
+    if (activeQuery && activeTab === "results") {
+      setTimeout(() => fetchKeywordResults(activeQuery), 0);
     }
   }
 
@@ -663,11 +745,23 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
                 )}
               </>
             ) : (
-              <SearchResults
-                results={searchResults}
-                query={activeQuery}
-                isLoading={isLoadingResults}
-              />
+              <>
+                <SearchFilters
+                  time={filters.time}
+                  types={filters.types}
+                  sort={filters.sort}
+                  onTimeChange={handleTimeChange}
+                  onTypesChange={handleTypesChange}
+                  onSortChange={handleSortChange}
+                  results={searchResults}
+                />
+                <SearchResults
+                  results={searchResults}
+                  query={activeQuery}
+                  isLoading={isLoadingResults}
+                  activeTypes={filters.types}
+                />
+              </>
             )}
           </>
         )}
