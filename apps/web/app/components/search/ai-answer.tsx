@@ -30,6 +30,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_statements_by_person: "Finding statements",
   get_current_date: "Checking current date",
   search_document_sections: "Searching documents",
+  search_bylaws: "Searching bylaws",
+  search_key_statements: "Searching key statements",
 };
 
 function getToolLabel(name: string, args?: any): string {
@@ -48,9 +50,10 @@ function getObservationSummary(result: any): string {
       const parsed = JSON.parse(result);
       if (Array.isArray(parsed)) return `Found ${parsed.length} results`;
       if (parsed.total !== undefined) return `Found ${parsed.total} records`;
+      if (typeof parsed === "string" && parsed.length < 200) return parsed;
       return "Retrieved data";
     } catch {
-      if (result.length < 80) return result;
+      if (result.length < 200) return result;
       return "Retrieved data";
     }
   }
@@ -64,6 +67,13 @@ function getObservationSummary(result: any): string {
 // ---------------------------------------------------------------------------
 
 function ResearchStep({ event }: { event: AgentEvent }) {
+  if (event.type === "thought") {
+    return (
+      <div className="py-1 pl-6 text-sm text-zinc-400 italic leading-relaxed">
+        {(event as any).thought}
+      </div>
+    );
+  }
   if (event.type === "tool_call") {
     return (
       <div className="flex items-center gap-2.5 py-1.5 text-sm text-zinc-500">
