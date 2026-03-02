@@ -108,11 +108,12 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 | 10 | Fix image alignment with document_section_id-based mapping | 2026-02-26 | 568cc358 | [10-fix-image-alignment-with-document-sectio](./quick/10-fix-image-alignment-with-document-sectio/) |
 | 11 | Fix pipeline image-to-section matcher (skip same-page extras) + re-extract 3649 | 2026-02-26 | 1bf3d245 | [11-fix-pipeline-image-to-section-matcher-an](./quick/11-fix-pipeline-image-to-section-matcher-an/) |
 | 12 | Fix half-ingested meetings: self-healing check + GEMINI_API_KEY warning | 2026-03-01 | c7dbe9b0 | [12-investigate-and-fix-missing-agenda-items](./quick/12-investigate-and-fix-missing-agenda-items/) |
+| 13 | Sentence-level transcript sub-segments for CC overlay and transcript display | 2026-03-02 | 70f4d078 | [13-use-transcript-segments-for-transcript-c](./quick/13-use-transcript-segments-for-transcript-c/) |
 
 ## Session Continuity
 
-Last session: 2026-03-01
-Stopped at: Completed quick task 12 (fix half-ingested meetings)
+Last session: 2026-03-02
+Stopped at: Completed quick task 13 (sentence-level transcript sub-segments)
 Resume file: None
 
 ### Paused Work: Phase 7.1
