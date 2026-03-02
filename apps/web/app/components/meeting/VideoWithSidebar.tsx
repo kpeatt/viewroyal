@@ -36,6 +36,11 @@ import {
   findAgendaItemForTime,
 } from "../../lib/timeline-utils";
 import { getSpeakerColorIndex, SPEAKER_COLORS } from "../../lib/colors";
+import {
+  splitTranscript,
+  findCurrentSubSegment,
+  type SubSegment,
+} from "../../lib/transcript-utils";
 import { EnhancedVideoScrubber } from "./EnhancedVideoScrubber";
 
 interface VideoWithSidebarProps {
@@ -62,7 +67,7 @@ interface VideoWithSidebarProps {
   agendaItems: AgendaItem[];
   transcript: TranscriptSegment[];
   meetingDuration: number;
-  resolveSpeakerName: (seg: TranscriptSegment) => string;
+  resolveSpeakerName: (seg: { person?: { name: string } | null; speaker_name?: string | null }) => string;
   showCaption: boolean;
   setShowCaption: (show: boolean) => void;
   onVideoError?: () => void;
@@ -97,36 +102,20 @@ export function VideoWithSidebar({
     return findAgendaItemForTime(agendaItems, videoPlayer.currentTime);
   }, [agendaItems, videoPlayer.currentTime]);
 
-  // Find current transcript segment
-  const currentSegment = useMemo(() => {
-    return transcript.find(
-      (s) =>
-        videoPlayer.currentTime >= s.start_time &&
-        videoPlayer.currentTime < s.end_time,
-    );
-  }, [transcript, videoPlayer.currentTime]);
+  // Split transcript into sentence-level sub-segments
+  const subSegments = useMemo(() => splitTranscript(transcript), [transcript]);
 
-  // Filter transcript to current agenda item
-  const agendaTranscript = useMemo(() => {
-    if (!currentAgendaItem) return [];
-    return transcript.filter(
-      (seg) =>
-        seg.start_time >= (currentAgendaItem.discussion_start_time ?? 0) &&
-        seg.start_time < (currentAgendaItem.discussion_end_time ?? Infinity),
-    );
-  }, [transcript, currentAgendaItem]);
+  // Find current sub-segment (sentence-level) for CC overlay
+  const currentSubSegment = useMemo(() => {
+    return findCurrentSubSegment(subSegments, videoPlayer.currentTime);
+  }, [subSegments, videoPlayer.currentTime]);
 
-  // Auto-scroll transcript to current segment (works for both desktop sidebar and mobile drawer)
+  // Auto-scroll transcript to current sub-segment (works for both desktop sidebar and mobile drawer)
   useEffect(() => {
     if (sidebarMode !== "transcript" || !autoScrollEnabled) return;
 
-    const currentSeg = transcript.find(
-      (s) =>
-        videoPlayer.currentTime >= s.start_time &&
-        videoPlayer.currentTime < s.end_time,
-    );
-
-    if (!currentSeg) return;
+    const currentSub = findCurrentSubSegment(subSegments, videoPlayer.currentTime);
+    if (!currentSub) return;
 
     // Use whichever container is currently active
     const container =
@@ -136,7 +125,7 @@ export function VideoWithSidebar({
 
     // Scope element lookup to the active container
     const element = container.querySelector(
-      `[id="sidebar-seg-${currentSeg.id}"]`,
+      `[id="sidebar-seg-${currentSub.id}"]`,
     );
     if (!element) return;
 
@@ -160,7 +149,7 @@ export function VideoWithSidebar({
         isScrollingProgrammatically.current = false;
       }, 500);
     }
-  }, [videoPlayer.currentTime, transcript, sidebarMode, autoScrollEnabled, mobileDrawerOpen]);
+  }, [videoPlayer.currentTime, subSegments, sidebarMode, autoScrollEnabled, mobileDrawerOpen]);
 
   // Handle user scroll - disconnect from auto-scroll when user manually scrolls
   useEffect(() => {
@@ -311,7 +300,7 @@ export function VideoWithSidebar({
             )}
 
             {/* Caption Overlay - Mobile */}
-            {showCaption && currentSegment && videoPlayer.videoEnabled && (
+            {showCaption && currentSubSegment && videoPlayer.videoEnabled && (
               <div className="lg:hidden absolute inset-0 z-20 pointer-events-none flex flex-col justify-end">
                 <div className="overflow-y-auto bg-black/60 backdrop-blur-sm px-3 py-2">
                   <div className="flex items-start gap-2">
@@ -320,17 +309,17 @@ export function VideoWithSidebar({
                         "w-2 h-2 rounded-full mt-0.5 shrink-0",
                         SPEAKER_COLORS[
                           getSpeakerColorIndex(
-                            resolveSpeakerName(currentSegment),
+                            resolveSpeakerName(currentSubSegment),
                           )
                         ],
                       )}
                     />
                     <div className="min-w-0">
                       <span className="text-white/50 text-[10px] font-bold uppercase tracking-wider">
-                        {resolveSpeakerName(currentSegment)}
+                        {resolveSpeakerName(currentSubSegment)}
                       </span>
                       <p className="text-white/90 text-xs leading-snug">
-                        {currentSegment.text_content}
+                        {currentSubSegment.text_content}
                       </p>
                     </div>
                   </div>
@@ -339,7 +328,7 @@ export function VideoWithSidebar({
             )}
 
             {/* Caption Overlay - Desktop */}
-            {showCaption && currentSegment && videoPlayer.videoEnabled && (
+            {showCaption && currentSubSegment && videoPlayer.videoEnabled && (
               <div className="hidden lg:flex absolute bottom-16 left-0 right-0 p-4 z-20 pointer-events-none justify-center">
                 <div className="bg-black/70 backdrop-blur-sm rounded-xl px-6 py-3 border border-white/10 max-w-2xl text-center shadow-2xl">
                   <div className="flex items-center justify-center gap-2 mb-1">
@@ -348,17 +337,17 @@ export function VideoWithSidebar({
                         "w-2 h-2 rounded-full",
                         SPEAKER_COLORS[
                           getSpeakerColorIndex(
-                            resolveSpeakerName(currentSegment),
+                            resolveSpeakerName(currentSubSegment),
                           )
                         ],
                       )}
                     />
                     <span className="text-white/60 text-[10px] font-bold uppercase tracking-wider">
-                      {resolveSpeakerName(currentSegment)}
+                      {resolveSpeakerName(currentSubSegment)}
                     </span>
                   </div>
                   <p className="text-white text-base md:text-lg font-medium leading-tight">
-                    {currentSegment.text_content}
+                    {currentSubSegment.text_content}
                   </p>
                 </div>
               </div>
@@ -581,7 +570,7 @@ export function VideoWithSidebar({
                 />
               ) : (
                 <TranscriptSidebarContent
-                  transcript={transcript}
+                  subSegments={subSegments}
                   currentTime={videoPlayer.currentTime}
                   onSeek={(time) => {
                     if (!videoPlayer.videoEnabled) {
@@ -722,7 +711,7 @@ export function VideoWithSidebar({
               />
             ) : (
               <TranscriptSidebarContent
-                transcript={transcript}
+                subSegments={subSegments}
                 currentTime={videoPlayer.currentTime}
                 onSeek={(time) => {
                   if (!videoPlayer.videoEnabled) {
@@ -1087,23 +1076,23 @@ function MotionCard({
   );
 }
 
-// Transcript in sidebar
+// Transcript in sidebar (sentence-level sub-segments)
 function TranscriptSidebarContent({
-  transcript,
+  subSegments,
   currentTime,
   onSeek,
   resolveSpeakerName,
   autoScrollEnabled,
   onJumpToLive,
 }: {
-  transcript: TranscriptSegment[];
+  subSegments: SubSegment[];
   currentTime: number;
   onSeek: (time: number) => void;
-  resolveSpeakerName: (seg: TranscriptSegment) => string;
+  resolveSpeakerName: (seg: { person?: { name: string } | null; speaker_name?: string | null }) => string;
   autoScrollEnabled: boolean;
   onJumpToLive: () => void;
 }) {
-  if (transcript.length === 0) {
+  if (subSegments.length === 0) {
     return (
       <div className="p-6 text-center text-zinc-500">
         <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -1127,51 +1116,56 @@ function TranscriptSidebarContent({
         </div>
       )}
 
-      <div className="p-2 space-y-1">
-        {transcript.map((segment) => {
-          const speakerName = resolveSpeakerName(segment);
+      <div className="p-2 space-y-0.5">
+        {subSegments.map((sub, idx) => {
+          const speakerName = resolveSpeakerName(sub);
           const colorIdx = getSpeakerColorIndex(speakerName);
           const isActive =
-            currentTime >= segment.start_time && currentTime < segment.end_time;
+            currentTime >= sub.start_time && currentTime < sub.end_time;
+          const prevSub = idx > 0 ? subSegments[idx - 1] : null;
+          const showSpeaker = !prevSub || prevSub.parentId !== sub.parentId || prevSub.speaker_name !== sub.speaker_name;
 
           return (
             <div
-              key={segment.id}
-              id={`sidebar-seg-${segment.id}`}
-              onClick={() => onSeek(segment.start_time)}
+              key={sub.id}
+              id={`sidebar-seg-${sub.id}`}
+              onClick={() => onSeek(sub.start_time)}
               className={cn(
-                "p-2 rounded-lg cursor-pointer transition-all",
+                "px-2 py-1.5 rounded-lg cursor-pointer transition-all",
                 isActive
                   ? "bg-blue-600/20 border border-blue-500/50"
                   : "hover:bg-zinc-700/50 border border-transparent",
               )}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <div
-                  className={cn(
-                    "w-2 h-2 rounded-full shrink-0",
-                    SPEAKER_COLORS[colorIdx],
-                  )}
-                />
-                <span
-                  className={cn(
-                    "text-xs font-bold truncate",
-                    isActive ? "text-blue-300" : "text-zinc-400",
-                  )}
-                >
-                  {speakerName}
-                </span>
-                <span className="text-[10px] text-zinc-500 ml-auto shrink-0">
-                  {formatTimestamp(segment.start_time)}
-                </span>
-              </div>
+              {showSpeaker && (
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div
+                    className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      SPEAKER_COLORS[colorIdx],
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "text-xs font-bold truncate",
+                      isActive ? "text-blue-300" : "text-zinc-400",
+                    )}
+                  >
+                    {speakerName}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 ml-auto shrink-0">
+                    {formatTimestamp(sub.start_time)}
+                  </span>
+                </div>
+              )}
               <p
                 className={cn(
-                  "text-xs leading-relaxed line-clamp-3",
+                  "text-xs leading-relaxed",
                   isActive ? "text-white" : "text-zinc-400",
+                  !showSpeaker && "pl-4",
                 )}
               >
-                {segment.text_content}
+                {sub.text_content}
               </p>
             </div>
           );
