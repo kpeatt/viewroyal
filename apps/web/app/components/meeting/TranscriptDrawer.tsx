@@ -1,9 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { X, Search, MessageSquare, PlayCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { TranscriptSegment } from "../../lib/types";
 import { formatTimestamp } from "../../lib/timeline-utils";
 import { getSpeakerColorIndex, SPEAKER_COLORS } from "../../lib/colors";
+import {
+  splitTranscript,
+  findCurrentSubSegment,
+} from "../../lib/transcript-utils";
 
 interface TranscriptDrawerProps {
   isOpen: boolean;
@@ -13,7 +17,7 @@ interface TranscriptDrawerProps {
   onSegmentClick: (time: number) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  resolveSpeakerName: (seg: TranscriptSegment) => string;
+  resolveSpeakerName: (seg: { person?: { name: string } | null; speaker_name?: string | null }) => string;
 }
 
 export function TranscriptDrawer({
@@ -31,26 +35,27 @@ export function TranscriptDrawer({
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollEnabled = useRef(true);
 
-  // Filter transcript by search
-  const filteredTranscript = transcript.filter((segment) => {
+  // Split transcript into sentence-level sub-segments
+  const subSegments = useMemo(() => splitTranscript(transcript), [transcript]);
+
+  // Filter sub-segments by search
+  const filteredSubSegments = subSegments.filter((sub) => {
     if (!searchQuery) return true;
-    const text = segment.text_content.toLowerCase();
-    const speaker = resolveSpeakerName(segment).toLowerCase();
+    const text = sub.text_content.toLowerCase();
+    const speaker = resolveSpeakerName(sub).toLowerCase();
     const query = searchQuery.toLowerCase();
     return text.includes(query) || speaker.includes(query);
   });
 
-  // Auto-scroll to current segment
+  // Auto-scroll to current sub-segment
   useEffect(() => {
     if (!isOpen || !autoScrollEnabled.current) return;
 
-    const currentSegment = transcript.find(
-      (s) => currentTime >= s.start_time && currentTime < s.end_time
-    );
+    const currentSub = findCurrentSubSegment(subSegments, currentTime);
 
-    if (currentSegment) {
+    if (currentSub) {
       const element = document.getElementById(
-        `drawer-segment-${currentSegment.id}`
+        `drawer-segment-${currentSub.id}`
       );
       const container = containerRef.current;
 
@@ -79,7 +84,7 @@ export function TranscriptDrawer({
         }
       }
     }
-  }, [currentTime, transcript, isOpen]);
+  }, [currentTime, subSegments, isOpen]);
 
   // Handle user scroll
   useEffect(() => {
@@ -96,12 +101,10 @@ export function TranscriptDrawer({
   }, []);
 
   const jumpToLive = () => {
-    const currentSegment = transcript.find(
-      (s) => currentTime >= s.start_time && currentTime < s.end_time
-    );
-    if (currentSegment) {
+    const currentSub = findCurrentSubSegment(subSegments, currentTime);
+    if (currentSub) {
       const element = document.getElementById(
-        `drawer-segment-${currentSegment.id}`
+        `drawer-segment-${currentSub.id}`
       );
       if (element) {
         isScrollingProgrammatically.current = true;
@@ -142,7 +145,7 @@ export function TranscriptDrawer({
             <MessageSquare className="h-5 w-5 text-blue-600" />
             <h2 className="font-bold text-zinc-900">Transcript</h2>
             <span className="text-xs text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">
-              {filteredTranscript.length} segments
+              {filteredSubSegments.length} segments
             </span>
           </div>
           <button
@@ -185,26 +188,28 @@ export function TranscriptDrawer({
           ref={containerRef}
           className="flex-1 overflow-y-auto scroll-smooth"
         >
-          <div className="p-4 space-y-2">
-            {filteredTranscript.length === 0 ? (
+          <div className="p-4 space-y-1">
+            {filteredSubSegments.length === 0 ? (
               <div className="text-center py-12 text-zinc-500">
                 {searchQuery
                   ? "No matching segments found."
                   : "No transcript available."}
               </div>
             ) : (
-              filteredTranscript.map((segment) => {
-                const speakerName = resolveSpeakerName(segment);
+              filteredSubSegments.map((sub, idx) => {
+                const speakerName = resolveSpeakerName(sub);
                 const colorIdx = getSpeakerColorIndex(speakerName);
                 const isActive =
-                  currentTime >= segment.start_time &&
-                  currentTime < segment.end_time;
+                  currentTime >= sub.start_time &&
+                  currentTime < sub.end_time;
+                const prevSub = idx > 0 ? filteredSubSegments[idx - 1] : null;
+                const showSpeaker = !prevSub || prevSub.parentId !== sub.parentId || prevSub.speaker_name !== sub.speaker_name;
 
                 return (
                   <div
-                    key={segment.id}
-                    id={`drawer-segment-${segment.id}`}
-                    onClick={() => onSegmentClick(segment.start_time)}
+                    key={sub.id}
+                    id={`drawer-segment-${sub.id}`}
+                    onClick={() => onSegmentClick(sub.start_time)}
                     className={cn(
                       "p-3 rounded-lg cursor-pointer transition-all border",
                       isActive
@@ -212,35 +217,36 @@ export function TranscriptDrawer({
                         : "hover:bg-zinc-50 border-transparent hover:border-zinc-200"
                     )}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div
-                        className={cn(
-                          "w-2 h-2 rounded-full flex-shrink-0",
-                          SPEAKER_COLORS[colorIdx]
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "text-xs font-bold truncate",
-                          isActive ? "text-blue-700" : "text-zinc-600"
-                        )}
-                      >
-                        {speakerName}
-                      </span>
-                      <span className="text-[10px] text-zinc-400 ml-auto flex-shrink-0 font-mono">
-                        {formatTimestamp(segment.start_time)}
-                      </span>
-                    </div>
+                    {showSpeaker && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <div
+                          className={cn(
+                            "w-2 h-2 rounded-full flex-shrink-0",
+                            SPEAKER_COLORS[colorIdx]
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "text-xs font-bold truncate",
+                            isActive ? "text-blue-700" : "text-zinc-600"
+                          )}
+                        >
+                          {speakerName}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 ml-auto flex-shrink-0 font-mono">
+                          {formatTimestamp(sub.start_time)}
+                        </span>
+                      </div>
+                    )}
                     <p
                       className={cn(
                         "text-sm leading-relaxed",
-                        isActive ? "text-zinc-900" : "text-zinc-600"
+                        isActive ? "text-zinc-900" : "text-zinc-600",
+                        !showSpeaker && "pl-4"
                       )}
                     >
                       <HighlightText
-                        text={
-                          segment.text_content
-                        }
+                        text={sub.text_content}
                         query={searchQuery}
                       />
                     </p>
