@@ -104,11 +104,12 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 | 11 | Fix pipeline image-to-section matcher (skip same-page extras) + re-extract 3649 | 2026-02-26 | 1bf3d245 | [11-fix-pipeline-image-to-section-matcher-an](./quick/11-fix-pipeline-image-to-section-matcher-an/) |
 | 12 | Fix half-ingested meetings: self-healing check + GEMINI_API_KEY warning | 2026-03-01 | c7dbe9b0 | [12-investigate-and-fix-missing-agenda-items](./quick/12-investigate-and-fix-missing-agenda-items/) |
 | 13 | Sentence-level transcript sub-segments for CC overlay and transcript display | 2026-03-02 | 70f4d078 | [13-use-transcript-segments-for-transcript-c](./quick/13-use-transcript-segments-for-transcript-c/) |
+| 14 | Add PostHog analytics with automatic pageview tracking | 2026-03-03 | 56664d8c | [14-add-posthog-or-similar-analytics](./quick/14-add-posthog-or-similar-analytics/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Starting v1.7 RDOS Ingestion milestone
+Stopped at: Completed quick-14 (PostHog analytics)
 Resume file: None
 
 ### Paused Work: Phase 7.1
