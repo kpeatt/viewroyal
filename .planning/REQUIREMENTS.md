@@ -1,75 +1,90 @@
-# Requirements: ViewRoyal.ai v1.6
+# Requirements: ViewRoyal.ai v1.7
 
-**Defined:** 2026-02-28
+**Defined:** 2026-03-03
 **Core Value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
 
-## v1.6 Requirements
+## v1.7 Requirements
 
-### Citations
+### Scraping
 
-- [ ] **CITE-01**: User sees grouped source badges per sentence (e.g., `[3 sources]`) instead of individual numbered references
-- [ ] **CITE-02**: User can hover (desktop) or tap (mobile) a citation badge to see a source preview card with title, date, content snippet, and source link
-- [ ] **CITE-03**: User can page through multiple sources within a single citation badge's preview card
-- [ ] **CITE-04**: Document section source previews render markdown content (headings, lists, tables) instead of plain text
+- [ ] **SCRP-01**: Pipeline can discover RDOS Board of Directors meetings from the Escribemeetings API by year
+- [ ] **SCRP-02**: Pipeline downloads agenda and minutes PDFs via Escribemeetings FileStream URLs
+- [ ] **SCRP-03**: Pipeline downloads HTML agendas from Escribemeetings Meeting.aspx pages
 
-### Search Controls
+### Agenda
 
-- [x] **SRCH-01**: User can filter keyword search results by time range (Any time, Past week, Past month, Past year)
-- [x] **SRCH-02**: User can filter keyword search results by content type (Motions, Documents, Statements, Transcripts)
-- [x] **SRCH-03**: User can sort keyword search results by relevance, newest first, or oldest first
-- [x] **SRCH-04**: Search filter selections persist in URL params so filtered views are shareable
+- [ ] **AGND-01**: Pipeline can parse structured HTML agendas from Escribemeetings into agenda items with section hierarchy (A, B, C, A.1)
+- [ ] **AGND-02**: Pipeline falls back to PDF + Gemini AI refinement when HTML agenda is unavailable or parsing fails
 
-### Agent
+### Video
 
-- [x] **AGNT-01**: Agent reasoning steps explain why it is choosing each search tool, not just which tool it is calling
-- [x] **AGNT-02**: Tool result summaries show what was found and why it matters (count, relevance) instead of raw observation text
-- [x] **AGNT-03**: Agent can search bylaws directly when questions ask about regulations, zoning rules, fees, or bylaw provisions
+- [ ] **TUBE-01**: Pipeline can list videos from a YouTube channel and build a date-indexed video map
+- [ ] **TUBE-02**: Pipeline can download audio from YouTube videos via yt-dlp
+- [ ] **TUBE-03**: Pipeline matches YouTube videos to meetings by date and title keywords
 
-### Answer UX
+### Municipality
 
-- [x] **ANSR-01**: Source panel is collapsed by default showing a count header (e.g., "16 sources used") with expand toggle
-- [x] **ANSR-02**: Follow-up suggestions appear as a prominent collapsible "Related" section with full-width pill buttons below the answer
+- [ ] **MUNI-01**: RDOS municipality record exists in the database with Escribemeetings source_config
+- [ ] **MUNI-02**: Pipeline orchestrator routes to YouTube video client when source_config specifies YouTube
+
+### Members
+
+- [ ] **MEMB-01**: Pipeline can scrape current board members and 2022 election results from the RDOS website
+- [ ] **MEMB-02**: Scraped members are imported into people, elections, and memberships tables
+
+### Integration
+
+- [ ] **INTG-01**: Running `--municipality rdos` executes the full 5-phase pipeline (scrape → download → diarize → ingest → embed) for 2025 RDOS Board meetings
 
 ## Future Requirements
 
-### Search Enhancements
-- **SRCH-05**: Custom date range picker for time filtering (from/to dates)
-- **SRCH-06**: AI mode accepts explicit time constraints from the user
-- **AGNT-04**: Agent can search by specific councillor name across all content types
+### Multi-Municipality Web
+
+- **WEB-01**: Web app can serve RDOS content alongside View Royal
+- **WEB-02**: Users can switch between municipalities in the web app
+
+### Additional Meeting Types
+
+- **SCRP-04**: Pipeline can ingest additional Escribemeetings meeting types (Committees, Public Hearings)
+- **SCRP-05**: Pipeline can ingest OSRHD Board of Directors meetings
+
+### Additional Municipalities
+
+- **MUNI-03**: Esquimalt ingestion via existing Legistar scraper
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Real-time search suggestions / autocomplete | Search volume doesn't justify prefix-search index complexity |
-| Personalized search ranking | Privacy concerns in civic context; relevance should be equal for all citizens |
-| Image/chart search | Document images not indexed for search; separate capability |
-| Voice search | Browser speech-to-text unreliable; text input sufficient |
-| AI answer regeneration | Civic information should be consistent; same question → same answer |
+| Web app RDOS rendering | Pipeline-only milestone; web serving is a separate milestone |
+| All RDOS meeting types | Starting with Board of Directors only to prove the pattern |
+| Real-time Escribemeetings sync | Batch pipeline is sufficient for current needs |
+| Escribemeetings scraper for other orgs | Build for RDOS first, generalize if needed later |
+| YouTube live stream capture | Only archived recordings; live streaming is a different problem |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CITE-01 | Phase 30 | Pending |
-| CITE-02 | Phase 30 | Pending |
-| CITE-03 | Phase 30 | Pending |
-| CITE-04 | Phase 30 | Pending |
-| SRCH-01 | Phase 31 | Complete |
-| SRCH-02 | Phase 31 | Complete |
-| SRCH-03 | Phase 31 | Complete |
-| SRCH-04 | Phase 31 | Complete |
-| AGNT-01 | Phase 29 | Complete |
-| AGNT-02 | Phase 29 | Complete |
-| AGNT-03 | Phase 29 | Complete |
-| ANSR-01 | Phase 31 | Complete |
-| ANSR-02 | Phase 31 | Complete |
+| SCRP-01 | TBD | Pending |
+| SCRP-02 | TBD | Pending |
+| SCRP-03 | TBD | Pending |
+| AGND-01 | TBD | Pending |
+| AGND-02 | TBD | Pending |
+| TUBE-01 | TBD | Pending |
+| TUBE-02 | TBD | Pending |
+| TUBE-03 | TBD | Pending |
+| MUNI-01 | TBD | Pending |
+| MUNI-02 | TBD | Pending |
+| MEMB-01 | TBD | Pending |
+| MEMB-02 | TBD | Pending |
+| INTG-01 | TBD | Pending |
 
 **Coverage:**
-- v1.6 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0
+- v1.7 requirements: 13 total
+- Mapped to phases: 0
+- Unmapped: 13 ⚠️
 
 ---
-*Requirements defined: 2026-02-28*
-*Last updated: 2026-03-01 after Phase 31 completion*
+*Requirements defined: 2026-03-03*
+*Last updated: 2026-03-03 after initial definition*
