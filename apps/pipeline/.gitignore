@@ -9,3 +9,5 @@ __snapshots__/
 scripts/*
 # Keep the launchd wrapper script
 !scripts/run-pipeline.sh
+# Keep R2 cleanup utility
+!scripts/cleanup_r2_orphans.py
