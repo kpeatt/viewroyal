@@ -66,25 +66,25 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCRP-01 | TBD | Pending |
-| SCRP-02 | TBD | Pending |
-| SCRP-03 | TBD | Pending |
-| AGND-01 | TBD | Pending |
-| AGND-02 | TBD | Pending |
-| TUBE-01 | TBD | Pending |
-| TUBE-02 | TBD | Pending |
-| TUBE-03 | TBD | Pending |
-| MUNI-01 | TBD | Pending |
-| MUNI-02 | TBD | Pending |
-| MEMB-01 | TBD | Pending |
-| MEMB-02 | TBD | Pending |
-| INTG-01 | TBD | Pending |
+| SCRP-01 | Phase 32 | Pending |
+| SCRP-02 | Phase 32 | Pending |
+| SCRP-03 | Phase 32 | Pending |
+| AGND-01 | Phase 33 | Pending |
+| AGND-02 | Phase 33 | Pending |
+| TUBE-01 | Phase 34 | Pending |
+| TUBE-02 | Phase 34 | Pending |
+| TUBE-03 | Phase 34 | Pending |
+| MUNI-01 | Phase 32 | Pending |
+| MUNI-02 | Phase 34 | Pending |
+| MEMB-01 | Phase 35 | Pending |
+| MEMB-02 | Phase 35 | Pending |
+| INTG-01 | Phase 36 | Pending |
 
 **Coverage:**
 - v1.7 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-03*
-*Last updated: 2026-03-03 after initial definition*
+*Last updated: 2026-03-03 after roadmap creation*
