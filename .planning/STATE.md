@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: Not started (defining requirements)
 Plan: —
 Status: Defining requirements
-Last activity: 2026-03-03 — Milestone v1.7 started
+Last activity: 2026-03-03 - Completed quick task 14: Add posthog (or similar) analytics
 
 ## Performance Metrics
 
