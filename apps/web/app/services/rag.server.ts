@@ -1107,21 +1107,30 @@ async function search_document_sections({
   if (!embedding) return [];
 
   try {
-    const { data } = await getSupabase().rpc("hybrid_search_document_sections", {
+    const rpcParams: Record<string, any> = {
       query_text: query,
       query_embedding: JSON.stringify(embedding),
       match_count: 15,
       full_text_weight: 1,
       semantic_weight: 1,
       rrf_k: 50,
-    });
+    };
+
+    // Pass date_from to the RPC so filtering happens at the database level,
+    // not after results are returned. Without this, all 15 result slots could
+    // be consumed by older meetings, leaving no room for date-relevant content.
+    if (after_date) {
+      rpcParams.date_from = after_date;
+    }
+
+    const { data } = await getSupabase().rpc("hybrid_search_document_sections", rpcParams);
 
     if (!data || data.length === 0) return [];
 
-    // Enrich with document and meeting info
+    // Enrich with document title and meeting date
     const docIds = [...new Set(data.map((d: any) => d.document_id))];
 
-    let enrichQuery = getSupabase()
+    const { data: docs } = await getSupabase()
       .from("documents")
       .select(`
         id,
@@ -1131,18 +1140,9 @@ async function search_document_sections({
       `)
       .in("id", docIds);
 
-    if (after_date) {
-      enrichQuery = enrichQuery.gte("meetings.meeting_date", after_date);
-    }
-
-    const { data: docs } = await enrichQuery;
     const docMap = new Map((docs || []).map((d: any) => [d.id, d]));
 
     return data
-      .filter((d: any) => {
-        const doc = docMap.get(d.document_id);
-        return doc !== undefined; // Filter out sections from docs excluded by date
-      })
       .map((d: any) => {
         const doc = docMap.get(d.document_id);
         const meeting = Array.isArray(doc?.meetings) ? doc.meetings[0] : doc?.meetings;
@@ -1151,7 +1151,7 @@ async function search_document_sections({
           document_id: d.document_id,
           heading: d.section_title,
           content: d.content,
-          meeting_id: doc?.meeting_id || 0,
+          meeting_id: d.meeting_id || doc?.meeting_id || 0,
           document_title: doc?.title || "Unknown",
           meeting_date: meeting?.meeting_date || "Unknown",
         };
