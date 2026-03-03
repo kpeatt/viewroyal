@@ -36,6 +36,7 @@
     "lucide-react": "^0.562.0",
     "marked": "^17.0.3",
     "openai": "^6.17.0",
+    "posthog-js": "^1.357.2",
     "radix-ui": "^1.4.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

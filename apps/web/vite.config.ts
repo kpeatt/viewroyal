@@ -91,6 +91,9 @@ export default defineConfig(({ mode }) => {
       "process.env.VIMEO_PROXY_FALLBACK_API_KEY": JSON.stringify(
         env.VIMEO_PROXY_FALLBACK_API_KEY || "",
       ),
+      "process.env.VITE_POSTHOG_KEY": JSON.stringify(
+        env.VITE_POSTHOG_KEY || "",
+      ),
     },
   };
 });
