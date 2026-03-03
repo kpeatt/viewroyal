@@ -21,6 +21,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { Navbar } from "./components/navbar";
 import { Footer } from "./components/footer";
+import { PostHogProvider } from "./components/posthog-provider";
 
 export const meta: Route.MetaFunction = ({ matches }) => {
   const municipality = getMunicipalityFromMatches(matches);
@@ -112,6 +113,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <ScrollRestoration />
         <Scripts />
+        <PostHogProvider />
       </body>
     </html>
   );
