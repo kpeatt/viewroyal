@@ -81,11 +81,12 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 | 12 | Fix half-ingested meetings: self-healing check + GEMINI_API_KEY warning | 2026-03-01 | c7dbe9b0 | [12-investigate-and-fix-missing-agenda-items](./quick/12-investigate-and-fix-missing-agenda-items/) |
 | 13 | Sentence-level transcript sub-segments for CC overlay and transcript display | 2026-03-02 | 70f4d078 | [13-use-transcript-segments-for-transcript-c](./quick/13-use-transcript-segments-for-transcript-c/) |
 | 14 | Add PostHog analytics with automatic pageview tracking | 2026-03-03 | 56664d8c | [14-add-posthog-or-similar-analytics](./quick/14-add-posthog-or-similar-analytics/) |
+| 15 | R2 orphan cleanup script (dry-run + delete mode) | 2026-03-03 | adbc5fe6 | [15-clean-up-r2-object-storage](./quick/15-clean-up-r2-object-storage/) |
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Roadmap created for v1.7 RDOS Ingestion
+Stopped at: Completed quick-15 R2 orphan cleanup script
 Resume file: None
 
 ### Paused Work: Phase 7.1
