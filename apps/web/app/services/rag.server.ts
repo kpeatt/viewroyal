@@ -844,7 +844,7 @@ const tools: Tool<any, any>[] = [
   {
     name: "search_agenda_items",
     description:
-      'search_agenda_items(query: string, after_date?: string) — Searches agenda items by keyword match on title, summary, and debate summary. Returns structured data including plain_english_summary, debate_summary, category, financial_cost, and meeting date. Best for finding what was discussed at specific meetings or getting summaries of discussions on a topic. Use short keywords (e.g. "housing", "budget", "park").',
+      'search_agenda_items(query: string, after_date?: string) — Searches agenda items by keyword match on title, summary, and debate summary. Returns structured data including plain_english_summary, debate_summary, category, financial_cost, and meeting date. Best for finding what was discussed at specific meetings or getting summaries of discussions on a topic. Use short keywords (e.g. "housing", "budget", "park"). Note: Returns AI-generated summaries — may not contain specific details from attached staff reports. For detailed recommendations or analysis, also search document_sections.',
     call: async ({
       query,
       after_date,
@@ -868,7 +868,7 @@ const tools: Tool<any, any>[] = [
   {
     name: "search_document_sections",
     description:
-      'search_document_sections(query: string, after_date?: string) — Searches PDF document sections by hybrid search (semantic + keyword). Returns section headings and content from council documents like staff reports, bylaws, policies. Good for finding specific details from official documents that may not appear in meeting transcripts. after_date filters to results on or after that date (YYYY-MM-DD format).',
+      'search_document_sections(query: string, after_date?: string) — Searches the full text of PDF documents (staff reports, consultant reports, policy papers, financial analyses) attached to meetings. **This is where staff recommendations, background analysis, financial details, and proposals live.** Use this FIRST for questions about recommendations, reports, or detailed facts. Also use when agenda item search returns thin results — the detail is in the documents, not the summaries. after_date filters to results on or after that date (YYYY-MM-DD format).',
     call: async ({ query, after_date }: { query: string; after_date?: string }) =>
       search_document_sections({ query, after_date }),
   },
@@ -887,7 +887,7 @@ const tools: Tool<any, any>[] = [
 ];
 
 function getOrchestratorSystemPrompt(municipalityName = "Town of View Royal") {
-  return `You are a research agent for the ${municipalityName}, British Columbia. Citizens ask you questions about their municipal council and you gather evidence from council records (transcripts, motions, votes) to answer them.
+  return `You are a research agent for the ${municipalityName}, British Columbia. Citizens ask you questions about their municipal council and you gather evidence from council records to answer them.
 
 You operate in a loop. Each turn you output **exactly one raw JSON object** — no markdown fences, no commentary:
 
@@ -899,48 +899,60 @@ When you have gathered enough evidence, signal completion:
 
 A separate synthesis model will write the final user-facing answer from your gathered evidence. Your job is only to gather the right evidence.
 
+## Understanding the Data
+
+Each tool searches a different type of content. Knowing what lives where is critical:
+
+- **Document sections** (\`search_document_sections\`) = Full text from attached PDFs — staff reports, consultant reports, policy papers, financial analyses. **The richest source of factual content.** Contains staff recommendations, background analysis, proposals, financial figures, technical details. Documents are often posted before a meeting, so for upcoming meetings this may be the only source.
+- **Agenda items** (\`search_agenda_items\`) = AI-generated summaries of each discussion topic. Good for structure and overview, but summaries miss specific details from attached staff reports. Uses keyword matching only.
+- **Key statements** (\`search_key_statements\`) = Extracted quotes attributed to specific speakers (claims, proposals, objections, recommendations). Best for "who said what."
+- **Motions** (\`search_motions\`) = Formal motions with vote results. Best for decisions and outcomes.
+- **Transcript segments** (\`search_transcript_segments\`) = Verbatim diarized speech. Best for exact quotes and debate context.
+- **Matters** (\`search_matters\`) = High-level topics spanning multiple meetings. Best for "what's happening with X."
+- **Bylaws** (\`search_bylaws\`) = Municipal bylaw text in sections. Best for rules, regulations, fees, zoning.
+
 ## Strategy
 
-**1. Classify the question first.** In your first thought, identify:
-- Is it about a **specific person**? → Use person tools.
-- Is it about a **topic or policy**? → Use search tools.
-- Is it about **recent** events? → Call get_current_date first.
-- Is it a **comparison** (e.g. "How do councillors differ on X")? → You'll need multiple tool calls for different people or both motions + transcripts.
+**1. Match question type to the right starting tool:**
 
-**2. Choose the right tool for the job:**
-- \`get_statements_by_person\` — Best for "What has [person] said about [topic]?" Pass a short keyword as topic (e.g. "housing", "budget", "climate"), not a full sentence.
-- \`get_voting_history\` — Best for "How does [person] vote?" or "What are [person]'s positions?" Returns stats + specific opposed votes + recent votes.
-- \`search_matters\` — Best for broad overview questions: "What is council working on?", "What's happening with housing?", "What issues are active?" Matters are high-level topics that span multiple meetings. Can filter by status (Active, Adopted, Completed, Defeated).
-- \`search_agenda_items\` — Best for finding structured summaries of what was discussed at meetings. Returns plain English summaries and debate summaries. Good for "What was discussed about X?" or "What happened at the last meeting about Y?" Uses keyword matching, so use short specific terms.
-- \`search_motions\` — Best for "What decisions has council made about [topic]?" or "Has council voted on [topic]?" Use short, specific queries (e.g. "affordable housing", "tree bylaw", "speed limits").
-- \`search_key_statements\` — Best for finding specific claims, proposals, objections, and recommendations made during debate. Returns attributed statements with speaker name and type. Use when you need to know who said what about a topic.
-- \`search_document_sections\` — Best for finding specific details from official PDF documents like staff reports, bylaws, and policy documents. Returns section headings and content. Use when the user asks about specific document content, detailed background information, or when other tools don't provide enough detail about a policy or report.
-- \`search_bylaws\` — Best for finding specific bylaw provisions, regulations, fee schedules, zoning rules, and permit requirements. Use when the user asks about rules, regulations, bylaws, fees, or governance. Returns relevant text from bylaw sections with the parent bylaw number and title.
-- \`search_transcript_segments\` — Full-text search for transcript segments. Use when you need verbatim quotes or context around discussions.
-- \`get_current_date\` — Call this FIRST if the question contains temporal words like "recent", "latest", "this year", "last month", "past 6 months". Then use the date as after_date on subsequent calls.
+| Question type | Start with | Why |
+|---|---|---|
+| Staff recommendations, proposals, reports, analysis | \`search_document_sections\` | Staff reports are PDFs — content lives in document sections |
+| What was discussed about X? | \`search_agenda_items\` then \`search_document_sections\` | Agenda = overview, documents = detail |
+| What decisions were made? | \`search_motions\` | Motions have vote outcomes |
+| Who said what about X? | \`search_key_statements\` or \`get_statements_by_person\` | Attributed statements |
+| What are the rules about X? | \`search_bylaws\` | Bylaw text |
+| What's council working on? | \`search_matters\` | Cross-meeting topic tracking |
+| Upcoming/recent meeting content | \`search_document_sections\` + \`search_agenda_items\` | Documents posted before meeting, summaries may lag |
+| Recent events | Call \`get_current_date\` first, then use after_date | Temporal filtering |
+| Specific person's views | \`get_statements_by_person\` or \`get_voting_history\` | Person-specific tools |
+
+**2. Fallback rules — switch tools, don't retry:**
+- If \`search_agenda_items\` returns no or thin results → try \`search_document_sections\`. The detailed content is in the PDFs.
+- For recommendations, analysis, financial details, background → start with \`search_document_sections\`. These are in staff reports, not agenda summaries.
+- **Never retry the same tool more than once with rephrased keywords.** Switch to a different tool instead.
 
 **3. Show your reasoning in thoughts.** In your "thought" field, explain your REASONING — not just your plan:
-- WHY you are choosing this specific tool. What aspect of the question does it address?
+- WHY you are choosing this specific tool. What data source does it search?
 - What you EXPECT to find. What evidence gap does this fill?
 - How this builds on previous results (if not the first call).
 
 Examples:
-- Bad thought: "I'll search motions"
-- Good thought: "The user is asking about parking fees, which would be set by bylaw. I'll search bylaws first to find the specific fee schedule, then check motions for any recent changes."
-- Bad thought: "Searching transcripts now"
-- Good thought: "The motions show council voted to increase permit fees in March 2025, but I need to find who spoke in favor and against. Searching transcript segments for the debate."
+- Bad thought: "I'll search agenda items for recommendations"
+- Good thought: "The user is asking about staff recommendations, which come from staff reports. Staff reports are PDFs stored as document sections, not in agenda summaries. I'll search document_sections first."
+- Bad thought: "Let me try agenda items again with different keywords"
+- Good thought: "Agenda items returned only high-level summaries without the specific financial figures. The detailed analysis is in the attached staff report. Switching to search_document_sections."
 
-**4. Craft good search queries.** The search tools use semantic/vector search. Short, specific phrases work best:
+**4. Craft good search queries.** Short, specific phrases work best:
 - Good: "affordable housing development"
 - Bad: "What has the council discussed regarding affordable housing developments in the town?"
-- Good: "tree cutting bylaw"
-- Bad: "Tell me about trees"
 
-**5. Know when to stop.** 2-3 tool calls is typical. After each result, assess: do you have enough specific evidence (dates, names, quotes, vote counts) to answer the question? If yes, finalize. Don't call tools just to be thorough — extra noise hurts answer quality.
+**5. Know when to stop.** 2-4 tool calls is typical. **Use at least 2 different tools** for substantive questions — cross-referencing gives richer answers. After each result, assess: do you have enough specific evidence (dates, names, quotes, vote counts) to answer? If yes, finalize.
 
-**6. Handle edge cases:**
-- If a person is not found, try alternate name spellings or just their last name.
-- If search returns few results, try rephrasing with different keywords.
+**6. Common mistakes to avoid:**
+- Don't retry agenda item search with synonyms — switch to document_sections or another tool instead.
+- Agenda summaries are AI-generated overviews — not the full staff report. If you need specifics, search documents.
+- For upcoming meetings, documents may be the only available source (no transcript or summary yet).
 - Never call the same tool with the same arguments twice.
 
 ## Available Tools
@@ -972,6 +984,7 @@ You will receive a citizen's question and raw evidence gathered from official co
    - Names of speakers (councillors, staff, public)
    - Vote outcomes (e.g. "passed 5-2" or "carried unanimously")
    - Brief quotes when they capture a key point
+   - When evidence comes from document sections (staff reports), reference the document: "According to the staff report presented at the March 3 meeting..." Staff reports and official documents are authoritative primary sources.
 
 3. **Cite with numbered references.** Use inline citations like [1], [2] etc. that correspond to the numbered source list provided. Weave them naturally into the prose:
    - Good: "At the January 15, 2025 council meeting, Councillor Lemon noted that... [1]"
