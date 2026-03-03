@@ -83,23 +83,27 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ Document links on agenda items (count chips + "View full document") and matter timeline (document chips) — v1.5
 - ✓ Table of contents sidebar with IntersectionObserver scroll-spy for long documents — v1.5
 - ✓ Cross-reference detection linking bylaw mentions to bylaw pages with inline badges — v1.5
+- ✓ Bylaw search tool for RAG agent with match_bylaws RPC — v1.6
+- ✓ Grouped citation badges with hover/tap source preview cards — v1.6
+- ✓ Keyword search time/type filters with URL state persistence — v1.6
+- ✓ Collapsible source panel and follow-up suggestions redesign — v1.6
 
 ### Active
 
-## Current Milestone: v1.6 Search Experience
+## Current Milestone: v1.7 RDOS Ingestion
 
-**Goal:** Transform search and RAG into a polished, Perplexity/Kagi-inspired experience with better agent transparency, citation UX, search controls, and follow-up emphasis.
+**Goal:** Ingest RDOS Board of Directors meetings (2025+) through the full pipeline — scrape from Escribemeetings, download YouTube video, diarize, AI refine, and embed — proving multi-municipality ingestion works end-to-end.
 
 **Target features:**
-- RAG agent improvements (better reasoning, result summaries, bylaw search tool)
-- Citation UX overhaul (grouped source badges per sentence, hover/tap pager cards, mobile-friendly)
-- Source panel collapsed by default, document markdown previews rendering
-- Keyword search controls (time filtering, sort/filter options)
-- Perplexity-style follow-up suggestions
+- Escribemeetings scraper (API-based, replaces StaticHtmlScraper for RDOS)
+- YouTube video client (replaces stub, yt-dlp integration matching VimeoClient interface)
+- RDOS municipality record and source_config in Supabase
+- Orchestrator wiring for YouTube video source type
+- End-to-end pipeline run for 2025 RDOS Board meetings
 
 ### Out of Scope
 - Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — v2.0 milestone candidate
-- Second town onboarding (Esquimalt, RDOS) — separate milestone after APIs stable
+- Second town onboarding (Esquimalt) — separate milestone after RDOS proves pattern
 - Push notifications / native app — overkill for current user base size
 - Social features (comments, reactions, forums) — undermines official record credibility
 - Real-time live meeting notifications — architecture mismatch (batch pipeline)
@@ -109,7 +113,7 @@ Citizens can understand what their council decided, why, and who said what — w
 ## Context
 
 Shipped v1.5 with ~39,000 LOC TypeScript web app, 40+ database tables, developer docs portal at docs.viewroyal.ai.
-v1.5: 4 phases, 7 plans.
+v1.5: 4 phases, 7 plans. v1.6: 3 phases, 7 plans.
 Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed, fumadocs v16 + Next.js 16 (docs).
 v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.3: 4 phases, 14 plans. v1.4: 6 phases, 10 plans. v1.5: 4 phases, 7 plans.
 
@@ -170,4 +174,4 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-02-28 after v1.6 milestone started*
+*Last updated: 2026-03-03 after v1.7 milestone started*
