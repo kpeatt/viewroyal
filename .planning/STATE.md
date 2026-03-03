@@ -1,40 +1,38 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Search Experience
-status: unknown
-last_updated: "2026-03-01T21:10:03.185Z"
+milestone: v1.7
+milestone_name: RDOS Ingestion
+status: defining_requirements
+last_updated: "2026-03-03T00:00:00.000Z"
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-28)
+See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 31 -- Search Controls + Polish
+**Current focus:** Defining requirements for v1.7 RDOS Ingestion
 
 ## Current Position
 
-Phase: 2 of 3 (Phase 30: Citation UX)
-Plan: 3 of 3 in current phase
-Status: Phase 30 complete
-Last activity: 2026-03-01 -- Phase 30 Citation UX completed (3/3 plans)
-
-Progress: [███░░░░░░░] 29%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-03 — Milestone v1.7 started
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 69 (across v1.0-v1.6)
+- Total plans completed: 76 (across v1.0-v1.6)
 - Average duration: 4.0min
-- Total execution time: ~5.5 hours
+- Total execution time: ~6 hours
 
 **By Phase:**
 
@@ -76,7 +74,7 @@ Progress: [███░░░░░░░] 29%
 
 ### Decisions
 
-All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
+All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
@@ -88,9 +86,6 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
 - Rate Limit binding pricing needs verification before production launch
-- Research flag: Verify `bylaws` table has `embedding` column populated before building `match_bylaws` RPC (Phase 29)
-- Research flag: Test Gemini citation format reliability -- parser must handle format variations (Phase 30)
-- Research flag: Profile hybrid search RPC performance with date filters before deciding on denormalization (Phase 31)
 
 ### Quick Tasks Completed
 
@@ -112,8 +107,8 @@ All v1.0-v1.5 decisions archived -- see PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed quick task 13 (sentence-level transcript sub-segments)
+Last session: 2026-03-03
+Stopped at: Starting v1.7 RDOS Ingestion milestone
 Resume file: None
 
 ### Paused Work: Phase 7.1
