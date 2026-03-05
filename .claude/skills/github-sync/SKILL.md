@@ -66,21 +66,18 @@ These are feature ideas not yet scheduled into phases. Leave open until planned:
 
 | Issue | Title | Notes |
 |---|---|---|
-| #4 | Meeting Summary Cards | Not yet planned |
-| #5 | Enhanced Ask Page Discovery | Partially addressed in v1.6 |
-| #6 | Topic/Issue Clustering Page | Not built |
-| #8 | Financial Transparency | Not built |
-| #9 | Neighbourhood Relevance Filtering | Not built |
-| #10 | Meeting Outcome Badges | Not built |
-| #12 | Surface Underused Schema Data | Partially addressed |
-| #27 | Phase 5e: Speaker Identification | Not built |
-| #28 | Phase 6: Second Town Onboarding | v1.7 covers RDOS portion |
-| #43 | RAG: LLM Reranking | Split from #25 |
-| #44 | RAG: Redesigned Tool Set | Split from #25 |
-| #45 | RAG: Conversation Memory & Follow-ups | Split from #25 |
-| #46 | RAG: Observability & Quality Feedback | Split from #25 |
-| #47 | Council Member: AI Profile Generation | Split from #26 |
-| #48 | Council Member: Profile Page Redesign | Split from #26, depends on #47 |
+| #4 | Meeting Summary Cards | GSD todo #2 |
+| #6 | Topic/Issue Clustering Page | GSD todo #3 |
+| #8 | Financial Transparency | GSD todo #4 |
+| #9 | Neighbourhood Relevance Filtering | GSD todo #5 |
+| #10 | Meeting Outcome Badges | GSD todo #6 |
+| #27 | Speaker Identification | GSD todo #7 |
+| #43 | RAG: LLM Reranking | GSD todo #8 |
+| #44 | RAG: Redesigned Tool Set | GSD todo #9 |
+| #45 | RAG: Conversation Memory & Follow-ups | GSD todo #10 |
+| #46 | RAG: Observability & Quality Feedback | GSD todo #11 |
+| #47 | Council Member: AI Profile Generation | GSD todo #12 |
+| #48 | Council Member: Profile Page Redesign | GSD todo #13, depends on #47 |
 
 ### Project board commands
 
@@ -97,6 +94,43 @@ gh issue close <number> --comment "<summary>"
 # Create issue
 gh issue create --title "Phase X.Y: Name" --label enhancement --body "<body>"
 ```
+
+## Structure Mapping: GSD <-> GitHub
+
+GSD and GitHub track work at different granularities. This mapping keeps them in sync.
+
+### Concept mapping
+
+| GSD Concept | GitHub Equivalent | Sync Rule |
+|---|---|---|
+| Milestone (v1.7) | No direct equivalent | Mention in issue body/title prefix |
+| Phase (32-36) | Issue (with `enhancement` label) | 1:1 — create issue when phase added to roadmap |
+| Plan (32-01, 32-02) | No equivalent | Too granular for GitHub — stays in GSD only |
+| Quick task | No equivalent | Tracked only in STATE.md, no GitHub issue |
+| Todo (STATE.md) | Backlog issue | 1:1 — each todo references a GitHub issue number |
+| STATE.md status | Project board status | Sync: planning->Todo, executing->In Progress, done->Done |
+
+### Sync triggers
+
+| Event | GSD Action | GitHub Action |
+|---|---|---|
+| New milestone created | ROADMAP.md updated | Create issues for each phase, add to project board |
+| Phase planning starts | STATE.md status -> planning | Project board item -> "Todo" (default) |
+| Phase execution starts | STATE.md status -> executing | Project board item -> "In Progress" |
+| Phase completed | ROADMAP.md checkbox, STATE.md progress | Close issue with summary comment (board auto-updates to "Done") |
+| Todo added to STATE.md | New todo entry with [#N] reference | Verify issue #N exists and is open |
+| Todo scheduled into a phase | Todo removed, phase added to ROADMAP.md | Issue stays open, gets phase reference in comment |
+| Todo completed via quick task | Todo removed, quick task row added | Close issue with quick task reference |
+| Backlog issue created on GitHub | — | Add matching todo to STATE.md with [#N] |
+
+### Naming conventions
+
+- **Phase issues**: `Phase X.Y: <Name>` (public numbering, not internal phase numbers)
+  - v1.0 phases: Phase 0-4b (issues #15-#22)
+  - v1.3 phases: Phase 5-5b (issues #23-#24)
+  - v1.7 phases: Phase 7-7.4 (issues #38-#42)
+- **Backlog issues**: Descriptive title, no phase prefix (e.g., "RAG: LLM Reranking")
+- **GitHub issue body**: Always reference the GSD todo number or roadmap phase
 
 ### Important notes
 
