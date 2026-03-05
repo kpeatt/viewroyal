@@ -60,6 +60,18 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 ### Pending Todos
 
 1. **Let users supply their own Gemini API key** (api) -- Allow power users to provide their own Gemini key for RAG queries
+2. **Meeting Summary Cards** (web) -- AI-generated summary cards on meeting list pages [#4]
+3. **Topic/Issue Clustering Page** (web) -- Group agenda items by topic across meetings [#6]
+4. **Financial Transparency** (web) -- Surface cost data from agenda items [#8]
+5. **Neighbourhood Relevance Filtering** (web) -- Filter by neighbourhood (needs DB column) [#9]
+6. **Meeting Outcome Badges** (web) -- Visual badges for meeting outcomes [#10]
+7. **Speaker Identification** (pipeline) -- Speaker fingerprinting beyond basic diarization [#27]
+8. **RAG: LLM Reranking** (api) -- Gemini reranking of top-30 search candidates [#43]
+9. **RAG: Redesigned Tool Set** (api) -- Consolidated RAG tools (search_discussions, search_decisions, etc.) [#44]
+10. **RAG: Conversation Memory & Follow-ups** (api) -- KV session state, pronoun resolution, suggested follow-ups [#45]
+11. **RAG: Observability & Quality Feedback** (api) -- Per-question telemetry, feedback buttons, quality dashboard [#46]
+12. **Council Member: AI Profile Generation** (pipeline) -- Topic taxonomy, AI summaries, key vote detection, alignment analysis [#47]
+13. **Council Member: Profile Page Redesign** (web) -- Redesigned profile page with at-a-glance cards, policy positions [#48]
 
 ### Blockers/Concerns
 
