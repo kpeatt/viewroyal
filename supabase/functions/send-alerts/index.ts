@@ -300,10 +300,21 @@ interface MeetingInfo {
 }
 
 Deno.serve(async (req: Request) => {
-  // Verify authorization
+  // Verify authorization — accept the project's service role key OR the
+  // pipeline's custom API key.  Deployed with --no-verify-jwt because
+  // Supabase's newer sb_secret_* API keys are not JWTs and would be
+  // rejected by the gateway's JWT verifier.
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response("Unauthorized", { status: 401 });
+  }
+  const token = authHeader.slice(7);
+  const ALLOWED_KEYS = [
+    SUPABASE_SERVICE_ROLE_KEY,
+    Deno.env.get("PIPELINE_API_KEY"),
+  ].filter(Boolean);
+  if (!ALLOWED_KEYS.includes(token)) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const body = await req.json();
