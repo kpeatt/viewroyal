@@ -90,20 +90,20 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-## Current Milestone: v1.7 RDOS Ingestion
+## Current Milestone: v1.7 View Royal Intelligence
 
-**Goal:** Ingest RDOS Board of Directors meetings (2025+) through the full pipeline — scrape from Escribemeetings, download YouTube video, diarize, AI refine, and embed — proving multi-municipality ingestion works end-to-end.
+**Goal:** Deepen the single-municipality (View Royal) experience with smarter search, richer council member profiles, better meeting UX, and improved email alerts — making the existing platform substantially more useful before expanding to other municipalities.
 
 **Target features:**
-- Escribemeetings scraper (API-based, replaces StaticHtmlScraper for RDOS)
-- YouTube video client (replaces stub, yt-dlp integration matching VimeoClient interface)
-- RDOS municipality record and source_config in Supabase
-- Orchestrator wiring for YouTube video source type
-- End-to-end pipeline run for 2025 RDOS Board meetings
+- RAG improvements: LLM reranking, redesigned tool set, conversation memory, observability & feedback
+- Council member intelligence: AI profile generation with topic taxonomy, stance analysis, key vote detection
+- Council member profile page redesign with at-a-glance cards and policy positions
+- UX features: meeting summary cards, topic/issue clustering, meeting outcome badges, financial transparency
+- Pipeline: speaker identification/fingerprinting, neighbourhood relevance filtering
+- Email alerts: better digest design, upcoming meeting attendance info, link to join in-progress meetings
 
 ### Out of Scope
-- Speaker ID improvements (multi-sample fingerprints, custom vocabulary) — v2.0 milestone candidate
-- Second town onboarding (Esquimalt) — separate milestone after RDOS proves pattern
+- RDOS / multi-municipality ingestion — deferred to v1.8
 - Push notifications / native app — overkill for current user base size
 - Social features (comments, reactions, forums) — undermines official record credibility
 - Real-time live meeting notifications — architecture mismatch (batch pipeline)
@@ -174,4 +174,4 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-03-03 after v1.7 milestone started*
+*Last updated: 2026-03-05 after v1.7 View Royal Intelligence milestone started (RDOS deferred to v1.8)*
