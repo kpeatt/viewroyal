@@ -1,193 +1,243 @@
-# Technology Stack: v1.6 Search Experience
+# Technology Stack: v1.7 View Royal Intelligence
 
-**Project:** ViewRoyal.ai v1.6 — Perplexity-style citations, Kagi-style search controls, RAG agent transparency
-**Researched:** 2026-02-28
-**Scope:** Stack changes/additions for citation hover cards, search filter controls, mobile popovers, improved agent reasoning display, bylaw search tool
-**Out of scope:** Existing validated stack (React Router 7 SSR, Tailwind CSS 4, shadcn/ui + Radix UI, Supabase PostgreSQL with pgvector, Gemini, OpenAI embeddings, streaming SSE) — all unchanged.
+**Project:** ViewRoyal.ai v1.7 -- LLM reranking, conversation memory, council member intelligence, email improvements, speaker fingerprinting
+**Researched:** 2026-03-05
+**Scope:** Stack additions/changes for NEW v1.7 capabilities only. Existing validated stack (React Router 7, Cloudflare Workers, Supabase, Gemini, fastembed, Hono, PostHog, Resend) is not re-evaluated.
 
----
+## Recommended Stack Additions
 
-## Executive Finding: Minimal New Dependencies
+### Conversation Memory: Cloudflare Workers KV
 
-This milestone requires **one potential new component** from shadcn/ui (`Popover` if not already installed) and zero new npm packages. The work is component-level UX redesign, not library-level.
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Cloudflare Workers KV | (platform service) | Persistent conversation memory for RAG follow-ups | Already on Cloudflare; zero new dependencies; 1 GB free tier covers thousands of conversations; TTL-based auto-expiration eliminates cleanup logic |
 
-**Confidence:** HIGH — verified by auditing existing `package.json`, the search route, RAG service, and feature requirements against current capabilities.
+**Current state:** Conversation history lives in a client-side `useRef` array capped at 5 turns, passed as a `context` query param to the API. This is lost on page refresh, tab close, or navigation.
 
----
+**What KV adds:**
+- Server-side conversation storage keyed by `session_id` (generated client-side, stored in `sessionStorage`)
+- Survives page refreshes within a session
+- TTL of 3600s (1 hour) auto-expires stale conversations -- no cleanup cron needed
+- Value: JSON-serialized array of `{role, content}` turns, capped at 10 turns server-side
+- KV's eventual consistency is fine -- a single user's conversation is read/written from a single PoP
 
-## Existing Stack Relevant to This Milestone
+**Why NOT Supabase for this:**
+- Conversation memory is ephemeral (1-hour lifespan), not relational data
+- KV reads are free up to 100K/day -- Supabase RPC calls cost more in latency
+- No schema migration needed; conversations don't need SQL queries
 
-### Already Installed and Sufficient
+**Why NOT Durable Objects:**
+- Overkill for simple key-value with TTL; DO's coordination features aren't needed
+- KV is simpler to reason about and cheaper
 
-| Technology | Version | Role in v1.6 | Status |
-|------------|---------|--------------|--------|
-| `@radix-ui/react-popover` | Already in shadcn deps | Citation hover cards, source preview popovers | Already available via shadcn/ui |
-| `@radix-ui/react-dialog` | Already in shadcn deps | Mobile source preview (sheet/drawer pattern) | Already available |
-| `@radix-ui/react-select` | Already in shadcn deps | Sort/filter dropdowns for search controls | Already available |
-| `@radix-ui/react-tabs` | ^1.1.13 | Already used; potential for source pager tabs | Already installed |
-| `@radix-ui/react-collapsible` | Already in shadcn deps | Collapsible sources panel, follow-up section | Already available |
-| `lucide-react` | ^0.562.0 | Icons for search filters, source types, navigation | Already installed |
-| `tailwindcss` | ^4.1.13 | All styling for new components | Already the CSS engine |
-| `class-variance-authority` | ^0.7.1 | Variant styling for citation badges, filter chips | Already installed |
-| `marked` | ^17.0.3 | Render document section markdown in source previews | Already installed |
+**Configuration in `wrangler.toml`:**
+```toml
+[[kv_namespaces]]
+binding = "CONVERSATIONS"
+id = "<created-via-wrangler>"
+```
 
-### Key Integration Points
+**Cost:** Free tier (1 GB storage, 100K reads/day, 1K writes/day) is more than sufficient. At peak, expect <100 conversations/day.
 
-**`apps/web/app/routes/search.tsx` (675 lines):**
-- Handles both keyword and AI search modes
-- Streams SSE events from `/api/search`
-- Renders thoughts, tool calls, final answer, sources, follow-ups
-- **Primary file for citation UX, source panel, and follow-up redesign**
+### LLM Reranking: Gemini Pointwise Scoring (No New Dependency)
 
-**`apps/web/app/services/rag.server.ts` (1,344 lines):**
-- Agent orchestration with 8 search tools
-- Generates numbered citations [1]..[N]
-- Streams thought/tool_call/tool_observation/final_answer events
-- **Primary file for agent reasoning improvements, bylaw tool**
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| @google/genai (existing) | ^1.42.0 | Pointwise relevance scoring of retrieved chunks | Already installed; Gemini Flash is fast enough for reranking 20-30 chunks; avoids adding a separate reranker API/model |
 
-**`apps/web/app/services/hybrid-search.server.ts` (351 lines):**
-- Unified keyword search with RRF across 4 content types
-- Returns `UnifiedSearchResult[]` with rank_score
-- **Primary file for search filter/sort controls**
+**Approach: Pointwise scoring with Gemini Flash, not a dedicated cross-encoder.**
 
-**`apps/web/app/routes/api.search.tsx` (236 lines):**
-- API endpoint handling mode dispatch (keyword/ai/cached)
-- Query params: q, mode, type, context
-- **Needs time filter params and updated SSE event types**
+**Why Gemini Flash for reranking instead of a dedicated reranker (Cohere, Voyage, Jina):**
+- Already paying for Gemini API calls -- no new billing relationship
+- Gemini Flash latency is ~200-400ms for a pointwise batch, acceptable for search
+- Research shows dedicated rerankers outperform LLMs by ~13%, but the absolute quality at our scale (20-30 candidates, civic domain) makes LLM reranking more than adequate
+- No new SDK, no new API key, no new secret to manage
+- Can inject BM25 scores into the reranking prompt for a documented ~3-16% accuracy boost
 
-**`apps/web/app/lib/intent.ts` (69 lines):**
-- Heuristic intent classifier (keyword vs question)
-- **No changes needed — intent detection is working**
+**Implementation pattern:**
+```typescript
+// Score each chunk with a simple relevance prompt
+const scores = await Promise.all(chunks.map(async (chunk) => {
+  const response = await genAI.models.generateContent({
+    model: "gemini-2.0-flash",
+    contents: `Rate relevance 0-10. Query: "${query}" Document: "${chunk.text}"`,
+  });
+  return { chunk, score: parseFloat(response.text) };
+}));
+// Sort by score, take top-k
+```
 
----
+**Why NOT Vertex AI Ranking API:**
+- Requires GCP project setup, service account, different auth flow
+- Adds operational complexity for marginal quality gain over Gemini Flash pointwise
 
-## Feature-Specific Stack Guidance
+**Why NOT Cohere Rerank / Voyage Reranker:**
+- New billing relationship, new API key, new dependency
+- Dedicated rerankers shine at 100+ candidate sets; we have 20-30 candidates from hybrid search
 
-### 1. Citation Hover Cards (Perplexity-style)
+### Topic Taxonomy: Supabase PostgreSQL (No New Dependency)
 
-**Approach:** Radix `Popover` for desktop hover, Radix `Dialog` (sheet mode) for mobile tap.
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Supabase PostgreSQL (existing) | - | Topic taxonomy storage, stance aggregation, profile generation | Already have a `topics` table and `normalize_topic_category()` SQL function; taxonomy is relational data that belongs in the DB |
+| @google/genai (existing) | ^1.42.0 | AI-generated profile summaries, stance analysis, key vote detection | Gemini already used for stance generation; extending to richer profiles is a prompt change, not a stack change |
 
-The citation system needs to:
-- Parse grouped source references from AI output (e.g., `[3 sources]` per sentence)
-- Show a popover card on hover (desktop) or tap (mobile)
-- Support paging through multiple sources in the popover
+**Current state:** 8 normalized topic categories via `normalize_topic_category()` IMMUTABLE SQL function. `councillor_stances` table stores AI-generated stance text per person per topic.
 
-**Components needed (all available via shadcn/ui):**
-- `Popover` — desktop hover card positioned near the citation badge
-- `Dialog` / `Drawer` — mobile full-width bottom sheet for source preview
-- Custom `SourcePager` — left/right navigation within a popover showing one source at a time
+**What v1.7 adds:**
+- Deeper topic hierarchy (subtopics within the 8 categories) -- new `subtopics` table with FK to `topics`
+- `councillor_profiles` table for AI-generated at-a-glance profile cards (generated by pipeline, not on-demand)
+- `key_votes` table flagging significant/controversial votes per person
+- Pipeline Gemini calls to generate profiles and detect key votes -- same SDK, new prompts
 
-**Why Radix Popover over CSS :hover:**
-- Popover stays open while user interacts with it (reading, clicking links)
-- Proper focus management for keyboard navigation
-- Handles viewport edge positioning automatically
-- Can be triggered by hover (desktop) and click/tap (mobile) with the same component
+**No new libraries needed.** This is schema + prompt work on existing infrastructure.
 
-**Citation badge rendering:**
-The AI currently generates `[1][2][3]` style citations. For v1.6, the SSE protocol needs to change so the backend sends source metadata per-sentence, and the frontend renders grouped badges like `[3 sources]` instead of individual numbers.
+### Speaker Fingerprinting: Resemblyzer
 
-### 2. Search Filter Controls (Kagi-style)
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| resemblyzer | >=0.1.4 | Speaker voice embedding extraction for cross-meeting identification | Lightweight (PyTorch-based), well-documented for exactly this use case, generates d-vector embeddings that can be compared via cosine similarity |
 
-**Approach:** Native Radix `Select` + custom filter chip components. No new libraries.
+**Current state:** MLX diarization pipeline assigns `SPEAKER_00`, `SPEAKER_01` labels per meeting. These labels don't persist across meetings. The existing `SpeakerClusterer` in `pipeline/diarization/clustering.py` already does agglomerative clustering with cosine similarity -- Resemblyzer fits naturally into this architecture.
 
-Kagi's search UI features:
-- Time filter dropdown (Past day, Past week, Past month, Past year, Custom range)
-- Content type filter chips (Documents, Motions, Statements, Transcripts)
-- Sort options (Relevance, Date newest, Date oldest)
+**Why Resemblyzer over SpeechBrain/pyannote:**
+- Resemblyzer is purpose-built for speaker embedding comparison (not full diarization)
+- Lightweight: ~50MB model vs SpeechBrain's multi-GB ecosystem
+- Runs at 1000x real-time, reliable for audio >= 2.63 seconds
+- Already uses PyTorch (compatible with existing pipeline dependencies)
+- Produces 256-dim d-vector embeddings ideal for cosine similarity matching
 
-All achievable with existing shadcn/ui components:
-- `Select` for time range and sort dropdowns
-- `ToggleGroup` or custom chips for content type filters
-- URL search params for filter state persistence (already the RR7 pattern)
+**Why NOT pyannote/embedding:**
+- Requires HuggingFace auth token, model download agreement
+- Heavier dependency chain (pyannote-audio pulls in many transitive deps)
+- Resemblyzer does exactly what we need: extract a voice fingerprint, compare it
 
-### 3. Agent Reasoning Display
+**Why NOT building on existing MLX diarization embeddings:**
+- MLX diarization is Apple Silicon specific and runs scribe via uvx (external tool)
+- Embeddings from scribe's internal model aren't easily extractable for cross-meeting comparison
+- Resemblyzer gives us a clean, extractable embedding per speaker segment
 
-**Approach:** Enhanced SSE event content. No new frontend libraries.
+**Installation:**
+```bash
+# In apps/pipeline/
+uv add resemblyzer
+```
 
-The streaming thought/tool_call events already render in the UI. The improvements are:
-- Better prompt instructions to Gemini for more explanatory thoughts
-- Structured tool observation summaries (not raw result dumps)
-- Frontend: styled reasoning cards with icons per tool type
+**Workflow:**
+1. After diarization, extract Resemblyzer embeddings for each speaker cluster
+2. Store embeddings in `speaker_fingerprints` table (person_id nullable initially)
+3. Compare new meeting speakers against stored fingerprints via cosine similarity
+4. Above threshold (0.85) -> auto-assign person_id; below -> flag for review
+5. Known councillors get fingerprints seeded from meetings where roll call identifies them
 
-This is prompt engineering + CSS, not library work.
+### Email Template Design: Inline HTML (No New Library)
 
-### 4. Bylaw Search Tool
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Inline HTML templates (existing) | - | Email digest and pre-meeting alert design | Current approach works, runs in Deno (Supabase Edge Functions), and avoids react-email/Cloudflare compatibility issues |
 
-**Approach:** New tool in `rag.server.ts` querying the `bylaws` table.
+**Current state:** Email templates are inline HTML string builders (`buildDigestHtml`, `buildPreMeetingHtml`) in the Supabase Edge Function. They produce well-structured, responsive emails with highlighting, badges, and attendance info.
 
-The bylaws table already has:
-- `embedding halfvec(384)` — vector search ready
-- `text_search tsvector` — FTS ready
-- `title`, `plain_english_summary`, `bylaw_number`
+**Why NOT react-email:**
+- Emails are sent from a **Supabase Edge Function** (Deno runtime), not Cloudflare Workers
+- react-email has documented compatibility issues with Cloudflare Workers (GitHub issues #1508, #587)
+- Current inline HTML approach is battle-tested and already handles personalized subscription highlighting
+- Template complexity doesn't justify a build step -- these are ~100-line HTML builders, not multi-component layouts
+- Adding react-email would require either: (a) pre-rendering at build time, or (b) bundling React into the Edge Function
 
-Add a `search_bylaws` tool mirroring the existing `search_motions` pattern. Needs a `match_bylaws` RPC in Supabase (similar to existing `match_motions`).
+**What v1.7 improves (no new deps):**
+- Extract shared HTML components (header, footer, CTA button) into helper functions
+- Add meeting summary card section to digest
+- Add "join in progress" live-stream link when meeting is happening
+- Improve mobile responsiveness with better table fallbacks
+- Add attendance icons (in-person vs remote) with cleaner layout
 
-### 5. Follow-up Suggestions (Perplexity-style)
+### Observability: PostHog (Existing, Extended)
 
-**Approach:** CSS/component redesign of existing follow-up chips. No new libraries.
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| posthog-js (existing) | ^1.357.2 | RAG observability, feedback capture, tool call tracking | Already integrated; $ai_generation events already tracked; extend with feedback thumbs up/down and per-tool timing |
 
-Perplexity shows follow-ups as a collapsible "Related" section with pill buttons below the answer. The current implementation already generates and renders follow-ups — this is a visual redesign using existing Tailwind + Radix Collapsible.
+**What v1.7 adds:**
+- Thumbs up/down feedback on AI answers -> `$ai_feedback` custom event
+- Per-tool-call latency tracking in existing `$ai_generation` events
+- Reranking quality metrics (original rank vs reranked position)
+- Conversation turn depth tracking
 
-### 6. Source Panel (Collapsed by Default)
+**No new library needed.** PostHog's `$ai_generation` event schema already supports custom properties.
 
-**Approach:** Radix `Collapsible` wrapping the existing sources list. No new libraries.
+## Alternatives Considered
 
-Currently sources render as an open list below the answer. Wrap in `Collapsible` with a toggle header showing source count.
-
-### 7. Document Markdown in Source Previews
-
-**Approach:** Reuse existing `MarkdownContent` component. No new libraries.
-
-Source preview cards currently show plain text snippets. For document sections, render through `MarkdownContent` (already uses `marked`) to show formatted previews.
-
----
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Conversation memory | Cloudflare KV | Supabase table | Ephemeral data; KV's TTL auto-cleanup is cleaner than scheduled deletes on a DB table |
+| Conversation memory | Cloudflare KV | Durable Objects | Overkill; KV is cheaper and simpler for key-value with TTL |
+| Conversation memory | Cloudflare KV | Client-side only (current) | Lost on refresh; can't support longer conversations or server-side analysis |
+| LLM reranking | Gemini Flash pointwise | Cohere Rerank v3 | New vendor, new API key, new billing; marginal quality gain at our candidate set size |
+| LLM reranking | Gemini Flash pointwise | Jina Reranker v2 | Same vendor-sprawl concern; Gemini is already paid for |
+| LLM reranking | Gemini Flash pointwise | Cross-encoder (local) | Can't run ML models on Cloudflare Workers; would need a separate service |
+| Speaker fingerprinting | Resemblyzer | pyannote/embedding | Heavier deps, HF auth required, more than we need |
+| Speaker fingerprinting | Resemblyzer | SpeechBrain ecapa-tdnn | Full speech toolkit overkill; we just need embedding extraction |
+| Email templates | Inline HTML helpers | react-email | Compatibility issues with Deno Edge Functions; current approach works well |
+| Email templates | Inline HTML helpers | MJML | Build step complexity; overkill for 2 email templates |
+| Observability | PostHog (existing) | LangSmith/LangFuse | New vendor; PostHog already captures AI events; we need feedback, not full LLM tracing |
 
 ## What NOT to Add
 
-| Technology | Why Tempting | Why Wrong |
-|------------|-------------|-----------|
-| `@floating-ui/react` | "Better" popover positioning | Radix Popover already uses Floating UI internally; adding it separately duplicates logic and adds bundle size |
-| `react-virtualized` / `@tanstack/virtual` | Virtualize long source lists | Source lists are max ~20 items; virtualization adds complexity for no benefit at this scale |
-| `date-fns` / `dayjs` | Time filter date manipulation | Existing `Intl.DateTimeFormat` + native Date arithmetic covers all time filter needs; URL params store ISO strings |
-| `@tanstack/react-query` | Client-side caching for search | SSR loaders + URL param state is the established pattern; adding a client cache layer creates two sources of truth |
-| `framer-motion` | Animate popover/panel transitions | Radix components have built-in CSS animation support via `data-[state=open/closed]` attributes; CSS transitions are sufficient |
-| `react-markdown` | Render source previews | Already using `marked` for SSR safety; mixing both renderers in one app creates inconsistency |
-| `fuse.js` / `minisearch` | Client-side search filtering | Filtering happens server-side in Supabase RPCs; client-side search adds bundle size with no benefit |
+| Technology | Why Skip |
+|------------|----------|
+| LangChain/LlamaIndex | Over-abstraction for our custom RAG agent; adds thousands of lines of dependency for features we don't use |
+| Dedicated vector DB (Pinecone, Weaviate) | pgvector + Supabase handles our scale; adding a vector DB creates data sync complexity |
+| Redis/Upstash | KV covers our caching needs; Redis adds a new service to manage |
+| react-email | Deno Edge Function incompatibility; current inline HTML is sufficient |
+| Cohere/Voyage/Jina reranker | Vendor sprawl for marginal gain at our scale |
+| OpenAI Embeddings | fastembed with nomic-embed-text-v1.5 is free, local, and already validated |
+| Separate observability platform | PostHog already captures what we need; extend, don't replace |
 
----
+## Installation Summary
 
-## SSE Protocol Changes
+### Web App (apps/web/) -- No New Dependencies
 
-The streaming protocol needs updates for grouped citations:
+No new npm packages needed. KV is a Cloudflare platform binding, not an npm package.
 
-**New/modified SSE event types:**
+Only change: add KV namespace binding to `wrangler.toml`:
+```toml
+[[kv_namespaces]]
+binding = "CONVERSATIONS"
+id = "<created-via-wrangler>"
+```
 
-| Event Type | Current | v1.6 |
-|------------|---------|------|
-| `sources` | `{ sources: Source[] }` | `{ sources: Source[] }` (unchanged, but source objects enriched with content preview) |
-| `final_answer_chunk` | Text with `[1][2]` inline citations | Text with `[sources:1,3,7]` grouped citation markers |
-| `thought` | Raw reasoning text | Structured: `{ thought: string, intent: string }` |
-| `tool_observation` | Raw result text | Structured: `{ summary: string, count: number, relevance: string }` |
+### Pipeline (apps/pipeline/) -- One New Dependency
 
-The frontend parses `[sources:1,3,7]` markers and renders them as `[3 sources]` badge components with popover bindings.
+```bash
+cd apps/pipeline && uv add resemblyzer
+```
 
----
+This pulls in Resemblyzer (and its transitive PyTorch dependency, which is already present via the existing pipeline deps).
 
-## Summary
+## Integration Points
 
-| v1.6 Feature | Libraries Needed | Approach |
-|--------------|------------------|----------|
-| Citation hover cards | None (Radix Popover already available) | Popover on desktop, Dialog/Drawer on mobile |
-| Source pager | None | Custom component with left/right nav inside popover |
-| Search filters | None (Radix Select already available) | Time dropdown, type chips, sort select |
-| Agent reasoning | None | Better Gemini prompts + styled thought cards |
-| Bylaw search tool | None | New tool in rag.server.ts + Supabase RPC |
-| Follow-up emphasis | None | CSS redesign of existing chips |
-| Source panel collapse | None (Radix Collapsible already available) | Collapsible wrapper with count header |
-| Document preview rendering | None | Reuse MarkdownContent component |
+| New Capability | Touches | Integration Notes |
+|----------------|---------|-------------------|
+| KV conversation memory | `wrangler.toml`, `rag.server.ts`, `api.ask.tsx`, `search.tsx` | KV binding accessed via `env.CONVERSATIONS`; session ID generated client-side |
+| LLM reranking | `rag.server.ts` | New `rerankWithGemini()` function called after hybrid search, before context assembly |
+| Topic taxonomy | `bootstrap.sql` migrations, pipeline `ai_refiner.py`, web `services/people.ts` | New tables + pipeline Gemini calls + profile page queries |
+| Speaker fingerprinting | Pipeline `diarization/`, new `speaker_fingerprints` table | Post-diarization step; stores embeddings in Supabase for cross-meeting matching |
+| Email improvements | `supabase/functions/send-alerts/index.ts` | Refactor existing HTML builders; no new deps |
+| RAG observability | `rag.server.ts`, `search.tsx` | Extend existing PostHog `$ai_generation` events with feedback + rerank metrics |
 
-**Total new npm packages: 0**
+## Sources
 
----
-
-*Last updated: 2026-02-28*
+- [Cloudflare Workers KV docs](https://developers.cloudflare.com/kv/)
+- [KV pricing](https://developers.cloudflare.com/workers/platform/pricing/)
+- [KV bindings configuration](https://developers.cloudflare.com/kv/concepts/kv-bindings/)
+- [KV performance improvements (Aug 2025)](https://developers.cloudflare.com/changelog/2025-08-22-kv-performance-improvements/)
+- [LLM as reranker guide - ZeroEntropy](https://www.zeroentropy.dev/articles/llm-as-reranker-guide)
+- [Ultimate reranking model guide 2026 - ZeroEntropy](https://www.zeroentropy.dev/articles/ultimate-guide-to-choosing-the-best-reranking-model-in-2025)
+- [Case against LLMs as rerankers - Voyage AI](https://blog.voyageai.com/2025/10/22/the-case-against-llms-as-rerankers/)
+- [Vertex AI reranking docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/rag-engine/retrieval-and-ranking)
+- [Resemblyzer on PyPI](https://pypi.org/project/Resemblyzer/)
+- [Resemblyzer GitHub](https://github.com/resemble-ai/Resemblyzer)
+- [Speaker identification with Resemblyzer](https://kmeanskaran.medium.com/build-an-audio-driven-speaker-recognition-system-using-open-source-technologies-resemblyzer-and-6499cf0246eb)
+- [react-email Cloudflare issues #1508](https://github.com/resend/react-email/issues/1508)
+- [React Email](https://react.email)
