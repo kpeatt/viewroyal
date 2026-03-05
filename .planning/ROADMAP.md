@@ -9,7 +9,8 @@
 - ✅ **v1.4 Developer Documentation Portal** -- Phases 19-24 (shipped 2026-02-25) -- [Archive](milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 Document Experience** -- Phases 25-28 (shipped 2026-02-28) -- [Archive](milestones/v1.5-ROADMAP.md)
 - ✅ **v1.6 Search Experience** -- Phases 29-31 (shipped 2026-03-01)
-- 🚧 **v1.7 RDOS Ingestion** -- Phases 32-36 (in progress)
+- 🚧 **v1.7 View Royal Intelligence** -- Phases 37-40 (in progress)
+- 📋 **v1.8 RDOS Ingestion** -- Phases 32-36 (deferred)
 
 ## Phases
 
@@ -87,7 +88,17 @@
 
 </details>
 
-### 🚧 v1.7 RDOS Ingestion (In Progress)
+### 🚧 v1.7 View Royal Intelligence (In Progress)
+
+**Milestone Goal:** Deepen the single-municipality (View Royal) experience with smarter search, richer council member profiles, better meeting UX, and improved email alerts -- making the existing platform substantially more useful before expanding to other municipalities.
+
+- [ ] **Phase 37: Eval Foundation + Quick Wins** - RAG observability/feedback infrastructure and zero-backend-work UI improvements (summary cards, outcome badges)
+- [ ] **Phase 38: RAG Intelligence** - LLM reranking and consolidated tool set for better answer quality
+- [ ] **Phase 39: Council Intelligence** - Topic taxonomy, AI profiles, key vote detection, and redesigned profile page
+- [ ] **Phase 40: UX Polish + Email** - Financial transparency, meeting attendance info, and improved email digests
+
+<details>
+<summary>📋 v1.8 RDOS Ingestion (Deferred)</summary>
 
 **Milestone Goal:** Ingest RDOS Board of Directors meetings (2025+) through the full pipeline -- scrape from Escribemeetings, download YouTube video, diarize, AI refine, and embed -- proving multi-municipality ingestion works end-to-end.
 
@@ -97,87 +108,82 @@
 - [ ] **Phase 35: Board Members** - Scrape RDOS board members and election data into people tables
 - [ ] **Phase 36: End-to-End Integration** - Full 5-phase pipeline run for RDOS Board meetings
 
+See RDOS requirement details in REQUIREMENTS.md v2 section.
+
+</details>
+
 ## Phase Details
 
-### Phase 32: Municipality Foundation + Escribemeetings Scraper
-**Goal**: Pipeline can discover RDOS meetings and download their documents from Escribemeetings
+### Phase 37: Eval Foundation + Quick Wins
+**Goal**: Users can rate AI answers and see richer meeting information at a glance, while RAG traces provide a measurement baseline for subsequent improvements
 **Depends on**: Nothing (first phase of v1.7)
-**Requirements**: MUNI-01, SCRP-01, SCRP-02, SCRP-03
+**Requirements**: SRCH-03, SRCH-04, MTGX-01, MTGX-02
 **Success Criteria** (what must be TRUE):
-  1. RDOS municipality record exists in the database with source_config specifying Escribemeetings API URL and YouTube channel
-  2. Running the scraper for RDOS discovers 2025 Board of Directors meetings with correct dates, titles, and external IDs
-  3. Agenda and minutes PDFs are downloaded to the local archive for discovered meetings
-  4. HTML agendas are downloaded from Meeting.aspx pages for meetings that have them
+  1. User can give thumbs up or thumbs down on any AI answer, and the feedback is persisted
+  2. RAG traces (query text, tools invoked, latency, source count) are logged to the database for every AI answer
+  3. Meeting list page shows summary cards with key decisions and topic indicators for each meeting
+  4. Motion outcomes throughout the app display as colored badges indicating passed, defeated, tabled, or deferred
 **Plans**: TBD
 
 Plans:
-- [ ] 32-01: RDOS municipality record and Escribemeetings scraper
+- [ ] 37-01: RAG observability and feedback infrastructure
+- [ ] 37-02: Meeting summary cards and outcome badges
 
-### Phase 33: Agenda Parsing
-**Goal**: Pipeline can extract structured agenda items from Escribemeetings HTML with automatic fallback
-**Depends on**: Phase 32 (needs HTML agendas and PDFs from scraper)
-**Requirements**: AGND-01, AGND-02
+### Phase 38: RAG Intelligence
+**Goal**: AI answers are measurably more relevant through LLM reranking and a streamlined tool set
+**Depends on**: Phase 37 (observability baseline needed to measure improvements)
+**Requirements**: SRCH-01, SRCH-02
 **Success Criteria** (what must be TRUE):
-  1. HTML agendas are parsed into agenda items preserving the Escribemeetings section hierarchy (A, B, C, A.1, A.2)
-  2. When an HTML agenda is unavailable or parsing fails, the pipeline falls back to PDF extraction with Gemini AI refinement
-  3. Parsed agenda items have correct titles, section numbers, and parent-child relationships
+  1. Search results and RAG evidence are reranked by LLM relevance scoring, with the reranking step visible in RAG traces
+  2. RAG agent uses approximately 5 consolidated tools instead of the current 9 overlapping ones
+  3. Answer quality is maintained or improved as measured by feedback ratings compared to the Phase 37 baseline
 **Plans**: TBD
 
 Plans:
-- [ ] 33-01: HTML agenda parser and PDF+AI fallback
+- [ ] 38-01: RAG tool consolidation
+- [ ] 38-02: LLM reranking
 
-### Phase 34: YouTube Video Client
-**Goal**: Pipeline can list, match, and download audio from YouTube videos for RDOS meetings
-**Depends on**: Phase 32 (needs RDOS municipality record with YouTube channel config)
-**Requirements**: TUBE-01, TUBE-02, TUBE-03, MUNI-02
+### Phase 39: Council Intelligence
+**Goal**: Users can understand each councillor's priorities, positions, and notable votes through AI-generated profiles grounded in evidence
+**Depends on**: Phase 37 (topic taxonomy tables created in Phase 37 migrations)
+**Requirements**: CNCL-01, CNCL-02, CNCL-03, CNCL-04
 **Success Criteria** (what must be TRUE):
-  1. YouTubeClient implements get_video_map() returning a date-indexed map of available videos from the RDOS YouTube channel
-  2. YouTubeClient implements download_video() that downloads audio via yt-dlp in the same format expected by the diarization pipeline
-  3. Videos are matched to meetings by date and title keywords, handling cases where multiple videos exist for the same date
-  4. Pipeline orchestrator routes to YouTubeClient when a municipality's source_config specifies video_source: "youtube"
+  1. Agenda items are classified into a hierarchical topic taxonomy extending the existing 8-topic system
+  2. Each councillor has an AI-generated profile summary synthesizing their voting record, speaking patterns, and stance positions
+  3. Key votes are algorithmically detected and displayed (minority position votes, close votes, ally breaks)
+  4. Council member profile page shows at-a-glance stats card, AI summary, policy positions organized by topic, and a key votes section
 **Plans**: TBD
 
 Plans:
-- [ ] 34-01: YouTubeClient with get_video_map and download_video
-- [ ] 34-02: Orchestrator YouTube routing
+- [ ] 39-01: Topic taxonomy and agenda item classification
+- [ ] 39-02: AI profile generation and key vote detection
+- [ ] 39-03: Council member profile page redesign
 
-### Phase 35: Board Members
-**Goal**: RDOS board members and election history are populated in the database
-**Depends on**: Phase 32 (needs RDOS municipality record)
-**Requirements**: MEMB-01, MEMB-02
+### Phase 40: UX Polish + Email
+**Goal**: Users see financial data on relevant agenda items, know how to attend upcoming meetings, and receive better-designed email digests
+**Depends on**: Phase 37 (summary cards and badges established)
+**Requirements**: MTGX-03, MTGX-04, MAIL-01, MAIL-02
 **Success Criteria** (what must be TRUE):
-  1. Current RDOS board members are scraped from the RDOS website with names and roles
-  2. 2022 election results are scraped and stored in the elections table
-  3. Scraped members are inserted into the people table with memberships linking them to the RDOS organization
+  1. Agenda items with financial cost or funding source data display it visually (amount and/or source)
+  2. Upcoming meetings show attendance information including location, how to attend, and public input process
+  3. Email digest has a mobile-friendly design with meeting summary section at the top
+  4. Email digest includes upcoming meeting dates with attendance information
 **Plans**: TBD
 
 Plans:
-- [ ] 35-01: RDOS board member and election scraper
-
-### Phase 36: End-to-End Integration
-**Goal**: Running --municipality rdos executes the complete pipeline and produces fully ingested RDOS Board meetings
-**Depends on**: Phases 32, 33, 34, 35 (all prior phases must work)
-**Requirements**: INTG-01
-**Success Criteria** (what must be TRUE):
-  1. Running `python main.py --municipality rdos` completes all 5 phases (scrape, download, diarize, ingest, embed) without errors
-  2. After a pipeline run, RDOS Board meetings appear in the database with agenda items, documents, transcript segments, and embeddings
-  3. Meetings with YouTube video have diarized transcript segments with speaker labels
-**Plans**: TBD
-
-Plans:
-- [ ] 36-01: Integration testing and pipeline wiring
+- [ ] 40-01: Financial transparency and meeting attendance info
+- [ ] 40-02: Email digest redesign
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 32 -> 33 -> 34 -> 35 -> 36
+Phases execute in numeric order: 37 -> 38 -> 39 -> 40
 
-Note: Phases 33, 34, and 35 depend only on Phase 32 and could execute in parallel, but sequential execution is simpler for a solo developer.
+Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parallel with Phase 38, but sequential execution is simpler and lets RAG improvements stabilize first.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 32. Municipality Foundation + Escribemeetings Scraper | v1.7 | 0/1 | Not started | - |
-| 33. Agenda Parsing | v1.7 | 0/1 | Not started | - |
-| 34. YouTube Video Client | v1.7 | 0/2 | Not started | - |
-| 35. Board Members | v1.7 | 0/1 | Not started | - |
-| 36. End-to-End Integration | v1.7 | 0/1 | Not started | - |
+| 37. Eval Foundation + Quick Wins | v1.7 | 0/2 | Not started | - |
+| 38. RAG Intelligence | v1.7 | 0/2 | Not started | - |
+| 39. Council Intelligence | v1.7 | 0/3 | Not started | - |
+| 40. UX Polish + Email | v1.7 | 0/2 | Not started | - |

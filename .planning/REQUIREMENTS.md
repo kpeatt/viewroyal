@@ -1,7 +1,7 @@
 # Requirements: ViewRoyal.ai v1.7
 
 **Defined:** 2026-03-05
-**Core Value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
+**Core Value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
 
 ## v1.7 Requirements
 
@@ -83,26 +83,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SRCH-01 | TBD | Pending |
-| SRCH-02 | TBD | Pending |
-| SRCH-03 | TBD | Pending |
-| SRCH-04 | TBD | Pending |
-| CNCL-01 | TBD | Pending |
-| CNCL-02 | TBD | Pending |
-| CNCL-03 | TBD | Pending |
-| CNCL-04 | TBD | Pending |
-| MTGX-01 | TBD | Pending |
-| MTGX-02 | TBD | Pending |
-| MTGX-03 | TBD | Pending |
-| MTGX-04 | TBD | Pending |
-| MAIL-01 | TBD | Pending |
-| MAIL-02 | TBD | Pending |
+| SRCH-01 | Phase 38 | Pending |
+| SRCH-02 | Phase 38 | Pending |
+| SRCH-03 | Phase 37 | Pending |
+| SRCH-04 | Phase 37 | Pending |
+| CNCL-01 | Phase 39 | Pending |
+| CNCL-02 | Phase 39 | Pending |
+| CNCL-03 | Phase 39 | Pending |
+| CNCL-04 | Phase 39 | Pending |
+| MTGX-01 | Phase 37 | Pending |
+| MTGX-02 | Phase 37 | Pending |
+| MTGX-03 | Phase 40 | Pending |
+| MTGX-04 | Phase 40 | Pending |
+| MAIL-01 | Phase 40 | Pending |
+| MAIL-02 | Phase 40 | Pending |
 
 **Coverage:**
 - v1.7 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-05*
-*Last updated: 2026-03-05 after initial definition*
+*Last updated: 2026-03-05 after roadmap creation (phases 37-40)*
