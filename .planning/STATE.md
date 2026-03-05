@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: View Royal Intelligence
 status: planning
-stopped_at: Starting v1.7 View Royal Intelligence milestone
-last_updated: "2026-03-05T16:30:00.000Z"
-last_activity: "2026-03-05 - Milestone v1.7 View Royal Intelligence started"
+stopped_at: Roadmap created for v1.7 View Royal Intelligence (4 phases, 37-40)
+last_updated: "2026-03-05T17:00:00.000Z"
+last_activity: "2026-03-05 - Roadmap created for v1.7 View Royal Intelligence"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 9
   completed_plans: 0
   percent: 0
 ---
@@ -18,17 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-03)
+See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Defining requirements for v1.7 View Royal Intelligence
+**Current focus:** Phase 37: Eval Foundation + Quick Wins
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-05 — Milestone v1.7 View Royal Intelligence started
+Phase: 37 (1 of 4 in v1.7) (Eval Foundation + Quick Wins)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-03-05 -- Roadmap created for v1.7 View Royal Intelligence
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -54,31 +54,24 @@ Progress: [░░░░░░░░░░] 0%
 ### Decisions
 
 All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
-- [Phase quick-17]: Used Phase 7.x GitHub issue naming to match convention; deferred project board adds due to missing project write scope
-- [Phase quick-16]: Deploy Edge Functions with --no-verify-jwt when project uses sb_secret_* API keys, with manual token validation inside the function
+- RDOS ingestion deferred from v1.7 to v1.8 (phases 32-36 preserved, will execute after v1.7)
+- v1.7 refocused on View Royal Intelligence: search quality, council profiles, meeting UX, email digests
+- RAG observability (Phase 37) must precede RAG improvements (Phase 38) for measurement baseline
+- Topic taxonomy (Phase 39) extends existing 8-topic system, does not replace it
 
 ### Pending Todos
 
-1. **Let users supply their own Gemini API key** (api) -- Allow power users to provide their own Gemini key for RAG queries
-2. **Meeting Summary Cards** (web) -- AI-generated summary cards on meeting list pages [#4]
-3. **Topic/Issue Clustering Page** (web) -- Group agenda items by topic across meetings [#6]
-4. **Financial Transparency** (web) -- Surface cost data from agenda items [#8]
-5. **Neighbourhood Relevance Filtering** (web) -- Filter by neighbourhood (needs DB column) [#9]
-6. **Meeting Outcome Badges** (web) -- Visual badges for meeting outcomes [#10]
-7. **Speaker Identification** (pipeline) -- Speaker fingerprinting beyond basic diarization [#27]
-8. **RAG: LLM Reranking** (api) -- Gemini reranking of top-30 search candidates [#43]
-9. **RAG: Redesigned Tool Set** (api) -- Consolidated RAG tools (search_discussions, search_decisions, etc.) [#44]
-10. **RAG: Conversation Memory & Follow-ups** (api) -- KV session state, pronoun resolution, suggested follow-ups [#45]
-11. **RAG: Observability & Quality Feedback** (api) -- Per-question telemetry, feedback buttons, quality dashboard [#46]
-12. **Council Member: AI Profile Generation** (pipeline) -- Topic taxonomy, AI summaries, key vote detection, alignment analysis [#47]
-13. **Council Member: Profile Page Redesign** (web) -- Redesigned profile page with at-a-glance cards, policy positions [#48]
+1. **Let users supply their own Gemini API key** (api)
+2. **Speaker Identification** (pipeline) -- deferred to v1.8+
+3. **Neighbourhood Relevance Filtering** (web) -- deferred to v1.8+ (needs DB column + geocoding)
 
 ### Blockers/Concerns
 
-- bootstrap.sql is out of date with 30+ applied migrations -- technical debt to track
-- Email delivery requires external Resend configuration
+- bootstrap.sql is out of date with 30+ applied migrations
+- Email delivery requires external Resend configuration (affects MAIL-01, MAIL-02)
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
-- Rate Limit binding pricing needs verification before production launch
+- Financial cost field population needs DB verification before MTGX-03 UI work
+- Gemini cost projection: reranking + classification + profiling add new API consumers
 
 ### Quick Tasks Completed
 
@@ -104,8 +97,8 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-05T15:57:30.896Z
-Stopped at: Completed quick-16 email alert fix (Resend domain verification pending)
+Last session: 2026-03-05
+Stopped at: Roadmap created for v1.7 View Royal Intelligence (phases 37-40, 9 plans)
 Resume file: None
 
 ### Paused Work: Phase 7.1
