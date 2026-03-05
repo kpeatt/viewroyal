@@ -5,7 +5,7 @@ milestone_name: RDOS Ingestion
 status: planning
 stopped_at: Completed quick-17 GitHub Issues and Project Board sync
 last_updated: "2026-03-05T15:52:30.111Z"
-last_activity: "2026-03-03 - Completed quick task 15: Clean up R2 object storage"
+last_activity: "2026-03-05 - Completed quick task 17: Update the github issues and projects with what we've finished and still need to do"
 progress:
   total_phases: 5
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 Phase: 32 of 36 (Municipality Foundation + Escribemeetings Scraper)
 Plan: 0 of 1 in current phase
 Status: Ready to plan
-Last activity: 2026-03-03 - Completed quick task 15: Clean up R2 object storage
+Last activity: 2026-03-05 - Completed quick task 17: Update the github issues and projects with what we've finished and still need to do
 
 Progress: [░░░░░░░░░░] 0%
 
