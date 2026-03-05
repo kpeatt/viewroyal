@@ -73,10 +73,14 @@ These are feature ideas not yet scheduled into phases. Leave open until planned:
 | #9 | Neighbourhood Relevance Filtering | Not built |
 | #10 | Meeting Outcome Badges | Not built |
 | #12 | Surface Underused Schema Data | Partially addressed |
-| #25 | Phase 5c: AI Search & RAG | Major items remain |
-| #26 | Phase 5d: Council Member Profiling | Basic profiles exist |
 | #27 | Phase 5e: Speaker Identification | Not built |
 | #28 | Phase 6: Second Town Onboarding | v1.7 covers RDOS portion |
+| #43 | RAG: LLM Reranking | Split from #25 |
+| #44 | RAG: Redesigned Tool Set | Split from #25 |
+| #45 | RAG: Conversation Memory & Follow-ups | Split from #25 |
+| #46 | RAG: Observability & Quality Feedback | Split from #25 |
+| #47 | Council Member: AI Profile Generation | Split from #26 |
+| #48 | Council Member: Profile Page Redesign | Split from #26, depends on #47 |
 
 ### Project board commands
 
