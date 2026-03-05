@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.7
-milestone_name: RDOS Ingestion
+milestone_name: View Royal Intelligence
 status: planning
-stopped_at: Completed quick-16 email alert fix (Resend domain verification pending)
-last_updated: "2026-03-05T15:57:30.897Z"
-last_activity: "2026-03-05 - Completed quick task 17: Update the github issues and projects with what we've finished and still need to do"
+stopped_at: Starting v1.7 View Royal Intelligence milestone
+last_updated: "2026-03-05T16:30:00.000Z"
+last_activity: "2026-03-05 - Milestone v1.7 View Royal Intelligence started"
 progress:
-  total_phases: 5
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 32 - Municipality Foundation + Escribemeetings Scraper
+**Current focus:** Defining requirements for v1.7 View Royal Intelligence
 
 ## Current Position
 
-Phase: 32 of 36 (Municipality Foundation + Escribemeetings Scraper)
-Plan: 0 of 1 in current phase
-Status: Ready to plan
-Last activity: 2026-03-05 - Completed quick task 17: Update the github issues and projects with what we've finished and still need to do
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-05 — Milestone v1.7 View Royal Intelligence started
 
 Progress: [░░░░░░░░░░] 0%
 
