@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: RDOS Ingestion
 status: planning
-stopped_at: Completed quick-17 GitHub Issues and Project Board sync
-last_updated: "2026-03-05T15:52:30.111Z"
+stopped_at: Completed quick-16 email alert fix (Resend domain verification pending)
+last_updated: "2026-03-05T15:57:30.897Z"
 last_activity: "2026-03-05 - Completed quick task 17: Update the github issues and projects with what we've finished and still need to do"
 progress:
   total_phases: 5
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 
 All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 - [Phase quick-17]: Used Phase 7.x GitHub issue naming to match convention; deferred project board adds due to missing project write scope
+- [Phase quick-16]: Deploy Edge Functions with --no-verify-jwt when project uses sb_secret_* API keys, with manual token validation inside the function
 
 ### Pending Todos
 
@@ -86,12 +87,13 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 | 13 | Sentence-level transcript sub-segments for CC overlay and transcript display | 2026-03-02 | 70f4d078 | [13-use-transcript-segments-for-transcript-c](./quick/13-use-transcript-segments-for-transcript-c/) |
 | 14 | Add PostHog analytics with automatic pageview tracking | 2026-03-03 | 56664d8c | [14-add-posthog-or-similar-analytics](./quick/14-add-posthog-or-similar-analytics/) |
 | 15 | R2 orphan cleanup script (dry-run + delete mode) | 2026-03-03 | adbc5fe6 | [15-clean-up-r2-object-storage](./quick/15-clean-up-r2-object-storage/) |
+| 16 | Fix missing email alert: Edge Function JWT auth + Resend domain | 2026-03-05 | 5079802b | [16-i-didnt-get-an-email-summary-for-the-mos](./quick/16-i-didnt-get-an-email-summary-for-the-mos/) |
 | 17 | Sync GitHub issues and project board with shipped milestones + v1.7 tracking | 2026-03-05 | d17b012d | [17-update-the-github-issues-and-projects-wi](./quick/17-update-the-github-issues-and-projects-wi/) |
 
 ## Session Continuity
 
-Last session: 2026-03-05T15:52:28.813Z
-Stopped at: Completed quick-17 GitHub Issues and Project Board sync
+Last session: 2026-03-05T15:57:30.896Z
+Stopped at: Completed quick-16 email alert fix (Resend domain verification pending)
 Resume file: None
 
 ### Paused Work: Phase 7.1
