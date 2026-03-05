@@ -54,11 +54,15 @@ Current mapping (as of 2026-03-05):
 | #22 | Phase 4b | v1.5 | Closed |
 | #23 | Phase 5 | v1.3 | Closed |
 | #24 | Phase 5b | v1.3 | Closed |
-| #38 | Phase 7 (32) | v1.7 | Open |
-| #39 | Phase 7.1 (33) | v1.7 | Open |
-| #40 | Phase 7.2 (34) | v1.7 | Open |
-| #41 | Phase 7.3 (35) | v1.7 | Open |
-| #42 | Phase 7.4 (36) | v1.7 | Open |
+| #49 | Phase 8 (37) | v1.7 | Open |
+| #50 | Phase 8.1 (38) | v1.7 | Open |
+| #51 | Phase 8.2 (39) | v1.7 | Open |
+| #52 | Phase 8.3 (40) | v1.7 | Open |
+| #38 | Phase 7 (32) | v1.8 | Open (deferred) |
+| #39 | Phase 7.1 (33) | v1.8 | Open (deferred) |
+| #40 | Phase 7.2 (34) | v1.8 | Open (deferred) |
+| #41 | Phase 7.3 (35) | v1.8 | Open (deferred) |
+| #42 | Phase 7.4 (36) | v1.8 | Open (deferred) |
 
 ### Backlog issues (not tied to roadmap phases)
 
