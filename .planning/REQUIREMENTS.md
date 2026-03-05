@@ -1,90 +1,108 @@
 # Requirements: ViewRoyal.ai v1.7
 
-**Defined:** 2026-03-03
+**Defined:** 2026-03-05
 **Core Value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
 
 ## v1.7 Requirements
 
-### Scraping
+Requirements for v1.7 View Royal Intelligence. Each maps to roadmap phases.
 
-- [ ] **SCRP-01**: Pipeline can discover RDOS Board of Directors meetings from the Escribemeetings API by year
-- [ ] **SCRP-02**: Pipeline downloads agenda and minutes PDFs via Escribemeetings FileStream URLs
-- [ ] **SCRP-03**: Pipeline downloads HTML agendas from Escribemeetings Meeting.aspx pages
+### RAG & Search
 
-### Agenda
+- [ ] **SRCH-01**: Search results are reranked by LLM relevance scoring before display
+- [ ] **SRCH-02**: RAG agent uses 5 consolidated tools instead of 9 overlapping ones
+- [ ] **SRCH-03**: User can give thumbs up/down feedback on AI answers
+- [ ] **SRCH-04**: RAG traces (query, tools used, latency, sources) are logged for analysis
 
-- [ ] **AGND-01**: Pipeline can parse structured HTML agendas from Escribemeetings into agenda items with section hierarchy (A, B, C, A.1)
-- [ ] **AGND-02**: Pipeline falls back to PDF + Gemini AI refinement when HTML agenda is unavailable or parsing fails
+### Council Intelligence
 
-### Video
+- [ ] **CNCL-01**: Agenda items are classified into a hierarchical topic taxonomy
+- [ ] **CNCL-02**: AI-generated profile summaries synthesize voting, speaking, and stance data per councillor
+- [ ] **CNCL-03**: Key votes are algorithmically detected (minority position, close votes, ally breaks)
+- [ ] **CNCL-04**: Profile page shows at-a-glance stats, AI summary, policy positions by topic, and key votes
 
-- [ ] **TUBE-01**: Pipeline can list videos from a YouTube channel and build a date-indexed video map
-- [ ] **TUBE-02**: Pipeline can download audio from YouTube videos via yt-dlp
-- [ ] **TUBE-03**: Pipeline matches YouTube videos to meetings by date and title keywords
+### Meeting UX
 
-### Municipality
+- [ ] **MTGX-01**: Meeting list shows summary cards with key decisions and topic indicators
+- [ ] **MTGX-02**: Motion outcomes display as colored badges (passed/defeated/tabled/deferred)
+- [ ] **MTGX-03**: Agenda items with financial cost/funding data show it visually
+- [ ] **MTGX-04**: Upcoming meetings show attendance info (how to attend, location, public input process)
 
-- [ ] **MUNI-01**: RDOS municipality record exists in the database with Escribemeetings source_config
-- [ ] **MUNI-02**: Pipeline orchestrator routes to YouTube video client when source_config specifies YouTube
+### Email & Notifications
 
-### Members
+- [ ] **MAIL-01**: Email digest has improved mobile-friendly design with meeting summary at top
+- [ ] **MAIL-02**: Email includes upcoming meeting dates with attendance information
 
-- [ ] **MEMB-01**: Pipeline can scrape current board members and 2022 election results from the RDOS website
-- [ ] **MEMB-02**: Scraped members are imported into people, elections, and memberships tables
+## v2 Requirements
 
-### Integration
+Deferred to future milestones. Tracked but not in current roadmap.
 
-- [ ] **INTG-01**: Running `--municipality rdos` executes the full 5-phase pipeline (scrape → download → diarize → ingest → embed) for 2025 RDOS Board meetings
+### Pipeline Improvements (v1.8+)
 
-## Future Requirements
+- **PIPE-01**: Speaker fingerprinting enables cross-meeting speaker identification
+- **PIPE-02**: Neighbourhood filtering assigns agenda items to neighbourhoods via geocoding
 
-### Multi-Municipality Web
+### RDOS Ingestion (v1.8)
 
-- **WEB-01**: Web app can serve RDOS content alongside View Royal
-- **WEB-02**: Users can switch between municipalities in the web app
+- **SCRP-01**: Pipeline can discover RDOS Board meetings from Escribemeetings API
+- **SCRP-02**: Pipeline downloads agenda and minutes PDFs via Escribemeetings
+- **SCRP-03**: Pipeline downloads HTML agendas from Escribemeetings
+- **AGND-01**: HTML agenda parser for Escribemeetings with PDF+AI fallback
+- **AGND-02**: Agenda parsing falls back to PDF + Gemini when HTML unavailable
+- **TUBE-01**: YouTube channel video listing and date-indexed map
+- **TUBE-02**: YouTube audio download via yt-dlp
+- **TUBE-03**: YouTube video-to-meeting matching by date and title
+- **MUNI-01**: RDOS municipality record with Escribemeetings source_config
+- **MUNI-02**: Orchestrator YouTube routing based on source_config
+- **MEMB-01**: RDOS board member and election scraping
+- **MEMB-02**: Members imported into people, elections, memberships tables
+- **INTG-01**: End-to-end RDOS pipeline run with --municipality rdos
 
-### Additional Meeting Types
+### RAG Enhancements (future)
 
-- **SCRP-04**: Pipeline can ingest additional Escribemeetings meeting types (Committees, Public Hearings)
-- **SCRP-05**: Pipeline can ingest OSRHD Board of Directors meetings
-
-### Additional Municipalities
-
-- **MUNI-03**: Esquimalt ingestion via existing Legistar scraper
+- **RAGX-01**: KV-based persistent conversation memory across page refreshes
+- **RAGX-02**: Conversation memory summarization for long sessions
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Web app RDOS rendering | Pipeline-only milestone; web serving is a separate milestone |
-| All RDOS meeting types | Starting with Board of Directors only to prove the pattern |
-| Real-time Escribemeetings sync | Batch pipeline is sufficient for current needs |
-| Escribemeetings scraper for other orgs | Build for RDOS first, generalize if needed later |
-| YouTube live stream capture | Only archived recordings; live streaming is a different problem |
+| Multi-municipality ingestion/display | v1.8 scope (RDOS deferred) |
+| Push/SMS notifications | Overkill for current user base size |
+| Social features (comments, forums) | Undermines official record credibility |
+| Real-time meeting join links | Batch pipeline cannot detect in-progress meetings |
+| Sentiment analysis badges | Civic tone analysis is misleading and reductive |
+| Full budget explorer | No pipeline data source for budget documents |
+| OAuth providers | Magic links are lower friction for civic audience |
+| Speaker fingerprinting | Deferred to v1.8+ (regression risk, needs validation) |
+| Neighbourhood filtering | Deferred to v1.8+ (DB column doesn't exist, needs geocoding pipeline) |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCRP-01 | Phase 32 | Pending |
-| SCRP-02 | Phase 32 | Pending |
-| SCRP-03 | Phase 32 | Pending |
-| AGND-01 | Phase 33 | Pending |
-| AGND-02 | Phase 33 | Pending |
-| TUBE-01 | Phase 34 | Pending |
-| TUBE-02 | Phase 34 | Pending |
-| TUBE-03 | Phase 34 | Pending |
-| MUNI-01 | Phase 32 | Pending |
-| MUNI-02 | Phase 34 | Pending |
-| MEMB-01 | Phase 35 | Pending |
-| MEMB-02 | Phase 35 | Pending |
-| INTG-01 | Phase 36 | Pending |
+| SRCH-01 | TBD | Pending |
+| SRCH-02 | TBD | Pending |
+| SRCH-03 | TBD | Pending |
+| SRCH-04 | TBD | Pending |
+| CNCL-01 | TBD | Pending |
+| CNCL-02 | TBD | Pending |
+| CNCL-03 | TBD | Pending |
+| CNCL-04 | TBD | Pending |
+| MTGX-01 | TBD | Pending |
+| MTGX-02 | TBD | Pending |
+| MTGX-03 | TBD | Pending |
+| MTGX-04 | TBD | Pending |
+| MAIL-01 | TBD | Pending |
+| MAIL-02 | TBD | Pending |
 
 **Coverage:**
-- v1.7 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0
+- v1.7 requirements: 14 total
+- Mapped to phases: 0
+- Unmapped: 14
 
 ---
-*Requirements defined: 2026-03-03*
-*Last updated: 2026-03-03 after roadmap creation*
+*Requirements defined: 2026-03-05*
+*Last updated: 2026-03-05 after initial definition*
