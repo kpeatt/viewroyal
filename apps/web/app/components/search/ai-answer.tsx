@@ -24,24 +24,15 @@ import { SourceCards } from "./source-cards";
 // ---------------------------------------------------------------------------
 
 const TOOL_LABELS: Record<string, string> = {
-  search_motions: "Searching council decisions",
-  search_transcript_segments: "Searching meeting transcripts",
+  search_council_records: "Searching council records",
+  search_documents: "Searching documents",
   search_matters: "Looking up council matters",
-  search_agenda_items: "Searching agenda items",
-  get_voting_history: "Looking up voting record",
-  get_statements_by_person: "Finding statements",
-  get_current_date: "Checking current date",
-  search_document_sections: "Searching documents",
-  search_bylaws: "Searching bylaws",
-  search_key_statements: "Searching key statements",
+  get_person_info: "Looking up person info",
 };
 
 function getToolLabel(name: string, args?: any): string {
-  if (name === "get_statements_by_person" && args?.person_name) {
-    return `Finding statements by ${args.person_name}`;
-  }
-  if (name === "get_voting_history" && args?.person_name) {
-    return `Looking up ${args.person_name}'s voting record`;
+  if (name === "get_person_info" && args?.person_name) {
+    return `Looking up ${args.person_name}'s info`;
   }
   return TOOL_LABELS[name] || name;
 }
