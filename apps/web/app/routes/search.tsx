@@ -19,6 +19,7 @@ import {
   serializeSearchFilters,
   type ContentType,
 } from "../lib/search-params";
+import { trackEvent } from "../lib/analytics";
 
 // ---------------------------------------------------------------------------
 // Meta
@@ -132,6 +133,7 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [cacheId, setCacheId] = useState<string | null>(cachedId || null);
   const [copied, setCopied] = useState(false);
+  const [traceId, setTraceId] = useState<string | null>(null);
 
   // Keyword results state
   const [searchResults, setSearchResults] = useState<UnifiedSearchResult[]>([]);
@@ -264,6 +266,7 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     setCacheId(null);
     setCopied(false);
     setSuggestedFollowups([]);
+    setTraceId(null);
     answerStarted.current = false;
     aiFetched.current = true;
 
@@ -275,6 +278,9 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
 
     // Track full answer text for conversation history
     let fullAnswer = "";
+    const streamStartTime = Date.now();
+    let sourceCount = 0;
+    let toolCount = 0;
 
     const eventSource = new EventSource(
       `/api/search?q=${encodeURIComponent(query)}&mode=ai${contextParam}`,
@@ -288,6 +294,7 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
           setAgentSteps((prev) => [...prev, data as AgentEvent]);
           break;
         case "tool_call":
+          toolCount++;
           setAgentSteps((prev) => [...prev, data as AgentEvent]);
           break;
         case "tool_observation":
@@ -305,10 +312,14 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
           setAnswer((prev) => prev + (data as any).chunk);
           break;
         case "sources":
+          sourceCount = ((data as any).sources || []).length;
           setSources((data as any).sources);
           break;
         case "suggested_followups":
           setSuggestedFollowups((data as any).followups || []);
+          break;
+        case "trace_id":
+          setTraceId((data as any).traceId);
           break;
         case "cache_id": {
           const newCacheId = (data as any).id;
@@ -326,6 +337,13 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
         }
         case "done":
           setIsStreaming(false);
+          trackEvent("ai answer completed", {
+            query,
+            duration_ms: Date.now() - streamStartTime,
+            source_count: sourceCount,
+            tool_count: toolCount,
+            conversation_turn: conversationRef.current.length + 1,
+          });
           // Push to conversation history and cap at 5 turns
           conversationRef.current.push({
             question: query,
@@ -462,6 +480,15 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
     const defaultTab = intent === "keyword" ? "results" : "ai";
     setActiveTab(defaultTab);
 
+    trackEvent("search submitted", {
+      query,
+      intent,
+      tab: defaultTab,
+      filter_time: filters.time,
+      filter_types: filters.types,
+      filter_sort: filters.sort,
+    });
+
     // Trigger the search for the default tab
     triggerSearch(query, defaultTab);
   }
@@ -471,6 +498,11 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
   // ---------------------------------------------------------------------------
 
   function handleTabChange(tab: "ai" | "results") {
+    trackEvent("search tab changed", {
+      query: activeQuery,
+      from_tab: activeTab,
+      to_tab: tab,
+    });
     setActiveTab(tab);
 
     // Lazy-load the other tab's content if not yet fetched
@@ -488,6 +520,10 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
   async function handleCopy() {
     await navigator.clipboard.writeText(answer);
     setCopied(true);
+    trackEvent("answer copied", {
+      query: activeQuery,
+      answer_length: answer.length,
+    });
     setTimeout(() => setCopied(false), 2000);
   }
 
@@ -513,6 +549,20 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
 
   const filters = parseSearchFilters(searchParams);
 
+  // Track the filter signature so we can re-fetch when filters change
+  const filterSignature = `${filters.time}|${filters.types.join(",")}|${filters.sort}`;
+  const prevFilterSignature = useRef(filterSignature);
+
+  // Re-fetch keyword results when filter params change in the URL
+  useEffect(() => {
+    if (prevFilterSignature.current !== filterSignature) {
+      prevFilterSignature.current = filterSignature;
+      if (activeQuery && activeTab === "results") {
+        fetchKeywordResults(activeQuery);
+      }
+    }
+  }, [filterSignature]);
+
   function handleTimeChange(time: string) {
     setSearchParams(
       (prev) => {
@@ -526,12 +576,6 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
       },
       { replace: true },
     );
-    // Re-fetch results with new filter
-    resultsFetched.current = false;
-    if (activeQuery && activeTab === "results") {
-      // Use setTimeout to ensure searchParams are updated before fetch
-      setTimeout(() => fetchKeywordResults(activeQuery), 0);
-    }
   }
 
   function handleTypesChange(types: ContentType[]) {
@@ -546,10 +590,6 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
       },
       { replace: true },
     );
-    resultsFetched.current = false;
-    if (activeQuery && activeTab === "results") {
-      setTimeout(() => fetchKeywordResults(activeQuery), 0);
-    }
   }
 
   function handleSortChange(sort: string) {
@@ -565,10 +605,6 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
       },
       { replace: true },
     );
-    resultsFetched.current = false;
-    if (activeQuery && activeTab === "results") {
-      setTimeout(() => fetchKeywordResults(activeQuery), 0);
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -703,13 +739,21 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
                   sourceCount={sources.length}
                   onCopy={handleCopy}
                   copied={copied}
+                  traceId={traceId}
                 />
 
                 {/* Follow-up suggestion chips */}
                 {!isStreaming && suggestedFollowups.length > 0 && (
                   <FollowUp
                     suggestions={suggestedFollowups}
-                    onSelect={(q) => performSearch(q)}
+                    onSelect={(q) => {
+                      trackEvent("ai followup clicked", {
+                        followup_text: q,
+                        position: suggestedFollowups.indexOf(q),
+                        parent_query: activeQuery,
+                      });
+                      performSearch(q);
+                    }}
                     disabled={isStreaming}
                   />
                 )}
