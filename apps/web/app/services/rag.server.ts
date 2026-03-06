@@ -115,6 +115,7 @@ export type AgentEvent =
   | { type: "thought"; thought: string }
   | { type: "tool_call"; name: string; args: any }
   | { type: "tool_observation"; name: string; result: any }
+  | { type: "reranking"; candidates: number; selected: number; tool: string }
   | { type: "final_answer_chunk"; chunk: string }
   | { type: "sources"; sources: any[] }
   | { type: "suggested_followups"; followups: string[] }
@@ -1316,6 +1317,151 @@ export function buildToolSummary(toolName: string, toolResult: any): string {
   return "Results retrieved";
 }
 
+// ---------------------------------------------------------------------------
+// Reranking: LLM-based relevance scoring of tool results
+// ---------------------------------------------------------------------------
+
+const RERANK_ELIGIBLE = new Set(["search_council_records", "search_documents"]);
+
+/** Create a ~120-char summary of a result item for the reranking prompt. */
+function summarizeResult(result: any): string {
+  if (!result || typeof result !== "object") return JSON.stringify(result).slice(0, 120);
+
+  // Check _result_type tag first (set by flattenToolResults)
+  const type = result._result_type;
+
+  if (type === "motion" || result.motion_text || result.plain_english_summary) {
+    return `[Motion] ${(result.plain_english_summary || result.motion_text || "").slice(0, 120)}`;
+  }
+  if (type === "transcript" || (result.text_content && result.speaker_name !== undefined)) {
+    return `[Transcript] ${(result.text_content || "").slice(0, 120)}`;
+  }
+  if (type === "statement" || result.statement_text) {
+    return `[${result.statement_type || "Statement"}] ${(result.statement_text || "").slice(0, 120)}`;
+  }
+  if (type === "agenda_item" || (result.title && result.agenda_items !== undefined) || (result.title && !result.content)) {
+    return `[Agenda] ${(result.plain_english_summary || result.title || "").slice(0, 120)}`;
+  }
+  if (type === "document_section" || (result.content && result.document_id !== undefined)) {
+    return `[Document] ${(result.content || "").slice(0, 120)}`;
+  }
+  if (type === "bylaw" || result.bylaw_number) {
+    return `[Bylaw] ${(result.content || result.title || "").slice(0, 120)}`;
+  }
+  return JSON.stringify(result).slice(0, 120);
+}
+
+interface RerankScore { index: number; score: number; }
+interface RerankOutput { kept: number[]; dropped: number[]; scores: RerankScore[]; latency_ms: number; }
+
+/** Rerank results using Gemini Flash Lite for relevance scoring. */
+async function rerankResults(
+  query: string,
+  results: any[],
+  threshold: number = 3,
+  minKeep: number = 3,
+): Promise<RerankOutput> {
+  // Skip reranking if too few results or no API key
+  if (results.length <= minKeep || getGenAI() === null) {
+    return {
+      kept: results.map((_, i) => i),
+      dropped: [],
+      scores: results.map((_, i) => ({ index: i, score: 10 })),
+      latency_ms: 0,
+    };
+  }
+
+  const summaries = results.map((r, i) => `[${i}] ${summarizeResult(r)}`).join("\n");
+  const prompt = `Rate each search result's relevance to the question on a scale of 0-10. Be strict: only highly relevant results should score above 5.
+
+Question: "${query}"
+
+Results:
+${summaries}
+
+Return JSON: {"scores": [{"index": 0, "score": 8}, ...]}`;
+
+  const start = Date.now();
+  try {
+    const response = await getGenAI()!.models.generateContent({
+      model: "gemini-2.5-flash-lite-preview-06-17",
+      contents: [prompt],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const latency_ms = Date.now() - start;
+    const text = typeof response.text === "string" ? response.text : "";
+    const parsed = JSON.parse(text) as { scores: RerankScore[] };
+
+    // Sort by score descending
+    const sorted = [...parsed.scores].sort((a, b) => b.score - a.score);
+
+    // Keep results above threshold, but always keep at least minKeep
+    const kept: number[] = [];
+    const dropped: number[] = [];
+    for (const s of sorted) {
+      if (s.score >= threshold || kept.length < minKeep) {
+        kept.push(s.index);
+      } else {
+        dropped.push(s.index);
+      }
+    }
+
+    return { kept, dropped, scores: parsed.scores, latency_ms };
+  } catch (e) {
+    // Graceful degradation: if reranking fails, keep all results
+    console.error("Reranking failed, passing all results through:", e);
+    return {
+      kept: results.map((_, i) => i),
+      dropped: [],
+      scores: results.map((_, i) => ({ index: i, score: 10 })),
+      latency_ms: Date.now() - start,
+    };
+  }
+}
+
+/** Flatten a composite tool result into a flat array with _result_type labels. */
+function flattenToolResults(toolName: string, result: any): any[] {
+  if (!result || typeof result !== "object") return [];
+
+  const flat: any[] = [];
+
+  if (toolName === "search_council_records") {
+    for (const m of result.motions || []) flat.push({ ...m, _result_type: "motion" });
+    for (const t of result.transcripts || []) flat.push({ ...t, _result_type: "transcript" });
+    for (const s of result.statements || []) flat.push({ ...s, _result_type: "statement" });
+    for (const a of result.agenda_items || []) flat.push({ ...a, _result_type: "agenda_item" });
+  } else if (toolName === "search_documents") {
+    for (const d of result.document_sections || []) flat.push({ ...d, _result_type: "document_section" });
+    for (const b of result.bylaws || []) flat.push({ ...b, _result_type: "bylaw" });
+  }
+
+  return flat;
+}
+
+/** Reconstruct composite result shape from reranked flat array. */
+function unflattenRerankResults(toolName: string, flat: any[], keptIndices: number[]): any {
+  const kept = new Set(keptIndices);
+  const items = flat.filter((_, i) => kept.has(i));
+
+  if (toolName === "search_council_records") {
+    return {
+      motions: items.filter((r) => r._result_type === "motion").map(({ _result_type, ...rest }) => rest),
+      transcripts: items.filter((r) => r._result_type === "transcript").map(({ _result_type, ...rest }) => rest),
+      statements: items.filter((r) => r._result_type === "statement").map(({ _result_type, ...rest }) => rest),
+      agenda_items: items.filter((r) => r._result_type === "agenda_item").map(({ _result_type, ...rest }) => rest),
+    };
+  }
+  if (toolName === "search_documents") {
+    return {
+      document_sections: items.filter((r) => r._result_type === "document_section").map(({ _result_type, ...rest }) => rest),
+      bylaws: items.filter((r) => r._result_type === "bylaw").map(({ _result_type, ...rest }) => rest),
+    };
+  }
+
+  return items;
+}
+
 /**
  * Truncate tool result JSON to a reasonable size for the context window.
  * Keeps the first `maxItems` items for arrays, or truncates raw strings.
@@ -1425,25 +1571,36 @@ Respond with a single JSON object. No markdown fences.`;
 
     const toolResult = await tool.call(tool_args || {});
 
+    // Rerank eligible tool results for relevance filtering
+    let finalResult = toolResult;
+    if (RERANK_ELIGIBLE.has(tool_name)) {
+      const flat = flattenToolResults(tool_name, toolResult);
+      if (flat.length > 3) {
+        const reranked = await rerankResults(question, flat);
+        finalResult = unflattenRerankResults(tool_name, flat, reranked.kept);
+        yield { type: "reranking", candidates: flat.length, selected: reranked.kept.length, tool: tool_name };
+      }
+    }
+
     // Build a concise but complete context string for the orchestrator
-    const contextStr = truncateForContext(toolResult);
+    const contextStr = truncateForContext(finalResult);
     const observation = `Result from ${tool_name}:\n${contextStr}`;
     history.push(observation);
 
     // Build a short display summary for the client UI
-    const displaySummary = buildToolSummary(tool_name, toolResult);
+    const displaySummary = buildToolSummary(tool_name, finalResult);
 
     yield { type: "tool_observation", name: tool_name, result: displaySummary };
 
     // Collect normalized sources based on tool type
-    if (tool_name === "search_council_records" && typeof toolResult === "object" && toolResult !== null) {
-      if (toolResult.motions?.length) allSources.push(...normalizeMotionSources(toolResult.motions));
-      if (toolResult.transcripts?.length) allSources.push(...normalizeTranscriptSources(toolResult.transcripts));
-      if (toolResult.statements?.length) allSources.push(...normalizeKeyStatementSources(toolResult.statements));
-      if (toolResult.agenda_items?.length) allSources.push(...normalizeAgendaItemSources(toolResult.agenda_items));
-    } else if (tool_name === "search_documents" && typeof toolResult === "object" && toolResult !== null) {
-      if (toolResult.document_sections?.length) allSources.push(...normalizeDocumentSectionSources(toolResult.document_sections));
-      if (toolResult.bylaws?.length) allSources.push(...normalizeBylawSources(toolResult.bylaws));
+    if (tool_name === "search_council_records" && typeof finalResult === "object" && finalResult !== null) {
+      if (finalResult.motions?.length) allSources.push(...normalizeMotionSources(finalResult.motions));
+      if (finalResult.transcripts?.length) allSources.push(...normalizeTranscriptSources(finalResult.transcripts));
+      if (finalResult.statements?.length) allSources.push(...normalizeKeyStatementSources(finalResult.statements));
+      if (finalResult.agenda_items?.length) allSources.push(...normalizeAgendaItemSources(finalResult.agenda_items));
+    } else if (tool_name === "search_documents" && typeof finalResult === "object" && finalResult !== null) {
+      if (finalResult.document_sections?.length) allSources.push(...normalizeDocumentSectionSources(finalResult.document_sections));
+      if (finalResult.bylaws?.length) allSources.push(...normalizeBylawSources(finalResult.bylaws));
     } else if (tool_name === "get_person_info" && typeof toolResult === "object" && toolResult !== null) {
       if (toolResult.transcript_segments?.length) allSources.push(...normalizeTranscriptSources(toolResult.transcript_segments));
       if (toolResult.key_statements?.length) allSources.push(...normalizeKeyStatementSources(toolResult.key_statements));
