@@ -9,9 +9,10 @@ import {
   ChevronRight,
   Filter,
 } from "lucide-react";
+import { normalizeMotionResult } from "../../lib/motion-utils";
 import { cn } from "../../lib/utils";
-import { Badge } from "../ui/badge";
 import type { AgendaItem, Motion, Vote } from "../../lib/types";
+import { MotionOutcomeBadge } from "../motion-outcome-badge";
 import { formatTimestamp } from "../../lib/timeline-utils";
 
 interface MotionsOverviewProps {
@@ -190,11 +191,15 @@ function MotionRow({
         <div
           className={cn(
             "mt-1 w-3 h-3 rounded-full flex-shrink-0",
-            motion.result === "CARRIED"
+            normalizeMotionResult(motion.result) === "passed"
               ? "bg-green-500"
-              : motion.result === "DEFEATED"
+              : normalizeMotionResult(motion.result) === "failed"
                 ? "bg-red-500"
-                : "bg-zinc-400",
+                : normalizeMotionResult(motion.result) === "tabled"
+                  ? "bg-yellow-500"
+                  : normalizeMotionResult(motion.result) === "withdrawn"
+                    ? "bg-zinc-400"
+                    : "bg-zinc-400",
           )}
         />
 
@@ -213,17 +218,13 @@ function MotionRow({
           {/* Meta row */}
           <div className="flex flex-wrap items-center gap-3 mt-3">
             {/* Result badge */}
-            <Badge
-              variant={motion.result === "CARRIED" ? "default" : "destructive"}
+            <MotionOutcomeBadge
+              result={motion.result}
+              showVoteCounts={motion.yes_votes > 0}
+              yesVotes={motion.yes_votes}
+              noVotes={motion.no_votes}
               className="text-xs"
-            >
-              {motion.result || "Pending"}
-              {motion.yes_votes > 0 && (
-                <span className="ml-1 opacity-80">
-                  ({motion.yes_votes}-{motion.no_votes})
-                </span>
-              )}
-            </Badge>
+            />
 
             {/* Mover/Seconder */}
             {(motion.mover_person?.name || motion.mover) && (

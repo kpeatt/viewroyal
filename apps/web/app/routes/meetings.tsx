@@ -61,14 +61,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const supabase = getSupabaseAdminClient();
-    const meetings = await getMeetings(supabase, {
+    const { meetings, statsMap } = await getMeetings(supabase, {
       startDate: `${selectedYear}-01-01`,
       endDate: `${selectedYear}-12-31`,
     });
-    return { meetings, selectedYear, currentYear };
+    return { meetings, statsMap, selectedYear, currentYear };
   } catch (error) {
     console.error("Error loading meetings data:", error);
-    return { meetings: [], selectedYear, currentYear };
+    return { meetings: [], statsMap: {}, selectedYear, currentYear };
   }
 }
 
@@ -82,7 +82,7 @@ export function shouldRevalidate({
 }
 
 export default function Meetings({ loaderData }: Route.ComponentProps) {
-  const { meetings, selectedYear, currentYear } = loaderData;
+  const { meetings, statsMap, selectedYear, currentYear } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // View state (List vs Calendar)
@@ -474,7 +474,7 @@ export default function Meetings({ loaderData }: Route.ComponentProps) {
                 </div>
               ) : (
                 filteredMeetingsForList.map((meeting) => (
-                  <MeetingCard key={meeting.id} meeting={meeting} />
+                  <MeetingCard key={meeting.id} meeting={meeting} stats={statsMap[meeting.id]} />
                 ))
               )}
             </div>

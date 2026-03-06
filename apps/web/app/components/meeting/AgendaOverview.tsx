@@ -22,6 +22,8 @@ import {
 import { cn } from "../../lib/utils";
 import type { AgendaItem, Motion, Vote, DocumentSection, ExtractedDocument } from "../../lib/types";
 import { Badge } from "../ui/badge";
+import { MotionOutcomeBadge } from "../motion-outcome-badge";
+import { normalizeMotionResult } from "../../lib/motion-utils";
 import { formatTimestamp } from "../../lib/timeline-utils";
 import { DocumentSections } from "./DocumentSections";
 
@@ -637,10 +639,12 @@ function AgendaItemRow({
 function MotionResultBadge({ motions }: { motions: Motion[] }) {
   if (!motions || motions.length === 0) return null;
 
-  const allCarried = motions.every((m) => m.result === "Carried");
-  const anyDefeated = motions.some((m) => m.result === "Defeated");
+  // Use normalized results for checking
+  const outcomes = motions.map((m) => normalizeMotionResult(m.result));
+  const allPassed = outcomes.every((o) => o === "passed");
+  const anyFailed = outcomes.some((o) => o === "failed");
 
-  if (allCarried) {
+  if (allPassed) {
     return (
       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200">
         <ThumbsUp className="w-3 h-3 mr-1" />
@@ -649,7 +653,7 @@ function MotionResultBadge({ motions }: { motions: Motion[] }) {
     );
   }
 
-  if (anyDefeated) {
+  if (anyFailed) {
     return (
       <Badge
         variant="destructive"
@@ -699,23 +703,7 @@ function MotionCardInline({
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2 flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant={
-                motion.result === "Carried"
-                  ? "default"
-                  : motion.result === "Defeated"
-                    ? "destructive"
-                    : "secondary"
-              }
-              className={cn(
-                "h-5 text-[10px] px-1.5",
-                motion.result === "Carried" &&
-                  "bg-emerald-600 hover:bg-emerald-700",
-                motion.result === "Defeated" && "bg-red-600 hover:bg-red-700",
-              )}
-            >
-              {motion.result || "Motion"}
-            </Badge>
+            <MotionOutcomeBadge result={motion.result} className="h-5 text-[10px] px-1.5" />
             <span className="text-[10px] font-mono text-zinc-400 truncate">
               {motion.mover ? `Moved by ${motion.mover}` : "Mover not recorded"}
             </span>

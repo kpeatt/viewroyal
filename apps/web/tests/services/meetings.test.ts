@@ -34,6 +34,7 @@ function createMockSupabase(builders?: Record<string, any>) {
       }
       return createMockQueryBuilder();
     }),
+    rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
   } as any;
 }
 
@@ -164,7 +165,8 @@ describe("getMeetings", () => {
 
     const result = await getMeetings(supabase);
 
-    expect(result).toEqual([]);
+    expect(result.meetings).toEqual([]);
+    expect(result.statsMap).toEqual({});
   });
 
   it("returns meetings data on success", async () => {
@@ -177,7 +179,7 @@ describe("getMeetings", () => {
 
     const result = await getMeetings(supabase);
 
-    expect(result).toEqual(mockMeetings);
+    expect(result.meetings).toEqual(mockMeetings);
   });
 
   it("throws on Supabase error", async () => {

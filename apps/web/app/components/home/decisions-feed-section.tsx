@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Scale } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { cn, formatDate } from "../../lib/utils";
+import { MotionOutcomeBadge } from "../motion-outcome-badge";
 
 interface Decision {
   id: number;
@@ -101,16 +102,7 @@ export function DecisionsFeedSection({ decisions }: DecisionsFeedSectionProps) {
 
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Result badge */}
-                    <Badge
-                      className={cn(
-                        "text-[10px] border-0",
-                        decision.result === "CARRIED"
-                          ? "bg-green-100 text-green-700 hover:bg-green-100"
-                          : "bg-red-100 text-red-700 hover:bg-red-100"
-                      )}
-                    >
-                      {decision.result === "CARRIED" ? "Carried" : "Defeated"}
-                    </Badge>
+                    <MotionOutcomeBadge result={decision.result} className="text-[10px] border-0" />
 
                     {/* Vote breakdown text */}
                     <span className="text-xs font-medium text-zinc-500">

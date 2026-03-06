@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { IntelligenceSection } from "./intelligence-section";
+import { MotionOutcomeBadge } from "./motion-outcome-badge";
 import { 
   getSpeakerColorIndex, 
   SPEAKER_COLORS, 
@@ -315,17 +316,10 @@ export function MeetingFeed({ transcript, agendaItems, videoUrl, resolveSpeakerN
                     <div className="flex items-center justify-between gap-4 mb-3">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Formal Motion</span>
-                        {motion.result && (
-                          <Badge 
-                            variant={motion.result === "CARRIED" ? "default" : "destructive"} 
-                            className={cn(
-                              "h-5 text-[8px] px-1.5 font-black tracking-widest shadow-sm",
-                              motion.result === "CARRIED" ? "bg-green-600" : "bg-red-600"
-                            )}
-                          >
-                            {motion.result}
-                          </Badge>
-                        )}
+                        <MotionOutcomeBadge
+                          result={motion.result}
+                          className="h-5 text-[8px] px-1.5 font-black tracking-widest shadow-sm"
+                        />
                       </div>
                       <time className="font-mono text-[10px] font-bold text-amber-500 bg-white px-2 py-0.5 rounded-full border border-amber-100 shadow-sm">
                         {Math.floor(item.timestamp / 60)}:{(item.timestamp % 60).toFixed(0).padStart(2, '0')}

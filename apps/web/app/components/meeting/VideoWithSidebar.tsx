@@ -42,6 +42,7 @@ import {
   type SubSegment,
 } from "../../lib/transcript-utils";
 import { EnhancedVideoScrubber } from "./EnhancedVideoScrubber";
+import { MotionOutcomeBadge } from "../motion-outcome-badge";
 
 interface VideoWithSidebarProps {
   videoPlayer: {
@@ -1013,21 +1014,13 @@ function MotionCard({
           </p>
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            {motion.result && (
-              <Badge
-                variant={
-                  motion.result === "CARRIED" ? "default" : "destructive"
-                }
-                className="text-[10px] py-0 px-1.5"
-              >
-                {motion.result}
-                {motion.yes_votes > 0 && (
-                  <span className="ml-1 opacity-80">
-                    ({motion.yes_votes}-{motion.no_votes})
-                  </span>
-                )}
-              </Badge>
-            )}
+            <MotionOutcomeBadge
+              result={motion.result}
+              showVoteCounts={motion.yes_votes > 0}
+              yesVotes={motion.yes_votes}
+              noVotes={motion.no_votes}
+              className="text-[10px] py-0 px-1.5"
+            />
 
             {motion.time_offset_seconds !== undefined && (
               <button

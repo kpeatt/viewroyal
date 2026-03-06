@@ -13,6 +13,7 @@ import type {
   Motion,
 } from "../../lib/types";
 import { cn } from "../../lib/utils";
+import { normalizeMotionResult, OUTCOME_LABELS } from "../../lib/motion-utils";
 
 interface MeetingQuickStatsProps {
   meeting: Meeting;
@@ -211,16 +212,20 @@ function MotionPreview({ motion }: { motion: Motion }) {
   const truncated =
     summary.length > 80 ? summary.substring(0, 80) + "..." : summary;
 
+  const outcome = normalizeMotionResult(motion.result);
+
   return (
     <div className="flex items-start gap-3 p-2 rounded-lg bg-zinc-50 border border-zinc-100">
       <div
         className={cn(
           "mt-0.5 w-2 h-2 rounded-full flex-shrink-0",
-          motion.result === "CARRIED"
+          outcome === "passed"
             ? "bg-green-500"
-            : motion.result === "DEFEATED"
+            : outcome === "failed"
               ? "bg-red-500"
-              : "bg-zinc-400",
+              : outcome === "tabled"
+                ? "bg-yellow-500"
+                : "bg-zinc-400",
         )}
       />
       <div className="flex-1 min-w-0">
@@ -229,14 +234,16 @@ function MotionPreview({ motion }: { motion: Motion }) {
           <span
             className={cn(
               "text-[10px] font-bold uppercase",
-              motion.result === "CARRIED"
+              outcome === "passed"
                 ? "text-green-600"
-                : motion.result === "DEFEATED"
+                : outcome === "failed"
                   ? "text-red-600"
-                  : "text-zinc-500",
+                  : outcome === "tabled"
+                    ? "text-yellow-600"
+                    : "text-zinc-500",
             )}
           >
-            {motion.result || "Pending"}
+            {outcome ? OUTCOME_LABELS[outcome] : "Pending"}
           </span>
           {motion.yes_votes > 0 && (
             <span className="text-[10px] text-zinc-400">

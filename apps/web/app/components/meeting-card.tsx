@@ -8,12 +8,21 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { ProvenanceBadges } from "./meeting/ProvenanceBadges";
+import { TOPIC_COLORS, TOPIC_ICONS, type TopicName, TOPICS } from "../lib/topic-utils";
+
+export interface MeetingStats {
+  motion_carried_count: number;
+  motion_defeated_count: number;
+  motion_other_count: number;
+  topics: string[];
+}
 
 interface MeetingCardProps {
   meeting: Meeting;
+  stats?: MeetingStats;
 }
 
-export function MeetingCard({ meeting }: MeetingCardProps) {
+export function MeetingCard({ meeting, stats }: MeetingCardProps) {
   const today = new Date().toLocaleDateString("en-CA");
   const isPast = meeting.meeting_date < today;
   const hasContent =
@@ -34,6 +43,22 @@ export function MeetingCard({ meeting }: MeetingCardProps) {
   const status = meeting.status || (isPast ? "Completed" : "Planned");
   const Wrapper = hasContent ? Link : "div";
   const wrapperProps = hasContent ? { to: `/meetings/${meeting.id}` } : {};
+
+  // Filter topics to valid TopicName values, exclude General, limit to 4
+  const validTopics = (stats?.topics ?? [])
+    .filter((t): t is TopicName => (TOPICS as readonly string[]).includes(t) && t !== "General")
+    .slice(0, 4);
+
+  const totalMotions = stats
+    ? stats.motion_carried_count + stats.motion_defeated_count + stats.motion_other_count
+    : 0;
+
+  // Truncate summary to ~150 chars
+  const truncatedSummary = meeting.summary
+    ? meeting.summary.length > 150
+      ? meeting.summary.substring(0, 150).replace(/\s+\S*$/, "") + "..."
+      : meeting.summary
+    : null;
 
   return (
     <Wrapper
@@ -92,15 +117,56 @@ export function MeetingCard({ meeting }: MeetingCardProps) {
             {meeting.title}
           </h3>
 
-          {meeting.summary ? (
-            <p className="text-zinc-600 text-sm leading-relaxed">
-              {meeting.summary}
+          {/* Topic Chips */}
+          {validTopics.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {validTopics.map((topic) => {
+                const Icon = TOPIC_ICONS[topic];
+                return (
+                  <span
+                    key={topic}
+                    className={cn(
+                      "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border",
+                      TOPIC_COLORS[topic],
+                    )}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {topic}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Summary Text */}
+          {truncatedSummary ? (
+            <p className="text-zinc-600 text-sm leading-relaxed mb-2">
+              {truncatedSummary}
             </p>
-          ) : (
-            <p className="text-zinc-400 text-sm italic">
+          ) : !meeting.summary ? (
+            <p className="text-zinc-400 text-sm italic mb-2">
               Record processing in progress. Full agenda highlights available
               soon.
             </p>
+          ) : null}
+
+          {/* Motion Tally */}
+          {totalMotions > 0 && (
+            <div className="text-xs font-bold text-zinc-500">
+              {stats!.motion_carried_count > 0 && (
+                <span className="text-green-700">
+                  {stats!.motion_carried_count} carried
+                </span>
+              )}
+              {stats!.motion_carried_count > 0 && stats!.motion_defeated_count > 0 && (
+                <span className="text-zinc-400">, </span>
+              )}
+              {stats!.motion_defeated_count > 0 && (
+                <span className="text-red-700">
+                  {stats!.motion_defeated_count} defeated
+                </span>
+              )}
+            </div>
           )}
         </div>
 

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { formatDate } from "../../lib/utils";
+import { normalizeMotionResult } from "../../lib/motion-utils";
 
 interface RecentMeetingSectionProps {
   meeting: any;
@@ -81,7 +82,7 @@ export function RecentMeetingSection({
                   key={decision.id}
                   className="flex items-start gap-2 text-sm"
                 >
-                  {decision.result === "CARRIED" ? (
+                  {normalizeMotionResult(decision.result) === "passed" ? (
                     <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
                   ) : (
                     <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />

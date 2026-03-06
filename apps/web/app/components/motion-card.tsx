@@ -1,8 +1,8 @@
 import { Gavel, CheckCircle2, XCircle, AlertCircle, PlayCircle } from "lucide-react";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import type { Motion, Vote } from "../lib/types";
+import { MotionOutcomeBadge } from "./motion-outcome-badge";
 
 interface MotionCardProps {
   motion: Motion;
@@ -19,17 +19,10 @@ export function MotionCard({ motion, timestamp, showTimeline = false, onWatchVid
           <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">
             Formal Motion
           </span>
-          {motion.result && (
-            <Badge
-              variant={motion.result === "CARRIED" ? "default" : "destructive"}
-              className={cn(
-                "h-5 text-[8px] px-1.5 font-black tracking-widest shadow-sm",
-                motion.result === "CARRIED" ? "bg-green-600" : "bg-red-600",
-              )}
-            >
-              {motion.result}
-            </Badge>
-          )}
+          <MotionOutcomeBadge
+            result={motion.result}
+            className="h-5 text-[8px] px-1.5 font-black tracking-widest shadow-sm"
+          />
         </div>
         <div className="flex items-center gap-3">
           {(timestamp !== undefined || motion.time_offset_seconds !== null) && (

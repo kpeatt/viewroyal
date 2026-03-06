@@ -3,6 +3,8 @@ import type { TranscriptSegment, AgendaItem } from "../lib/types";
 import { User, Gavel, Activity, ExternalLink, FileText } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { cn } from "~/lib/utils";
+import { MotionOutcomeBadge } from "./motion-outcome-badge";
+import { normalizeMotionResult } from "../lib/motion-utils";
 import { formatTimestamp } from "../lib/timeline-utils";
 import {
   getSpeakerColorIndex,
@@ -336,11 +338,13 @@ export function MeetingTimeline({
                   <span
                     className={cn(
                       "text-[10px] uppercase font-bold tracking-wider",
-                      hoveredEvent.result === "CARRIED"
+                      normalizeMotionResult(hoveredEvent.result) === "passed"
                         ? "text-emerald-400"
-                        : hoveredEvent.result === "DEFEATED"
+                        : normalizeMotionResult(hoveredEvent.result) === "failed"
                           ? "text-rose-400"
-                          : "text-zinc-400",
+                          : normalizeMotionResult(hoveredEvent.result) === "tabled"
+                            ? "text-yellow-400"
+                            : "text-zinc-400",
                     )}
                   >
                     {hoveredEvent.result || "VOTE"}
@@ -531,16 +535,7 @@ export function MeetingTimeline({
                       )}
                     </span>
                     {hoveredEvent.type === "motion" && hoveredEvent.result && (
-                      <Badge
-                        variant={
-                          hoveredEvent.result === "CARRIED"
-                            ? "default"
-                            : "destructive"
-                        }
-                        className="h-5 text-[10px]"
-                      >
-                        {hoveredEvent.result}
-                      </Badge>
+                      <MotionOutcomeBadge result={hoveredEvent.result} className="h-5 text-[10px]" />
                     )}
                   </div>
                 </div>

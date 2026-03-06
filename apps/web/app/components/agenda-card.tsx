@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { MotionOutcomeBadge } from "./motion-outcome-badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { cn } from "../lib/utils";
 import type { AgendaItem } from "../lib/types";
@@ -115,21 +116,7 @@ export function AgendaCard({
 
           <div className="flex items-center gap-3 shrink-0">
             {outcome && (
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full",
-                  outcome === "CARRIED"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700",
-                )}
-              >
-                {outcome === "CARRIED" ? (
-                  <CheckCircle2 className="w-3 h-3" />
-                ) : (
-                  <XCircle className="w-3 h-3" />
-                )}
-                {outcome}
-              </div>
+              <MotionOutcomeBadge result={outcome} className="text-[10px] font-bold" />
             )}
             {isExpanded ? (
               <ChevronUp className="w-5 h-5 text-muted-foreground" />
