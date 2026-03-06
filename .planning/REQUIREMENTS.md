@@ -11,8 +11,8 @@ Requirements for v1.7 View Royal Intelligence. Each maps to roadmap phases.
 
 - [ ] **SRCH-01**: Search results are reranked by LLM relevance scoring before display
 - [ ] **SRCH-02**: RAG agent uses 5 consolidated tools instead of 9 overlapping ones
-- [ ] **SRCH-03**: User can give thumbs up/down feedback on AI answers
-- [ ] **SRCH-04**: RAG traces (query, tools used, latency, sources) are logged for analysis
+- [x] **SRCH-03**: User can give thumbs up/down feedback on AI answers
+- [x] **SRCH-04**: RAG traces (query, tools used, latency, sources) are logged for analysis
 
 ### Council Intelligence
 
@@ -85,8 +85,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SRCH-01 | Phase 38 | Pending |
 | SRCH-02 | Phase 38 | Pending |
-| SRCH-03 | Phase 37 | Pending |
-| SRCH-04 | Phase 37 | Pending |
+| SRCH-03 | Phase 37 | Complete |
+| SRCH-04 | Phase 37 | Complete |
 | CNCL-01 | Phase 39 | Pending |
 | CNCL-02 | Phase 39 | Pending |
 | CNCL-03 | Phase 39 | Pending |
