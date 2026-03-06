@@ -93,7 +93,7 @@
 **Milestone Goal:** Deepen the single-municipality (View Royal) experience with smarter search, richer council member profiles, better meeting UX, and improved email alerts -- making the existing platform substantially more useful before expanding to other municipalities.
 
 - [x] **Phase 37: Eval Foundation + Quick Wins** - RAG observability/feedback infrastructure and zero-backend-work UI improvements (summary cards, outcome badges) (completed 2026-03-06)
-- [ ] **Phase 38: RAG Intelligence** - LLM reranking and consolidated tool set for better answer quality
+- [x] **Phase 38: RAG Intelligence** - LLM reranking and consolidated tool set for better answer quality (completed 2026-03-06)
 - [ ] **Phase 39: Council Intelligence** - Topic taxonomy, AI profiles, key vote detection, and redesigned profile page
 - [ ] **Phase 40: UX Polish + Email** - Financial transparency, meeting attendance info, and improved email digests
 
@@ -184,6 +184,6 @@ Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parall
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 37. Eval Foundation + Quick Wins | 2/2 | Complete    | 2026-03-06 | - |
-| 38. RAG Intelligence | 1/2 | In Progress|  | - |
+| 38. RAG Intelligence | 2/2 | Complete   | 2026-03-06 | - |
 | 39. Council Intelligence | v1.7 | 0/3 | Not started | - |
 | 40. UX Polish + Email | v1.7 | 0/2 | Not started | - |
