@@ -88,7 +88,7 @@
 
 </details>
 
-### 🚧 v1.7 View Royal Intelligence (In Progress)
+### v1.7 View Royal Intelligence (In Progress)
 
 **Milestone Goal:** Deepen the single-municipality (View Royal) experience with smarter search, richer council member profiles, better meeting UX, and improved email alerts -- making the existing platform substantially more useful before expanding to other municipalities.
 
@@ -98,7 +98,7 @@
 - [ ] **Phase 40: UX Polish + Email** - Financial transparency, meeting attendance info, and improved email digests
 
 <details>
-<summary>📋 v1.8 RDOS Ingestion (Deferred)</summary>
+<summary>v1.8 RDOS Ingestion (Deferred)</summary>
 
 **Milestone Goal:** Ingest RDOS Board of Directors meetings (2025+) through the full pipeline -- scrape from Escribemeetings, download YouTube video, diarize, AI refine, and embed -- proving multi-municipality ingestion works end-to-end.
 
@@ -123,11 +123,11 @@ See RDOS requirement details in REQUIREMENTS.md v2 section.
   2. RAG traces (query text, tools invoked, latency, source count) are logged to the database for every AI answer
   3. Meeting list page shows summary cards with key decisions and topic indicators for each meeting
   4. Motion outcomes throughout the app display as colored badges indicating passed, defeated, tabled, or deferred
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 37-01: RAG observability and feedback infrastructure
-- [ ] 37-02: Meeting summary cards and outcome badges
+- [ ] 37-01-PLAN.md -- RAG trace logging and user feedback infrastructure (SRCH-03, SRCH-04)
+- [ ] 37-02-PLAN.md -- Motion outcome badges and enhanced meeting summary cards (MTGX-01, MTGX-02)
 
 ### Phase 38: RAG Intelligence
 **Goal**: AI answers are measurably more relevant through LLM reranking and a streamlined tool set
