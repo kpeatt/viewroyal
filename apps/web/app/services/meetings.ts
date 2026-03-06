@@ -9,6 +9,13 @@ import type {
   ExtractedDocument,
 } from "../lib/types";
 
+export interface MeetingStats {
+  motion_carried_count: number;
+  motion_defeated_count: number;
+  motion_other_count: number;
+  topics: string[];
+}
+
 export interface GetMeetingsOptions {
   limit?: number;
   orderBy?: keyof Meeting;
@@ -80,7 +87,28 @@ export async function getMeetings(
     throw new Error(error.message);
   }
 
-  return (data || []) as unknown as Meeting[];
+  const meetings = (data || []) as unknown as Meeting[];
+
+  // Fetch meeting stats (motion counts + topics) from RPC
+  let statsMap: Record<number, MeetingStats> = {};
+  try {
+    const { data: statsData } = await supabase.rpc("get_meetings_with_stats");
+    if (statsData) {
+      for (const row of statsData as any[]) {
+        statsMap[row.meeting_id] = {
+          motion_carried_count: row.motion_carried_count,
+          motion_defeated_count: row.motion_defeated_count,
+          motion_other_count: row.motion_other_count,
+          topics: row.topics || [],
+        };
+      }
+    }
+  } catch (e) {
+    // Stats are supplementary -- don't fail the whole request
+    console.error("Error fetching meeting stats:", e);
+  }
+
+  return { meetings, statsMap };
 }
 
 export async function getMeetingById(supabase: SupabaseClient, id: string) {

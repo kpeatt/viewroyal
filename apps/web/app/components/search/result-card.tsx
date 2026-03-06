@@ -3,6 +3,8 @@ import { Gavel, MessageSquare, FileText, Mic } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { cn, formatDate } from "../../lib/utils";
 import type { UnifiedSearchResult } from "../../services/hybrid-search.server";
+import { MotionOutcomeBadge } from "../motion-outcome-badge";
+import { trackEvent } from "../../lib/analytics";
 
 // ---------------------------------------------------------------------------
 // Query highlighting
@@ -68,9 +70,10 @@ const TYPE_CONFIG = {
 interface ResultCardProps {
   result: UnifiedSearchResult;
   query: string;
+  position?: number;
 }
 
-export function ResultCard({ result, query }: ResultCardProps) {
+export function ResultCard({ result, query, position }: ResultCardProps) {
   const config = TYPE_CONFIG[result.type];
   const { Icon, iconColor, hoverBorder } = config;
 
@@ -83,6 +86,13 @@ export function ResultCard({ result, query }: ResultCardProps) {
   return (
     <Link
       to={linkTo}
+      onClick={() =>
+        trackEvent("search result clicked", {
+          result_type: result.type,
+          result_position: position,
+          meeting_id: result.meeting_id,
+        })
+      }
       className={cn(
         "block p-5 bg-white rounded-2xl border border-zinc-200 shadow-sm hover:shadow-md transition-all group",
         hoverBorder,
@@ -94,17 +104,7 @@ export function ResultCard({ result, query }: ResultCardProps) {
 
         {/* Type-specific badges */}
         {result.type === "motion" && result.motion_result && (
-          <Badge
-            variant={result.motion_result === "CARRIED" ? "secondary" : "outline"}
-            className={cn(
-              "text-[10px] font-bold",
-              result.motion_result === "CARRIED"
-                ? "bg-green-100 text-green-700 hover:bg-green-100"
-                : "text-zinc-500",
-            )}
-          >
-            {result.motion_result}
-          </Badge>
+          <MotionOutcomeBadge result={result.motion_result} className="text-[10px] font-bold" />
         )}
 
         {result.type === "key_statement" && result.statement_type && (

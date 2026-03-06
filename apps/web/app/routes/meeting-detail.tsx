@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { cn, formatDate, formatRelativeTime } from "../lib/utils";
+import { normalizeMotionResult } from "../lib/motion-utils";
 import {
   getSpeakerColorIndex,
   SPEAKER_COLORS,
@@ -68,6 +69,7 @@ import {
   type MeetingTabId,
 } from "../components/meeting/MeetingTabs";
 import { ProvenanceBadges } from "../components/meeting/ProvenanceBadges";
+import { trackEvent } from "../lib/analytics";
 
 export function HydrateFallback() {
   return <MeetingLoadingSkeleton />;
@@ -295,6 +297,7 @@ export default function MeetingDetail({ loaderData }: any) {
   const videoPlayer = useVideoPlayer({
     directVideoUrl,
     directAudioUrl,
+    meetingId: rawMeeting.id,
     onError: (error) => {
       console.error("[Video] HLS error:", error);
       handleVideoError();
@@ -501,7 +504,14 @@ export default function MeetingDetail({ loaderData }: any) {
             transcript={transcript}
             participantCount={participantCount}
             activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={(tab) => {
+              trackEvent("meeting tab changed", {
+                meeting_id: rawMeeting.id,
+                from_tab: activeTab,
+                to_tab: tab,
+              });
+              setActiveTab(tab);
+            }}
           />
 
           {/* Tab Content */}
@@ -534,7 +544,7 @@ export default function MeetingDetail({ loaderData }: any) {
                             key={decision.id}
                             className="flex items-start gap-2 text-sm"
                           >
-                            {decision.result === "CARRIED" ? (
+                            {normalizeMotionResult(decision.result) === "passed" ? (
                               <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
                             ) : (
                               <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />

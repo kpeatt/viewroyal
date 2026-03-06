@@ -10,6 +10,7 @@ import {
   type AgendaBlockWithMotions,
   type EmbeddedMotion,
 } from "../../lib/timeline-utils";
+import { normalizeMotionResult, OUTCOME_LABELS } from "../../lib/motion-utils";
 import { getSpeakerColorIndex, SPEAKER_COLORS } from "../../lib/colors";
 
 interface EnhancedVideoScrubberProps {
@@ -345,12 +346,10 @@ function MotionMarker({
   // Absolute position for tooltip
   const absoluteX = blockLeft + motion.relativePosition * blockWidth;
 
-  const resultLabel =
-    motion.result === "CARRIED"
-      ? "Motion Carried"
-      : motion.result === "DEFEATED"
-        ? "Motion Defeated"
-        : "Motion";
+  const outcome = normalizeMotionResult(motion.result);
+  const resultLabel = outcome
+    ? `Motion ${OUTCOME_LABELS[outcome]}`
+    : "Motion";
 
   const subLabel = [motion.mover, motion.seconder].filter(Boolean).join(" / ");
 
@@ -385,11 +384,13 @@ function MotionMarker({
         className={cn(
           "w-full h-full rounded-full flex items-center justify-center",
           "shadow-md border border-white/30",
-          motion.result === "CARRIED"
+          outcome === "passed"
             ? "bg-green-500"
-            : motion.result === "DEFEATED"
+            : outcome === "failed"
               ? "bg-red-500"
-              : "bg-zinc-500",
+              : outcome === "tabled"
+                ? "bg-yellow-500"
+                : "bg-zinc-500",
         )}
       >
         <Gavel className="h-2 w-2 text-white" />

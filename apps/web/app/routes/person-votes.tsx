@@ -15,8 +15,8 @@ import {
   Calendar,
 } from "lucide-react";
 import { Separator } from "../components/ui/separator";
-import { Badge } from "../components/ui/badge";
 import { Card, CardContent } from "../components/ui/card";
+import { MotionOutcomeBadge } from "../components/motion-outcome-badge";
 import { Button } from "../components/ui/button";
 import { cn, formatDate } from "../lib/utils";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
@@ -238,18 +238,10 @@ export default function PersonVotes({ loaderData }: Route.ComponentProps) {
                       View Full Meeting
                       <ArrowRight className="h-3 w-3" />
                     </Link>
-                    {v.motions?.result && (
-                      <Badge
-                        variant={
-                          v.motions.result === "CARRIED"
-                            ? "default"
-                            : "destructive"
-                        }
-                        className="text-[9px] font-black h-5 px-2 uppercase tracking-tighter"
-                      >
-                        Motion {v.motions.result}
-                      </Badge>
-                    )}
+                    <MotionOutcomeBadge
+                      result={v.motions?.result}
+                      className="text-[9px] font-black h-5 px-2 uppercase tracking-tighter"
+                    />
                   </div>
                 </div>
               </div>
