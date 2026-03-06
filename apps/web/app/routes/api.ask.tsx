@@ -61,6 +61,15 @@ function createStreamingResponse(question: string, context?: string, municipalit
           } else if (event.type === "tool_call") {
             toolCallCount++;
             toolCalls.push({ name: event.name, args: event.args });
+          } else if (event.type === "reranking") {
+            // Attach reranking metadata to the most recent tool call for traces
+            if (toolCalls.length > 0) {
+              (toolCalls[toolCalls.length - 1] as any).reranking = {
+                candidates: event.candidates,
+                selected: event.selected,
+                tool: event.tool,
+              };
+            }
           } else if (event.type === "sources") {
             sourceCount = (event.sources || []).length;
             sourcesData = event.sources || [];

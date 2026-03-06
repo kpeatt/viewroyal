@@ -304,6 +304,9 @@ export default function SearchPage({ loaderData }: Route.ComponentProps) {
             return newSteps;
           });
           break;
+        case "reranking":
+          setAgentSteps((prev) => [...prev, data as AgentEvent]);
+          break;
         case "final_answer_chunk":
           if (!answerStarted.current) {
             answerStarted.current = true;
