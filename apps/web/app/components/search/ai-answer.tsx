@@ -86,6 +86,17 @@ function ResearchStep({ event }: { event: AgentEvent }) {
       </div>
     );
   }
+  if (event.type === "reranking") {
+    return (
+      <div className="flex items-center gap-2.5 py-1.5 text-sm text-zinc-400">
+        <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+        <span>
+          Ranked {(event as any).candidates} sources &rarr;{" "}
+          {(event as any).selected} most relevant
+        </span>
+      </div>
+    );
+  }
   return null;
 }
 
