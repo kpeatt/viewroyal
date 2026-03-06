@@ -118,6 +118,7 @@ export type AgentEvent =
   | { type: "final_answer_chunk"; chunk: string }
   | { type: "sources"; sources: any[] }
   | { type: "suggested_followups"; followups: string[] }
+  | { type: "trace_id"; traceId: string }
   | { type: "done" };
 
 interface Tool<T extends Record<string, any>, R> {
