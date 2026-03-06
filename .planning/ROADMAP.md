@@ -137,11 +137,11 @@ Plans:
   1. Search results and RAG evidence are reranked by LLM relevance scoring, with the reranking step visible in RAG traces
   2. RAG agent uses approximately 5 consolidated tools instead of the current 9 overlapping ones
   3. Answer quality is maintained or improved as measured by feedback ratings compared to the Phase 37 baseline
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 38-01: RAG tool consolidation
-- [ ] 38-02: LLM reranking
+- [ ] 38-01-PLAN.md -- RAG tool consolidation from 10 to 4, system prompt update, UI labels (SRCH-02)
+- [ ] 38-02-PLAN.md -- LLM reranking with Gemini Flash Lite, trace logging, UI research step (SRCH-01)
 
 ### Phase 39: Council Intelligence
 **Goal**: Users can understand each councillor's priorities, positions, and notable votes through AI-generated profiles grounded in evidence
@@ -184,6 +184,6 @@ Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parall
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 37. Eval Foundation + Quick Wins | 2/2 | Complete    | 2026-03-06 | - |
-| 38. RAG Intelligence | v1.7 | 0/2 | Not started | - |
+| 38. RAG Intelligence | 1/2 | In Progress|  | - |
 | 39. Council Intelligence | v1.7 | 0/3 | Not started | - |
 | 40. UX Polish + Email | v1.7 | 0/2 | Not started | - |
