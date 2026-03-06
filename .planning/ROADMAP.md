@@ -183,7 +183,7 @@ Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parall
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 37. Eval Foundation + Quick Wins | v1.7 | 0/2 | Not started | - |
+| 37. Eval Foundation + Quick Wins | 1/2 | In Progress|  | - |
 | 38. RAG Intelligence | v1.7 | 0/2 | Not started | - |
 | 39. Council Intelligence | v1.7 | 0/3 | Not started | - |
 | 40. UX Polish + Email | v1.7 | 0/2 | Not started | - |
