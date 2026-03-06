@@ -11,6 +11,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   Shield,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { AgentEvent } from "../../services/rag.server";
@@ -137,6 +139,119 @@ function ConfidenceIndicator({ sourceCount }: { sourceCount: number }) {
 }
 
 // ---------------------------------------------------------------------------
+// FeedbackButtons sub-component
+// ---------------------------------------------------------------------------
+
+function FeedbackButtons({ traceId }: { traceId: string }) {
+  const [rating, setRating] = useState<-1 | 1 | null>(null);
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submitFeedback(newRating: -1 | 1, feedbackComment?: string) {
+    try {
+      setSubmitting(true);
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          traceId,
+          rating: newRating,
+          comment: feedbackComment || null,
+        }),
+      });
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 2000);
+    } catch {
+      // Feedback is best-effort -- don't disrupt UX
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleThumbsUp() {
+    if (rating === 1) {
+      setRating(null);
+      return;
+    }
+    setRating(1);
+    setShowComment(false);
+    submitFeedback(1);
+  }
+
+  function handleThumbsDown() {
+    if (rating === -1) {
+      setRating(null);
+      setShowComment(false);
+      return;
+    }
+    setRating(-1);
+    setShowComment(true);
+  }
+
+  function handleCommentSubmit() {
+    if (rating === -1) {
+      submitFeedback(-1, comment);
+      setShowComment(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1">
+        {submitted && (
+          <span className="text-xs text-green-600 mr-1">Thanks!</span>
+        )}
+        <button
+          onClick={handleThumbsUp}
+          disabled={submitting}
+          className={cn(
+            "p-1.5 rounded-md transition-colors",
+            rating === 1
+              ? "text-green-600 bg-green-50"
+              : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100",
+          )}
+          title="Good answer"
+        >
+          <ThumbsUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={handleThumbsDown}
+          disabled={submitting}
+          className={cn(
+            "p-1.5 rounded-md transition-colors",
+            rating === -1
+              ? "text-red-600 bg-red-50"
+              : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100",
+          )}
+          title="Bad answer"
+        >
+          <ThumbsDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {showComment && (
+        <div className="flex gap-2 items-start">
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="What was wrong? (optional)"
+            className="flex-1 text-xs border border-zinc-200 rounded-lg p-2 resize-none h-16 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300"
+          />
+          <button
+            onClick={handleCommentSubmit}
+            disabled={submitting}
+            className="text-xs px-3 py-1.5 bg-zinc-900 text-white rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-50"
+          >
+            Submit
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // AiAnswer main component
 // ---------------------------------------------------------------------------
 
@@ -148,6 +263,7 @@ interface AiAnswerProps {
   sourceCount: number;
   onCopy: () => void;
   copied: boolean;
+  traceId?: string | null;
 }
 
 export function AiAnswer({
@@ -158,6 +274,7 @@ export function AiAnswer({
   sourceCount,
   onCopy,
   copied,
+  traceId,
 }: AiAnswerProps) {
   const [stepsOpen, setStepsOpen] = useState(true);
   const [sourcesOpen, setSourcesOpen] = useState(false);
@@ -267,26 +384,29 @@ export function AiAnswer({
           </div>
         </div>
 
-        {/* Confidence + copy actions after streaming completes */}
+        {/* Confidence + copy + feedback actions after streaming completes */}
         {answer && !isStreaming && (
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-zinc-100">
             <ConfidenceIndicator sourceCount={sourceCount} />
-            <button
-              onClick={onCopy}
-              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
-            >
-              {copied ? (
-                <>
-                  <Check className="h-3.5 w-3.5 text-green-500" />
-                  <span className="text-green-600">Copied</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" />
-                  <span>Copy answer</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              {traceId && <FeedbackButtons traceId={traceId} />}
+              <button
+                onClick={onCopy}
+                className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <span className="text-green-600">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy answer</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>
