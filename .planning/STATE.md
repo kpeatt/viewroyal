@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: View Royal Intelligence
-status: executing
-stopped_at: Completed 37-01-PLAN.md
-last_updated: "2026-03-06T03:14:15.000Z"
-last_activity: 2026-03-06 -- Completed Phase 37 Plan 01 (RAG traces + feedback)
+status: phase-complete
+stopped_at: Phase 37 complete - all plans done
+last_updated: "2026-03-06T03:18:00Z"
+last_activity: 2026-03-06 -- Completed Phase 37 Plan 02 (motion badges + meeting cards)
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 12
+  completed_plans: 2
+  percent: 25
 ---
 
 # Project State
@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 37 (1 of 4 in v1.7) (Eval Foundation + Quick Wins)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-03-06 -- Completed Phase 37 Plan 01 (RAG traces + feedback)
+Plan: 2 of 2 in current phase
+Status: Phase 37 complete
+Last activity: 2026-03-06 -- Completed Phase 37 Plan 02 (motion badges + enhanced meeting cards)
 
-Progress: [█░░░░░░░░░] 12%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 77 (across v1.0-v1.7)
+- Total plans completed: 78 (across v1.0-v1.7)
 - Average duration: 4.0min
 - Total execution time: ~6 hours
 
@@ -58,6 +58,8 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 - v1.7 refocused on View Royal Intelligence: search quality, council profiles, meeting UX, email digests
 - RAG observability (Phase 37) must precede RAG improvements (Phase 38) for measurement baseline
 - Topic taxonomy (Phase 39) extends existing 8-topic system, does not replace it
+- normalizeMotionResult is canonical way to compare motion results (handles all 11 DB values + typos)
+- MotionOutcomeBadge replaces all inline badge logic for motion outcomes
 - Fire-and-forget trace insert to avoid blocking SSE stream (Phase 37-01)
 - Dual-write PostHog + Supabase rag_traces for gradual migration path (Phase 37-01)
 - Anonymous feedback via client_ip with partial unique indexes for upsert (Phase 37-01)
@@ -100,9 +102,9 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-06T03:14:15.000Z
-Stopped at: Completed 37-01-PLAN.md
-Resume file: .planning/phases/37-eval-foundation-quick-wins/37-01-SUMMARY.md
+Last session: 2026-03-06T03:18:00Z
+Stopped at: Phase 37 complete - ready for Phase 38
+Resume file: .planning/phases/37-eval-foundation-quick-wins/37-02-SUMMARY.md
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
