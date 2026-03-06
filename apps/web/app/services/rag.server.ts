@@ -783,57 +783,54 @@ async function search_key_statements({
   }
 }
 
-/**
- * A tool to get the current date.
- * @returns The current date in YYYY-MM-DD format.
- */
-async function get_current_date(): Promise<string> {
-  return new Date().toISOString().split("T")[0];
-}
-
 const tools: Tool<any, any>[] = [
   {
-    name: "get_statements_by_person",
+    name: "search_council_records",
     description:
-      "get_statements_by_person(person_name: string, topic?: string) — Finds all statements made by a specific person, optionally filtered by a keyword topic. This is the most reliable way to find what someone said, as it handles speaker aliases.",
-    call: async ({
-      person_name,
-      topic,
-    }: {
-      person_name: string;
-      topic?: string;
-    }) => get_statements_by_person({ person_name, topic }),
-  },
-  {
-    name: "get_voting_history",
-    description:
-      "get_voting_history(person_name: string) — Retrieves the complete voting record for a specific person, including their overall stats, a sample of their opposed votes, and their most recent votes. Use this when asked about a person's voting record, stances, or political beliefs.",
-    call: async ({ person_name }: { person_name: string }) =>
-      get_voting_history(person_name),
-  },
-  {
-    name: "search_motions",
-    description:
-      'search_motions(query: string, after_date?: string) — Searches for motions relevant to a query. Useful for finding official decisions, outcomes, and discussions on specific topics. after_date filters to results on or after that date (YYYY-MM-DD format, e.g. "2025-01-01").',
+      'search_council_records(query: string, after_date?: string) — Searches ALL meeting content in parallel: motions, transcript segments, key statements, and agenda items. Returns an object with { motions, transcripts, statements, agenda_items }. Use for broad questions about what council discussed, decided, or debated on a topic. after_date filters to results on or after that date (YYYY-MM-DD format, e.g. "2025-01-01").',
     call: async ({
       query,
       after_date,
     }: {
       query: string;
       after_date?: string;
-    }) => search_motions({ query, after_date }),
+    }) => {
+      const [motions, transcripts, statements, agenda_items] =
+        await Promise.all([
+          search_motions({ query, after_date }),
+          search_transcript_segments({ query, after_date }),
+          search_key_statements({ query, after_date }),
+          search_agenda_items({ query, after_date }),
+        ]);
+      return { motions, transcripts, statements, agenda_items };
+    },
   },
   {
-    name: "search_transcript_segments",
+    name: "search_documents",
     description:
-      'search_transcript_segments(query: string, after_date?: string) — Performs a general semantic search for transcript segments relevant to a topic. Use this when you want to find out what was said about a topic by *anyone*, not a specific person. after_date filters to results on or after that date (YYYY-MM-DD format, e.g. "2025-01-01").',
+      'search_documents(query: string, after_date?: string, type?: "staff_reports" | "bylaws" | "all") — Searches attached PDFs (staff reports, consultant reports, policy papers, financial analyses) and/or municipal bylaw text. Set type to "staff_reports" for document sections only, "bylaws" for bylaw text only, or "all" (default) for both in parallel. Returns { document_sections, bylaws }. **Staff recommendations, background analysis, financial details, and proposals live here.** after_date filters document sections on or after that date.',
     call: async ({
       query,
       after_date,
+      type,
     }: {
       query: string;
       after_date?: string;
-    }) => search_transcript_segments({ query, after_date }),
+      type?: "staff_reports" | "bylaws" | "all";
+    }) => {
+      if (type === "bylaws") {
+        return { document_sections: [], bylaws: await search_bylaws({ query }) };
+      }
+      if (type === "staff_reports") {
+        return { document_sections: await search_document_sections({ query, after_date }), bylaws: [] };
+      }
+      // "all" or undefined — run both in parallel
+      const [document_sections, bylaws] = await Promise.all([
+        search_document_sections({ query, after_date }),
+        search_bylaws({ query }),
+      ]);
+      return { document_sections, bylaws };
+    },
   },
   {
     name: "search_matters",
@@ -843,52 +840,50 @@ const tools: Tool<any, any>[] = [
       search_matters({ query, status }),
   },
   {
-    name: "search_agenda_items",
+    name: "get_person_info",
     description:
-      'search_agenda_items(query: string, after_date?: string) — Searches agenda items by keyword match on title, summary, and debate summary. Returns structured data including plain_english_summary, debate_summary, category, financial_cost, and meeting date. Best for finding what was discussed at specific meetings or getting summaries of discussions on a topic. Use short keywords (e.g. "housing", "budget", "park"). Note: Returns AI-generated summaries — may not contain specific details from attached staff reports. For detailed recommendations or analysis, also search document_sections.',
+      'get_person_info(person_name: string, include?: "statements" | "votes" | "both") — Looks up everything about a specific person. Set include to "statements" for their statements only, "votes" for voting record only, or "both" (default) for all. Returns combined object with transcript_segments, key_statements, and/or voting stats. Handles speaker aliases.',
     call: async ({
-      query,
-      after_date,
+      person_name,
+      include,
     }: {
-      query: string;
-      after_date?: string;
-    }) => search_agenda_items({ query, after_date }),
-  },
-  {
-    name: "search_key_statements",
-    description:
-      'search_key_statements(query: string, after_date?: string) — Searches extracted key statements (claims, proposals, objections, recommendations, financial impacts, public input) using semantic search. Returns speaker, statement type, statement text, and context. Best for finding specific claims or positions on a topic, or when you need attributed quotes.',
-    call: async ({
-      query,
-      after_date,
-    }: {
-      query: string;
-      after_date?: string;
-    }) => search_key_statements({ query, after_date }),
-  },
-  {
-    name: "search_document_sections",
-    description:
-      'search_document_sections(query: string, after_date?: string) — Searches the full text of PDF documents (staff reports, consultant reports, policy papers, financial analyses) attached to meetings. **This is where staff recommendations, background analysis, financial details, and proposals live.** Use this FIRST for questions about recommendations, reports, or detailed facts. Also use when agenda item search returns thin results — the detail is in the documents, not the summaries. after_date filters to results on or after that date (YYYY-MM-DD format).',
-    call: async ({ query, after_date }: { query: string; after_date?: string }) =>
-      search_document_sections({ query, after_date }),
-  },
-  {
-    name: "search_bylaws",
-    description:
-      'search_bylaws(query: string) — Searches municipal bylaws and bylaw sections using hybrid search (semantic + keyword). Returns relevant bylaw provisions, regulations, fee schedules, and zoning rules. Use when the user asks about specific rules, regulations, bylaws, fees, zoning, permits, or municipal governance provisions.',
-    call: async ({ query }: { query: string }) => search_bylaws({ query }),
-  },
-  {
-    name: "get_current_date",
-    description:
-      "get_current_date() — Returns the current date in YYYY-MM-DD format. Use this as the first step for any question involving a recent timeframe like 'recent', 'latest', 'this year', 'last month', etc.",
-    call: async () => get_current_date(),
+      person_name: string;
+      include?: "statements" | "votes" | "both";
+    }) => {
+      if (include === "statements") {
+        return await get_statements_by_person({ person_name });
+      }
+      if (include === "votes") {
+        return await get_voting_history(person_name);
+      }
+      // "both" or undefined — run both in parallel
+      const [statementsResult, votesResult] = await Promise.all([
+        get_statements_by_person({ person_name }),
+        get_voting_history(person_name),
+      ]);
+      // Either result could be a string (error message) — merge objects only
+      const merged: Record<string, any> = {};
+      if (typeof statementsResult === "object" && statementsResult !== null) {
+        Object.assign(merged, statementsResult);
+      } else {
+        merged.statements_error = statementsResult;
+      }
+      if (typeof votesResult === "object" && votesResult !== null) {
+        Object.assign(merged, votesResult);
+      } else {
+        merged.votes_error = votesResult;
+      }
+      return merged;
+    },
   },
 ];
 
 function getOrchestratorSystemPrompt(municipalityName = "Town of View Royal") {
+  const todayDate = new Date().toISOString().split("T")[0];
+
   return `You are a research agent for the ${municipalityName}, British Columbia. Citizens ask you questions about their municipal council and you gather evidence from council records to answer them.
+
+Today's date is ${todayDate}. Use this for any temporal references like "recent", "this year", "last month", etc.
 
 You operate in a loop. Each turn you output **exactly one raw JSON object** — no markdown fences, no commentary:
 
@@ -902,15 +897,12 @@ A separate synthesis model will write the final user-facing answer from your gat
 
 ## Understanding the Data
 
-Each tool searches a different type of content. Knowing what lives where is critical:
+You have 4 consolidated tools that search different types of council records:
 
-- **Document sections** (\`search_document_sections\`) = Full text from attached PDFs — staff reports, consultant reports, policy papers, financial analyses. **The richest source of factual content.** Contains staff recommendations, background analysis, proposals, financial figures, technical details. Documents are often posted before a meeting, so for upcoming meetings this may be the only source.
-- **Agenda items** (\`search_agenda_items\`) = AI-generated summaries of each discussion topic. Good for structure and overview, but summaries miss specific details from attached staff reports. Uses keyword matching only.
-- **Key statements** (\`search_key_statements\`) = Extracted quotes attributed to specific speakers (claims, proposals, objections, recommendations). Best for "who said what."
-- **Motions** (\`search_motions\`) = Formal motions with vote results. Best for decisions and outcomes.
-- **Transcript segments** (\`search_transcript_segments\`) = Verbatim diarized speech. Best for exact quotes and debate context.
-- **Matters** (\`search_matters\`) = High-level topics spanning multiple meetings. Best for "what's happening with X."
-- **Bylaws** (\`search_bylaws\`) = Municipal bylaw text in sections. Best for rules, regulations, fees, zoning.
+- **\`search_council_records\`** — Searches ALL meeting content in parallel: motions (formal decisions with vote results), transcript segments (verbatim speech), key statements (attributed quotes), and agenda items (discussion summaries). This is your primary tool for most questions.
+- **\`search_documents\`** — Searches attached PDFs (staff reports, consultant reports, policy papers, financial analyses) and/or municipal bylaw text. **Staff recommendations, background analysis, financial details, and proposals live here.** Use type="staff_reports" for documents only, type="bylaws" for bylaws only, or omit for both.
+- **\`search_matters\`** — Searches high-level topics that span multiple meetings. Best for "what's happening with X" or tracking the history of a specific issue.
+- **\`get_person_info\`** — Looks up everything about a specific person: their statements, voting record, or both. Handles speaker aliases.
 
 ## Strategy
 
@@ -918,19 +910,18 @@ Each tool searches a different type of content. Knowing what lives where is crit
 
 | Question type | Start with | Why |
 |---|---|---|
-| Staff recommendations, proposals, reports, analysis | \`search_document_sections\` | Staff reports are PDFs — content lives in document sections |
-| What was discussed about X? | \`search_agenda_items\` then \`search_document_sections\` | Agenda = overview, documents = detail |
-| What decisions were made? | \`search_motions\` | Motions have vote outcomes |
-| Who said what about X? | \`search_key_statements\` or \`get_statements_by_person\` | Attributed statements |
-| What are the rules about X? | \`search_bylaws\` | Bylaw text |
+| Staff recommendations, proposals, reports, analysis | \`search_documents\` (type: "staff_reports") | Staff reports are PDFs — content lives in document sections |
+| What was discussed about X? | \`search_council_records\` then \`search_documents\` | Council records = overview + debate, documents = detail |
+| What decisions were made? | \`search_council_records\` | Includes motions with vote outcomes |
+| Who said what about X? | \`get_person_info\` or \`search_council_records\` | Person-specific or broad attributed statements |
+| What are the rules about X? | \`search_documents\` (type: "bylaws") | Bylaw text |
 | What's council working on? | \`search_matters\` | Cross-meeting topic tracking |
-| Upcoming/recent meeting content | \`search_document_sections\` + \`search_agenda_items\` | Documents posted before meeting, summaries may lag |
-| Recent events | Call \`get_current_date\` first, then use after_date | Temporal filtering |
-| Specific person's views | \`get_statements_by_person\` or \`get_voting_history\` | Person-specific tools |
+| Upcoming/recent meeting content | \`search_documents\` + \`search_council_records\` with after_date | Documents posted before meeting, summaries may lag |
+| Specific person's views | \`get_person_info\` | Statements + voting record combined |
 
 **2. Fallback rules — switch tools, don't retry:**
-- If \`search_agenda_items\` returns no or thin results → try \`search_document_sections\`. The detailed content is in the PDFs.
-- For recommendations, analysis, financial details, background → start with \`search_document_sections\`. These are in staff reports, not agenda summaries.
+- If \`search_council_records\` returns thin results → try \`search_documents\`. The detailed content is in the PDFs.
+- For recommendations, analysis, financial details, background → start with \`search_documents\` (type: "staff_reports"). These are in staff reports, not agenda summaries.
 - **Never retry the same tool more than once with rephrased keywords.** Switch to a different tool instead.
 
 **3. Show your reasoning in thoughts.** In your "thought" field, explain your REASONING — not just your plan:
@@ -939,20 +930,20 @@ Each tool searches a different type of content. Knowing what lives where is crit
 - How this builds on previous results (if not the first call).
 
 Examples:
-- Bad thought: "I'll search agenda items for recommendations"
-- Good thought: "The user is asking about staff recommendations, which come from staff reports. Staff reports are PDFs stored as document sections, not in agenda summaries. I'll search document_sections first."
-- Bad thought: "Let me try agenda items again with different keywords"
-- Good thought: "Agenda items returned only high-level summaries without the specific financial figures. The detailed analysis is in the attached staff report. Switching to search_document_sections."
+- Bad thought: "I'll search council records for recommendations"
+- Good thought: "The user is asking about staff recommendations, which come from staff reports. Staff reports are PDFs stored as document sections. I'll use search_documents with type='staff_reports' first."
+- Bad thought: "Let me try council records again with different keywords"
+- Good thought: "Council records returned high-level summaries but not the specific financial figures. The detailed analysis is in the attached staff report. Switching to search_documents."
 
 **4. Craft good search queries.** Short, specific phrases work best:
 - Good: "affordable housing development"
 - Bad: "What has the council discussed regarding affordable housing developments in the town?"
 
-**5. Know when to stop.** 2-4 tool calls is typical. **Use at least 2 different tools** for substantive questions — cross-referencing gives richer answers. After each result, assess: do you have enough specific evidence (dates, names, quotes, vote counts) to answer? If yes, finalize.
+**5. Know when to stop.** 2-3 tool calls is typical. Each consolidated tool searches multiple data sources in parallel, so fewer calls are needed. After each result, assess: do you have enough specific evidence (dates, names, quotes, vote counts) to answer? If yes, finalize.
 
 **6. Common mistakes to avoid:**
-- Don't retry agenda item search with synonyms — switch to document_sections or another tool instead.
-- Agenda summaries are AI-generated overviews — not the full staff report. If you need specifics, search documents.
+- Don't retry the same tool with synonyms — switch to a different tool instead.
+- Agenda summaries are AI-generated overviews — not the full staff report. If you need specifics, use search_documents.
 - For upcoming meetings, documents may be the only available source (no transcript or summary yet).
 - Never call the same tool with the same arguments twice.
 
@@ -1264,35 +1255,6 @@ export function buildToolSummary(toolName: string, toolResult: any): string {
     const n = toolResult.length;
 
     switch (toolName) {
-      case "search_motions": {
-        const dateRange = extractDateRange(toolResult);
-        return `Found ${n} motion${n !== 1 ? "s" : ""}${dateRange}`;
-      }
-      case "search_bylaws": {
-        const uniqueNums = [...new Set(toolResult.map((r: any) => r.bylaw_number).filter(Boolean))];
-        const bylawInfo = uniqueNums.length > 0 ? ` from Bylaw${uniqueNums.length !== 1 ? "s" : ""} ${uniqueNums.join(", ")}` : "";
-        return `Found ${n} bylaw section${n !== 1 ? "s" : ""}${bylawInfo}`;
-      }
-      case "search_key_statements": {
-        const speakers = [...new Set(toolResult.map((r: any) => r.speaker_name).filter(Boolean))];
-        const speakerInfo = speakers.length > 0 ? ` from ${speakers.join(", ")}` : "";
-        const dateRange = extractDateRange(toolResult);
-        return `Found ${n} statement${n !== 1 ? "s" : ""}${speakerInfo}${dateRange}`;
-      }
-      case "search_transcript_segments": {
-        const speakers = [...new Set(toolResult.map((r: any) => r.speaker_name).filter(Boolean))];
-        const speakerInfo = speakers.length > 0 ? ` from ${speakers.join(", ")}` : "";
-        const dateRange = extractDateRange(toolResult);
-        return `Found ${n} transcript segment${n !== 1 ? "s" : ""}${speakerInfo}${dateRange}`;
-      }
-      case "search_document_sections": {
-        const dateRange = extractDateRange(toolResult);
-        return `Found ${n} document section${n !== 1 ? "s" : ""}${dateRange}`;
-      }
-      case "search_agenda_items": {
-        const dateRange = extractDateRange(toolResult);
-        return `Found ${n} agenda item${n !== 1 ? "s" : ""}${dateRange}`;
-      }
       case "search_matters": {
         const statuses = [...new Set(toolResult.map((r: any) => r.status).filter(Boolean))];
         const statusInfo = statuses.length > 0 ? ` (${statuses.join(", ")})` : "";
@@ -1303,13 +1265,48 @@ export function buildToolSummary(toolName: string, toolResult: any): string {
     }
   }
 
-  // Object results (non-array)
+  // Object results (non-array) — consolidated tools return composite objects
   if (typeof toolResult === "object" && toolResult !== null) {
-    if (toolName === "get_voting_history" && toolResult.stats) {
+    if (toolName === "search_council_records") {
+      const m = toolResult.motions?.length || 0;
+      const t = toolResult.transcripts?.length || 0;
+      const s = toolResult.statements?.length || 0;
+      const a = toolResult.agenda_items?.length || 0;
+      const total = m + t + s + a;
+      const parts: string[] = [];
+      if (m > 0) parts.push(`${m} motion${m !== 1 ? "s" : ""}`);
+      if (t > 0) parts.push(`${t} transcript${t !== 1 ? "s" : ""}`);
+      if (s > 0) parts.push(`${s} statement${s !== 1 ? "s" : ""}`);
+      if (a > 0) parts.push(`${a} agenda item${a !== 1 ? "s" : ""}`);
+      return total === 0 ? "No results found" : `Found ${parts.join(", ")}`;
+    }
+    if (toolName === "search_documents") {
+      const d = toolResult.document_sections?.length || 0;
+      const b = toolResult.bylaws?.length || 0;
+      const total = d + b;
+      const parts: string[] = [];
+      if (d > 0) parts.push(`${d} document section${d !== 1 ? "s" : ""}`);
+      if (b > 0) parts.push(`${b} bylaw section${b !== 1 ? "s" : ""}`);
+      return total === 0 ? "No results found" : `Found ${parts.join(", ")}`;
+    }
+    if (toolName === "get_person_info") {
+      const segments = toolResult.transcript_segments?.length || 0;
+      const statements = toolResult.key_statements?.length || 0;
+      const hasVotes = toolResult.stats != null;
+      const parts: string[] = [];
+      if (segments + statements > 0) parts.push(`${segments + statements} statement${(segments + statements) !== 1 ? "s" : ""}`);
+      if (hasVotes) {
+        const s = toolResult.stats;
+        parts.push(`voting record (${s.total} votes)`);
+      }
+      return parts.length === 0 ? "No results found" : `Found ${parts.join(", ")}`;
+    }
+    // Legacy fallback for voting history / statements objects
+    if (toolResult.stats) {
       const s = toolResult.stats;
       return `Found voting record: ${s.total} votes (${s.yes} yes, ${s.no} no)`;
     }
-    if (toolName === "get_statements_by_person") {
+    if (toolResult.transcript_segments || toolResult.key_statements) {
       const segments = toolResult.transcript_segments?.length || 0;
       const statements = toolResult.key_statements?.length || 0;
       return `Found ${segments + statements} statement${(segments + statements) !== 1 ? "s" : ""}`;
@@ -1439,42 +1436,21 @@ Respond with a single JSON object. No markdown fences.`;
     yield { type: "tool_observation", name: tool_name, result: displaySummary };
 
     // Collect normalized sources based on tool type
-    if (Array.isArray(toolResult) && toolResult.length > 0) {
-      if (tool_name === "search_matters") {
-        allSources.push(...normalizeMatterSources(toolResult));
-      } else if (tool_name === "search_agenda_items") {
-        allSources.push(...normalizeAgendaItemSources(toolResult));
-      } else if (tool_name === "search_key_statements") {
-        allSources.push(...normalizeKeyStatementSources(toolResult));
-      } else if (tool_name === "search_document_sections") {
-        allSources.push(...normalizeDocumentSectionSources(toolResult));
-      } else if (tool_name === "search_bylaws") {
-        allSources.push(...normalizeBylawSources(toolResult));
-      } else {
-        const first = toolResult[0];
-        if (first.text_content !== undefined) {
-          allSources.push(...normalizeTranscriptSources(toolResult));
-        } else if (
-          first.plain_english_summary !== undefined ||
-          first.result !== undefined
-        ) {
-          allSources.push(...normalizeMotionSources(toolResult));
-        }
-      }
-    } else if (typeof toolResult === "object" && toolResult !== null) {
-      if (toolResult.opposed_votes || toolResult.recent_votes) {
-        allSources.push(
-          ...normalizeVoteSources(toolResult.opposed_votes || []),
-          ...normalizeVoteSources(toolResult.recent_votes || []),
-        );
-      }
-      // Handle get_statements_by_person which now returns { transcript_segments, key_statements }
-      if (toolResult.transcript_segments) {
-        allSources.push(...normalizeTranscriptSources(toolResult.transcript_segments));
-      }
-      if (toolResult.key_statements) {
-        allSources.push(...normalizeKeyStatementSources(toolResult.key_statements));
-      }
+    if (tool_name === "search_council_records" && typeof toolResult === "object" && toolResult !== null) {
+      if (toolResult.motions?.length) allSources.push(...normalizeMotionSources(toolResult.motions));
+      if (toolResult.transcripts?.length) allSources.push(...normalizeTranscriptSources(toolResult.transcripts));
+      if (toolResult.statements?.length) allSources.push(...normalizeKeyStatementSources(toolResult.statements));
+      if (toolResult.agenda_items?.length) allSources.push(...normalizeAgendaItemSources(toolResult.agenda_items));
+    } else if (tool_name === "search_documents" && typeof toolResult === "object" && toolResult !== null) {
+      if (toolResult.document_sections?.length) allSources.push(...normalizeDocumentSectionSources(toolResult.document_sections));
+      if (toolResult.bylaws?.length) allSources.push(...normalizeBylawSources(toolResult.bylaws));
+    } else if (tool_name === "get_person_info" && typeof toolResult === "object" && toolResult !== null) {
+      if (toolResult.transcript_segments?.length) allSources.push(...normalizeTranscriptSources(toolResult.transcript_segments));
+      if (toolResult.key_statements?.length) allSources.push(...normalizeKeyStatementSources(toolResult.key_statements));
+      if (toolResult.opposed_votes?.length) allSources.push(...normalizeVoteSources(toolResult.opposed_votes));
+      if (toolResult.recent_votes?.length) allSources.push(...normalizeVoteSources(toolResult.recent_votes));
+    } else if (tool_name === "search_matters" && Array.isArray(toolResult) && toolResult.length > 0) {
+      allSources.push(...normalizeMatterSources(toolResult));
     }
   }
 
