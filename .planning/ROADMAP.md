@@ -152,12 +152,12 @@ Plans:
   2. Each councillor has an AI-generated profile summary synthesizing their voting record, speaking patterns, and stance positions
   3. Key votes are algorithmically detected and displayed (minority position votes, close votes, ally breaks)
   4. Council member profile page shows at-a-glance stats card, AI summary, policy positions organized by topic, and a key votes section
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 39-01: Topic taxonomy and agenda item classification
-- [ ] 39-02: AI profile generation and key vote detection
-- [ ] 39-03: Council member profile page redesign
+- [ ] 39-01-PLAN.md -- Topic taxonomy classification and agenda item backfill (CNCL-01)
+- [ ] 39-02-PLAN.md -- Key vote detection algorithm and AI profile narrative generation (CNCL-02, CNCL-03)
+- [ ] 39-03-PLAN.md -- Council member profile page redesign with new tabs (CNCL-04)
 
 ### Phase 40: UX Polish + Email
 **Goal**: Users see financial data on relevant agenda items, know how to attend upcoming meetings, and receive better-designed email digests
