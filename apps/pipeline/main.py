@@ -83,6 +83,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--reextract-images",
+        action="store_true",
+        help="Re-extract documents that have images to get Gemini-powered image-to-section mapping. "
+             "Clears extraction data for image-bearing PDFs, then runs normal extraction. "
+             "Use --limit N and --concurrency N as with --extract-documents.",
+    )
+
+    parser.add_argument(
         "--extract-documents",
         action="store_true",
         help="Run Gemini-powered document extraction on all agenda PDFs (resumable). "
@@ -151,6 +159,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--classify-topics",
+        action="store_true",
+        help="Classify all agenda items into topic taxonomy (backfill agenda_item_topics table).",
+    )
+
+    parser.add_argument(
         "--generate-stances",
         action="store_true",
         help="Generate AI stance summaries for all councillors using Gemini. "
@@ -183,7 +197,18 @@ if __name__ == "__main__":
 
         app = Archiver(municipality=municipality)
 
-        if args.check_updates:
+        if args.classify_topics:
+            print("\n--- Classifying Agenda Items into Topics ---")
+            from pipeline.profiling.topic_classifier import classify_topics
+            from pipeline import config as pipeline_config
+            from supabase import create_client as create_sb_client
+            sb_key = pipeline_config.SUPABASE_SECRET_KEY or pipeline_config.SUPABASE_KEY
+            if not pipeline_config.SUPABASE_URL or not sb_key:
+                print("  [!] SUPABASE_URL/KEY not set, skipping topic classification.")
+            else:
+                sb = create_sb_client(pipeline_config.SUPABASE_URL, sb_key)
+                classify_topics(sb)
+        elif args.check_updates:
             print("\n--- Update Check (Dry Run) ---")
             app.run_update_check()
         elif args.update_mode:
@@ -223,6 +248,13 @@ if __name__ == "__main__":
         elif args.embed_only:
             print("\n--- Embedding Only ---")
             app._embed_new_content()
+        elif args.reextract_images:
+            print("\n--- Re-extract Documents with Images (Gemini Image Matching) ---")
+            app.prepare_reextract_images()
+            app.backfill_extracted_documents(concurrency=args.concurrency, limit=args.limit)
+            if not args.skip_embed:
+                print("\n--- Embedding Document Sections ---")
+                app._embed_new_content()
         elif args.extract_documents:
             if args.batch:
                 print("\n--- Extract Documents (Gemini Batch API) ---")
