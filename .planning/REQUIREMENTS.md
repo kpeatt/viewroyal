@@ -17,8 +17,8 @@ Requirements for v1.7 View Royal Intelligence. Each maps to roadmap phases.
 ### Council Intelligence
 
 - [x] **CNCL-01**: Agenda items are classified into a hierarchical topic taxonomy
-- [ ] **CNCL-02**: AI-generated profile summaries synthesize voting, speaking, and stance data per councillor
-- [ ] **CNCL-03**: Key votes are algorithmically detected (minority position, close votes, ally breaks)
+- [x] **CNCL-02**: AI-generated profile summaries synthesize voting, speaking, and stance data per councillor
+- [x] **CNCL-03**: Key votes are algorithmically detected (minority position, close votes, ally breaks)
 - [ ] **CNCL-04**: Profile page shows at-a-glance stats, AI summary, policy positions by topic, and key votes
 
 ### Meeting UX
@@ -88,8 +88,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SRCH-03 | Phase 37 | Complete |
 | SRCH-04 | Phase 37 | Complete |
 | CNCL-01 | Phase 39 | Complete |
-| CNCL-02 | Phase 39 | Pending |
-| CNCL-03 | Phase 39 | Pending |
+| CNCL-02 | Phase 39 | Complete |
+| CNCL-03 | Phase 39 | Complete |
 | CNCL-04 | Phase 39 | Pending |
 | MTGX-01 | Phase 37 | Complete |
 | MTGX-02 | Phase 37 | Complete |
