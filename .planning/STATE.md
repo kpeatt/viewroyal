@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Phase 38: RAG Intelligence
+**Current focus:** Phase 39: Council Intelligence
 
 ## Current Position
 
-Phase: 38 (2 of 4 in v1.7) (RAG Intelligence)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: completed
-Last activity: 2026-03-06 -- Completed Phase 38 Plan 02 (LLM reranking)
+Phase: 39 (3 of 4 in v1.7) (Council Intelligence)
+Plan: 1 of 3 in current phase
+Status: executing
+Last activity: 2026-03-12 -- Completed Phase 39 Plan 01 (Topic Classification)
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [██████████] 100%
 - Trend: Stable
 | Phase 38 P01 | 6min | 2 tasks | 2 files |
 | Phase 38 P02 | 3min | 2 tasks | 4 files |
+| Phase 39 P01 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 - [Phase 38]: Consolidated 10 RAG tools to 4: search_council_records, search_documents, search_matters, get_person_info
 - [Phase 38]: Eliminated get_current_date tool -- date injected into system prompt instead
 - [Phase 38]: Used Gemini Flash Lite for LLM reranking of search results with flatten-rerank-unflatten pattern
+- [Phase 39]: SQL-first topic classification via bulk RPC, Gemini fallback for unmapped categories
+- [Phase 39]: Single Gemini call batches all distinct unmapped categories for efficiency
 
 ### Pending Todos
 
@@ -107,9 +110,9 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-12T15:15:15.029Z
-Stopped at: Phase 39 context gathered
-Resume file: .planning/phases/39-council-intelligence/39-CONTEXT.md
+Last session: 2026-03-13T05:15:32Z
+Stopped at: Completed 39-01-PLAN.md
+Resume file: .planning/phases/39-council-intelligence/39-01-SUMMARY.md
 
 ### Paused Work: Phase 7.1
 Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
