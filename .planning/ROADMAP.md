@@ -185,5 +185,5 @@ Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parall
 |-------|-----------|----------------|--------|-----------|
 | 37. Eval Foundation + Quick Wins | 2/2 | Complete    | 2026-03-06 | - |
 | 38. RAG Intelligence | 2/2 | Complete    | 2026-03-06 | - |
-| 39. Council Intelligence | 3/3 | Complete   | 2026-03-13 | - |
+| 39. Council Intelligence | 3/3 | Complete    | 2026-03-13 | - |
 | 40. UX Polish + Email | v1.7 | 0/2 | Not started | - |
