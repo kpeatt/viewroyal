@@ -403,6 +403,24 @@ export interface MeetingDigest {
   }[];
 }
 
+export interface KeyVote {
+  id: number;
+  person_id: number;
+  motion_id: number;
+  vote: string;
+  detection_type: string[];
+  composite_score: number;
+  context_summary: string | null;
+  ally_breaks: Array<{ person_id: number; person_name: string; usual_alignment: number }> | null;
+  vote_split: string | null;
+  generated_at: string;
+  // Joined fields
+  motion_text?: string;
+  meeting_id?: number;
+  meeting_date?: string;
+  agenda_item_title?: string;
+}
+
 export interface NearbyMatter {
   id: number;
   title: string;
