@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { KeyVote } from "../lib/types";
 
 // ── Type Definitions ──
 
@@ -40,6 +41,8 @@ export interface CouncillorHighlights {
   person_id: number;
   highlights: CouncillorHighlight[];
   overview: string;
+  narrative: string | null;
+  narrative_generated_at: string | null;
   generated_at: string;
 }
 
@@ -169,7 +172,7 @@ export async function getCouncillorHighlights(
 ): Promise<CouncillorHighlights | null> {
   const { data, error } = await supabase
     .from("councillor_highlights")
-    .select("*")
+    .select("id, person_id, highlights, overview, narrative, narrative_generated_at, generated_at")
     .eq("person_id", personId)
     .maybeSingle();
 
@@ -179,4 +182,62 @@ export async function getCouncillorHighlights(
   }
 
   return data as CouncillorHighlights | null;
+}
+
+/**
+ * Get top key votes for a councillor, ranked by composite score.
+ * Joins to motions, meetings, and agenda_items for display context.
+ */
+export async function getKeyVotes(
+  supabase: SupabaseClient,
+  personId: number,
+  limit = 15,
+): Promise<KeyVote[]> {
+  const { data, error } = await supabase
+    .from("key_votes")
+    .select(`
+      id, person_id, motion_id, vote, detection_type, composite_score,
+      context_summary, ally_breaks, vote_split, generated_at,
+      motions!inner (
+        text_content,
+        meeting_id,
+        meetings!inner ( meeting_date ),
+        agenda_items!inner ( title )
+      )
+    `)
+    .eq("person_id", personId)
+    .order("composite_score", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching key votes:", error);
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    person_id: row.person_id,
+    motion_id: row.motion_id,
+    vote: row.vote,
+    detection_type: row.detection_type,
+    composite_score: row.composite_score,
+    context_summary: row.context_summary,
+    ally_breaks: row.ally_breaks,
+    vote_split: row.vote_split,
+    generated_at: row.generated_at,
+    motion_text: row.motions?.text_content,
+    meeting_id: row.motions?.meeting_id,
+    meeting_date: row.motions?.meetings?.meeting_date,
+    agenda_item_title: row.motions?.agenda_items?.title,
+  })) as KeyVote[];
+}
+
+/**
+ * Get all key votes for a councillor (no limit).
+ */
+export async function getAllKeyVotes(
+  supabase: SupabaseClient,
+  personId: number,
+): Promise<KeyVote[]> {
+  return getKeyVotes(supabase, personId, 1000);
 }
