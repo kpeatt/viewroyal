@@ -628,3 +628,248 @@ def generate_councillor_highlights(
     from pipeline.profiling.profile_agent import generate_all_profiles
 
     generate_all_profiles(supabase, person_id=person_id, force=force)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# COUNCILLOR NARRATIVE PROFILES
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _gather_narrative_evidence(supabase, person_id: int) -> dict:
+    """Gather comprehensive evidence for generating a councillor narrative profile.
+
+    Synthesizes data from multiple sources:
+    - Stances (from councillor_stances table)
+    - Speaking time patterns
+    - Key votes (from key_votes table, if populated)
+    - Existing highlights/overview
+
+    Returns dict with all evidence organized for the Gemini prompt.
+    """
+    evidence = {
+        "stances": [],
+        "key_votes": [],
+        "highlights": [],
+        "overview": "",
+        "speaking_time": [],
+    }
+
+    # 1. Councillor stances (per-topic positions)
+    try:
+        stances_result = supabase.table("councillor_stances").select(
+            "topic, position, position_score, summary, confidence, statement_count"
+        ).eq("person_id", person_id).execute()
+        evidence["stances"] = stances_result.data or []
+    except Exception as e:
+        logger.warning("Error fetching stances for person %d: %s", person_id, e)
+
+    # 2. Key votes (if already detected)
+    try:
+        kv_result = supabase.table("key_votes").select(
+            "vote, detection_type, composite_score, context_summary, vote_split, "
+            "motions!inner(text_content, result, meetings!inner(meeting_date), "
+            "agenda_items(title))"
+        ).eq("person_id", person_id).order("composite_score", desc=True).limit(15).execute()
+        evidence["key_votes"] = kv_result.data or []
+    except Exception as e:
+        logger.warning("Error fetching key votes for person %d: %s", person_id, e)
+
+    # 3. Existing highlights
+    try:
+        highlights_result = supabase.table("councillor_highlights").select(
+            "highlights, overview"
+        ).eq("person_id", person_id).execute()
+        if highlights_result.data:
+            row = highlights_result.data[0]
+            evidence["highlights"] = row.get("highlights", []) or []
+            evidence["overview"] = row.get("overview", "") or ""
+    except Exception as e:
+        logger.warning("Error fetching highlights for person %d: %s", person_id, e)
+
+    # 4. Speaking time by topic (approximate from key_statements)
+    try:
+        ks_result = supabase.table("key_statements").select(
+            "agenda_items!inner(category)"
+        ).eq("person_id", person_id).not_.is_("agenda_item_id", "null").execute()
+        if ks_result.data:
+            topic_counts: dict[str, int] = {}
+            for row in ks_result.data:
+                category = row.get("agenda_items", {}).get("category", "")
+                topic = _normalize_category_to_topic(category)
+                topic_counts[topic] = topic_counts.get(topic, 0) + 1
+            # Sort by count descending
+            evidence["speaking_time"] = sorted(
+                [{"topic": t, "statement_count": c} for t, c in topic_counts.items()],
+                key=lambda x: x["statement_count"],
+                reverse=True,
+            )
+    except Exception as e:
+        logger.warning("Error fetching speaking time for person %d: %s", person_id, e)
+
+    return evidence
+
+
+def _build_narrative_prompt(person_name: str, evidence: dict) -> str:
+    """Build a Gemini prompt for generating a 2-3 paragraph councillor narrative."""
+    sections = []
+
+    # Stances section
+    if evidence["stances"]:
+        stance_text = "Policy Positions by Topic:\n"
+        for s in evidence["stances"]:
+            conf = s.get("confidence", "unknown")
+            stance_text += (
+                f"  - {s['topic']}: {s['position']} (score: {s.get('position_score', 0):.1f}, "
+                f"confidence: {conf}, evidence items: {s.get('statement_count', 0)})\n"
+                f"    Summary: {s.get('summary', 'N/A')}\n"
+            )
+        sections.append(stance_text)
+
+    # Key votes section
+    if evidence["key_votes"]:
+        kv_text = "Notable Votes:\n"
+        for kv in evidence["key_votes"][:10]:
+            motion = kv.get("motions", {}) or {}
+            meeting = motion.get("meetings", {}) or {}
+            agenda = motion.get("agenda_items", {}) or {}
+            title = agenda.get("title") if isinstance(agenda, dict) else None
+            kv_text += (
+                f"  - [{meeting.get('meeting_date', '?')}] Voted {kv['vote']} "
+                f"({kv.get('vote_split', '?')}) on: {title or (motion.get('text_content', '') or '')[:80]}\n"
+                f"    Notable because: {', '.join(kv.get('detection_type', []))}\n"
+                f"    Context: {kv.get('context_summary', 'N/A')}\n"
+            )
+        sections.append(kv_text)
+
+    # Speaking patterns
+    if evidence["speaking_time"]:
+        sp_text = "Topics Most Spoken About (by statement count):\n"
+        for st in evidence["speaking_time"][:8]:
+            sp_text += f"  - {st['topic']}: {st['statement_count']} statements\n"
+        sections.append(sp_text)
+
+    # Existing highlights
+    if evidence["highlights"]:
+        hl_text = "Previously Identified Notable Positions:\n"
+        for h in evidence["highlights"][:5]:
+            if isinstance(h, dict):
+                hl_text += f"  - {h.get('title', 'Unknown')}: {h.get('summary', '')}\n"
+        sections.append(hl_text)
+
+    evidence_text = "\n".join(sections) if sections else "Limited data available."
+
+    return f"""You are writing a profile narrative for a municipal councillor based on their voting record, speaking patterns, and policy positions.
+
+Councillor: {person_name}
+
+Evidence:
+{evidence_text}
+
+Write a 2-3 paragraph narrative profile that covers:
+1. Overall priorities and what this councillor cares about most
+2. Notable patterns in voting and speaking behavior
+3. Evolution over time (if detectable from the data)
+
+Rules:
+- Write in third person ("Councillor {person_name}...")
+- Ground all claims in specific evidence (topics, vote patterns, position scores)
+- Use measured, neutral language -- describe positions without editorializing
+- If evidence is limited, say so explicitly rather than speculating
+- Do not include any JSON formatting -- write plain prose paragraphs
+- Keep total length to 150-250 words
+- Do not include a title or heading -- just the paragraphs
+"""
+
+
+def generate_councillor_narratives(
+    supabase, gemini_model: str | None = None, person_id: int | None = None
+):
+    """Generate 2-3 paragraph AI narrative profiles for councillors.
+
+    Synthesizes voting record, speaking patterns, key votes, and stance data
+    into a rich narrative stored in councillor_highlights.narrative.
+
+    The existing overview field is left intact for backward compatibility.
+
+    Args:
+        supabase: Supabase client instance
+        gemini_model: Optional override for the Gemini model name
+        person_id: Optional - generate for only this person ID
+    """
+    global GEMINI_MODEL
+    if gemini_model:
+        GEMINI_MODEL = gemini_model
+
+    # Fetch councillors
+    if person_id:
+        result = supabase.table("people").select("id, name").eq("id", person_id).execute()
+    else:
+        result = supabase.table("people").select("id, name").eq("is_councillor", True).execute()
+
+    councillors = result.data or []
+    if not councillors:
+        print("[Narratives] No councillors found.")
+        return
+
+    print(f"[Narratives] Generating narrative profiles for {len(councillors)} councillor(s)...")
+
+    total_generated = 0
+    total_errors = 0
+
+    for councillor in councillors:
+        c_id = councillor["id"]
+        c_name = councillor["name"]
+
+        print(f"[Narratives] Processing {c_name}...")
+
+        # Gather all evidence
+        evidence = _gather_narrative_evidence(supabase, c_id)
+
+        # Check if we have enough data
+        total_evidence = (
+            len(evidence["stances"])
+            + len(evidence["key_votes"])
+            + len(evidence["highlights"])
+        )
+        if total_evidence == 0:
+            print(f"[Narratives]   Skipping {c_name} -- no evidence available")
+            continue
+
+        # Build prompt and call Gemini
+        prompt = _build_narrative_prompt(c_name, evidence)
+        narrative_text = _call_gemini(prompt, label=f"narrative-{c_name}")
+
+        if not narrative_text:
+            print(f"[Narratives]   Error: No response from Gemini for {c_name}")
+            total_errors += 1
+            time.sleep(RATE_LIMIT_DELAY)
+            continue
+
+        # Clean up the response
+        narrative = narrative_text.strip()
+        if narrative.startswith("```"):
+            narrative = narrative.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        # Upsert into councillor_highlights
+        try:
+            supabase.table("councillor_highlights").upsert(
+                {
+                    "person_id": c_id,
+                    "narrative": narrative,
+                    "narrative_generated_at": "now()",
+                },
+                on_conflict="person_id",
+            ).execute()
+            total_generated += 1
+            word_count = len(narrative.split())
+            print(f"[Narratives]   Generated {word_count}-word narrative for {c_name}")
+        except Exception as e:
+            logger.error("Failed to upsert narrative for person %d: %s", c_id, e)
+            total_errors += 1
+
+        time.sleep(RATE_LIMIT_DELAY)
+
+    print(
+        f"\n[Narratives] Generated {total_generated} narratives for "
+        f"{len(councillors)} councillor(s), {total_errors} errors"
+    )

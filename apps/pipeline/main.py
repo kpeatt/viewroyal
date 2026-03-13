@@ -176,6 +176,18 @@ if __name__ == "__main__":
         help="Generate councillor overview + notable policy positions using Gemini. "
              "Use --target to generate for a specific person ID only.",
     )
+    parser.add_argument(
+        "--detect-key-votes",
+        action="store_true",
+        help="Detect key votes (minority, close, ally breaks) for all councillors. "
+             "Use --target to detect for a specific person ID only.",
+    )
+    parser.add_argument(
+        "--generate-profiles",
+        action="store_true",
+        help="Generate enhanced AI narrative profiles for all councillors. "
+             "Use --target to generate for a specific person ID only.",
+    )
 
     args = parser.parse_args()
 
@@ -227,6 +239,30 @@ if __name__ == "__main__":
             print("\n--- Generating Councillor Highlights ---")
             person_id = int(args.target) if args.target else None
             app.generate_highlights(person_id=person_id, force=args.force)
+        elif args.detect_key_votes:
+            print("\n--- Detecting Key Votes ---")
+            from pipeline.profiling.key_vote_detector import detect_all_key_votes
+            from pipeline import config as pipeline_config
+            from supabase import create_client as create_sb_client
+            sb_key = pipeline_config.SUPABASE_SECRET_KEY or pipeline_config.SUPABASE_KEY
+            if not pipeline_config.SUPABASE_URL or not sb_key:
+                print("  [!] SUPABASE_URL/KEY not set, skipping key vote detection.")
+            else:
+                sb = create_sb_client(pipeline_config.SUPABASE_URL, sb_key)
+                person_id = int(args.target) if args.target else None
+                detect_all_key_votes(sb, person_id=person_id)
+        elif args.generate_profiles:
+            print("\n--- Generating Enhanced AI Narrative Profiles ---")
+            from pipeline.profiling.stance_generator import generate_councillor_narratives
+            from pipeline import config as pipeline_config
+            from supabase import create_client as create_sb_client
+            sb_key = pipeline_config.SUPABASE_SECRET_KEY or pipeline_config.SUPABASE_KEY
+            if not pipeline_config.SUPABASE_URL or not sb_key:
+                print("  [!] SUPABASE_URL/KEY not set, skipping profile generation.")
+            else:
+                sb = create_sb_client(pipeline_config.SUPABASE_URL, sb_key)
+                person_id = int(args.target) if args.target else None
+                generate_councillor_narratives(sb, person_id=person_id)
         elif args.target:
             # Targeted mode: diarize → ingest → embed for a single meeting
             folder = app._resolve_target(args.target)
