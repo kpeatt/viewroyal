@@ -116,11 +116,12 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 | 17 | Sync GitHub issues and project board with shipped milestones + v1.7 tracking | 2026-03-05 | d17b012d | [17-update-the-github-issues-and-projects-wi](./quick/17-update-the-github-issues-and-projects-wi/) |
 | 18 | Investigate why Mar 3 and Mar 10 videos missing | 2026-03-23 | -- | [18-investigate-why-mar-3-and-mar-10-videos-](./quick/18-investigate-why-mar-3-and-mar-10-videos-/) |
 | 19 | Fix Mar 17 Public Hearing and Council meeting shared video bug | 2026-03-23 | 07e9cb57 | [19-fix-mar-17-public-hearing-and-council-me](./quick/19-fix-mar-17-public-hearing-and-council-me/) |
+| 20 | Fix agenda/transcript sidebar alignment on large screens | 2026-03-23 | cf907592 | [20-fix-agenda-transcript-sidebar-alignment-](./quick/20-fix-agenda-transcript-sidebar-alignment-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-23T18:08:42Z
-Stopped at: Completed quick task 19
+Last session: 2026-03-23T18:31:10Z
+Stopped at: Completed quick task 20
 Resume file: None
 
 ### Paused Work: Phase 7.1
