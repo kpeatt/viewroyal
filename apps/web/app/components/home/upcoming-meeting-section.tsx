@@ -1,7 +1,8 @@
 import { Link } from "react-router";
-import { Calendar, ArrowRight } from "lucide-react";
+import { Calendar, ArrowRight, MapPin, Video, Clock } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { formatDate } from "../../lib/utils";
+import type { AttendanceInfo } from "../../lib/attendance";
 
 interface AgendaItem {
   title: string;
@@ -18,6 +19,7 @@ interface UpcomingMeetingSectionProps {
     has_agenda?: boolean;
     agendaPreview: AgendaItem[];
     organizations?: { name: string };
+    attendanceInfo?: AttendanceInfo | null;
   } | null;
 }
 
@@ -70,9 +72,42 @@ export function UpcomingMeetingSection({
           <h3 className="text-lg font-bold text-zinc-900 mb-1 group-hover:text-blue-600 transition-colors">
             {meeting.title}
           </h3>
-          <p className="text-sm text-zinc-500 mb-3">
+          <p className="text-sm text-zinc-500 mb-1">
             {formatDate(meeting.meeting_date)}
           </p>
+
+          {meeting.attendanceInfo && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3">
+              {meeting.attendanceInfo.startTime && (
+                <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+                  <Clock className="h-3 w-3" />
+                  {meeting.attendanceInfo.startTime}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+                <MapPin className="h-3 w-3" />
+                {meeting.attendanceInfo.venue}
+              </span>
+              {meeting.attendanceInfo.watchLink && (
+                <span
+                  className="inline-flex items-center gap-1 text-xs text-blue-600"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Video className="h-3 w-3" />
+                  <a
+                    href={meeting.attendanceInfo.watchLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
+                    {meeting.attendanceInfo.watchLabel || "Watch online"}
+                  </a>
+                </span>
+              )}
+            </div>
+          )}
+
+          {!meeting.attendanceInfo && <div className="mb-2" />}
 
           {meeting.agendaPreview?.length > 0 ? (
             <div className="border-t border-zinc-100 pt-3">

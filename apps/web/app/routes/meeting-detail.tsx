@@ -5,6 +5,9 @@ import {
   getExtractedDocumentsForMeeting,
 } from "../services/meetings";
 import { createSupabaseServerClient } from "../lib/supabase.server";
+import { getAttendanceInfo } from "../lib/attendance";
+import type { AttendanceInfo } from "../lib/attendance";
+import { getMunicipality } from "../services/municipality";
 import type {
   Meeting,
   AgendaItem,
@@ -46,6 +49,9 @@ import {
   CheckCircle2,
   XCircle,
   Mic,
+  MapPin,
+  Video,
+  MessageSquare,
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { cn, formatDate, formatRelativeTime } from "../lib/utils";
@@ -143,13 +149,23 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const [data, documentSections, extractedDocuments] = await Promise.all([
+    const [data, documentSections, extractedDocuments, municipality] = await Promise.all([
       getMeetingById(supabase, id),
       getDocumentSectionsForMeeting(supabase, id),
       getExtractedDocumentsForMeeting(supabase, id),
+      getMunicipality(supabase).catch(() => null),
     ]);
 
-    return { ...data, documentSections, extractedDocuments };
+    // Only show attendance info for future meetings (Vancouver timezone)
+    const today = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/Vancouver",
+    });
+    const isFutureMeeting = data.meeting?.meeting_date >= today;
+    const attendanceInfo = isFutureMeeting && municipality
+      ? getAttendanceInfo(municipality.meta, data.meeting?.meta, data.meeting?.type)
+      : null;
+
+    return { ...data, documentSections, extractedDocuments, attendanceInfo };
   } catch (error: any) {
     console.error("[meeting-detail loader]", error?.message || error);
     if (error.message === "Meeting Not Found") {
@@ -175,6 +191,7 @@ export default function MeetingDetail({ loaderData }: any) {
     activeCouncilMemberIds,
     documentSections,
     extractedDocuments,
+    attendanceInfo,
   } = loaderData;
 
   // Hydrate data from normalized people map
@@ -478,6 +495,88 @@ export default function MeetingDetail({ loaderData }: any) {
             </div>
           </div>
         </header>
+
+        {/* Attendance Info (future meetings only) */}
+        {attendanceInfo && (
+          <div className="mb-6 rounded-2xl border border-emerald-200/50 bg-emerald-50/50 p-5">
+            <h2 className="text-sm font-bold text-emerald-900 mb-3 flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-emerald-600" />
+              How to Attend
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              {/* Venue */}
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-medium text-zinc-900">{attendanceInfo.venue}</div>
+                  <a
+                    href={attendanceInfo.mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    {attendanceInfo.address}
+                  </a>
+                </div>
+              </div>
+
+              {/* Watch Online */}
+              {attendanceInfo.watchLink && (
+                <div className="flex items-start gap-2">
+                  <Video className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-zinc-900">Watch Online</div>
+                    <a
+                      href={attendanceInfo.watchLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      {attendanceInfo.watchLabel || "Watch live"}
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Meeting Time */}
+              {attendanceInfo.startTime && (
+                <div className="flex items-start gap-2">
+                  <Clock className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-zinc-900">Meeting Time</div>
+                    <span className="text-xs text-zinc-500">{attendanceInfo.startTime}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Public Input */}
+              {attendanceInfo.publicInputProcess && (
+                <div className="flex items-start gap-2 sm:col-span-2 lg:col-span-3">
+                  <MessageSquare className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-zinc-900">Public Input</div>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                      {attendanceInfo.publicInputProcess}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Special Instructions */}
+              {attendanceInfo.specialInstructions && (
+                <div className="flex items-start gap-2 sm:col-span-2 lg:col-span-3">
+                  <Sparkles className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-zinc-900">Note</div>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                      {attendanceInfo.specialInstructions}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-6">
           {/* Video Player */}

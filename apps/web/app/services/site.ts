@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getAttendanceInfo } from "../lib/attendance";
 
 export async function getPublicNotices(rssUrl?: string) {
   if (!rssUrl) return [];
@@ -77,7 +78,7 @@ export async function getAboutStats(supabase: SupabaseClient) {
   };
 }
 
-export async function getHomeData(supabase: SupabaseClient) {
+export async function getHomeData(supabase: SupabaseClient, municipalityMeta?: any) {
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Vancouver",
   });
@@ -111,7 +112,7 @@ export async function getHomeData(supabase: SupabaseClient) {
       supabase
         .from("meetings")
         .select(
-          "id, title, meeting_date, type, has_agenda, organizations(name)",
+          "id, title, meeting_date, type, has_agenda, meta, organizations(name)",
         )
         .gte("meeting_date", today)
         .order("meeting_date", { ascending: true })
@@ -328,9 +329,13 @@ export async function getHomeData(supabase: SupabaseClient) {
     };
   });
 
+  const attendanceInfo = upcomingMeeting && municipalityMeta
+    ? getAttendanceInfo(municipalityMeta, upcomingMeeting.meta, upcomingMeeting.type)
+    : null;
+
   return {
     upcomingMeeting: upcomingMeeting
-      ? { ...upcomingMeeting, agendaPreview }
+      ? { ...upcomingMeeting, agendaPreview, attendanceInfo }
       : null,
     recentMeeting,
     recentMeetingStats,
