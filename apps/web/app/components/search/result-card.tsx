@@ -79,9 +79,9 @@ function getResultUrl(result: UnifiedSearchResult): string {
         : `/meetings/${result.meeting_id}`;
 
     case "document_section":
-      // Link to document viewer if we have the document ID, otherwise meeting page with agenda anchor
-      if (result.document_id)
-        return `/meetings/${result.meeting_id}/documents/${result.document_id}`;
+      // Link to document viewer (uses extracted_document_id, not document_id)
+      if (result.extracted_document_id)
+        return `/meetings/${result.meeting_id}/documents/${result.extracted_document_id}`;
       if (result.agenda_item_id)
         return `/meetings/${result.meeting_id}#agenda-${result.agenda_item_id}`;
       return `/meetings/${result.meeting_id}`;
