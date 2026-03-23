@@ -182,10 +182,10 @@ export function VideoWithSidebar({
 
   return (
     <div className="bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
-      <div className="flex flex-col lg:flex-row lg:aspect-video lg:max-h-[70vh]">
+      <div className="flex flex-col lg:flex-row lg:max-h-[70vh]">
         {/* Video Player */}
         <div
-          className={cn("relative", sidebarCollapsed ? "flex-1" : "lg:w-2/3")}
+          className={cn("relative lg:aspect-video", sidebarCollapsed ? "flex-1" : "lg:w-2/3")}
         >
           <div className="aspect-video lg:aspect-auto lg:absolute lg:inset-0 bg-black relative group">
             {/* Video Loading State */}
