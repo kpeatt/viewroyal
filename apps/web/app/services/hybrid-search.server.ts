@@ -347,7 +347,7 @@ export async function hybridSearchAll(
   }
 
   if (shouldSearch("document_section") && embedding) {
-    promises.push(hybridSearchDocumentSections(query, embedding, 10, dateFrom, dateTo));
+    promises.push(hybridSearchDocumentSections(query, embedding, 15, dateFrom, dateTo));
   }
 
   if (shouldSearch("transcript_segment")) {

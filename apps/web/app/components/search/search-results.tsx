@@ -1,6 +1,9 @@
+import { useState, useEffect } from "react";
 import type { UnifiedSearchResult } from "../../services/hybrid-search.server";
 import { ResultCard } from "./result-card";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 // ---------------------------------------------------------------------------
 // SearchResults component
@@ -19,6 +22,16 @@ export function SearchResults({
   isLoading,
   activeTypes,
 }: SearchResultsProps) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Reset visible count when results change (new search)
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [results]);
+
+  const visibleResults = results.slice(0, visibleCount);
+  const hasMore = results.length > visibleCount;
+
   return (
     <div className="space-y-4">
       {/* Loading skeleton */}
@@ -46,13 +59,25 @@ export function SearchResults({
       {/* Results list */}
       {!isLoading && results.length > 0 && (
         <div className="space-y-3">
-          {results.map((result) => (
+          {visibleResults.map((result, index) => (
             <ResultCard
               key={`${result.type}-${result.id}`}
               result={result}
               query={query}
+              position={index}
             />
           ))}
+
+          {/* Show more button */}
+          {hasMore && (
+            <button
+              onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              className="w-full py-3 text-sm font-medium text-zinc-500 hover:text-zinc-700 bg-white rounded-2xl border border-zinc-200 hover:border-zinc-300 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <ChevronDown className="h-4 w-4" />
+              Show more ({results.length - visibleCount} remaining)
+            </button>
+          )}
         </div>
       )}
 
