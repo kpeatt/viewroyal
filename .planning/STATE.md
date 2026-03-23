@@ -117,11 +117,12 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 | 18 | Investigate why Mar 3 and Mar 10 videos missing | 2026-03-23 | -- | [18-investigate-why-mar-3-and-mar-10-videos-](./quick/18-investigate-why-mar-3-and-mar-10-videos-/) |
 | 19 | Fix Mar 17 Public Hearing and Council meeting shared video bug | 2026-03-23 | 07e9cb57 | [19-fix-mar-17-public-hearing-and-council-me](./quick/19-fix-mar-17-public-hearing-and-council-me/) |
 | 20 | Fix agenda/transcript sidebar alignment on large screens | 2026-03-23 | cf907592 | [20-fix-agenda-transcript-sidebar-alignment-](./quick/20-fix-agenda-transcript-sidebar-alignment-/) |
+| 21 | Fix search result cards to deep-link to specific items | 2026-03-23 | 0463b45e | [21-fix-search-result-cards-link-to-items](./quick/21-fix-search-result-cards-link-to-items/) |
 
 ## Session Continuity
 
-Last session: 2026-03-23T18:31:10Z
-Stopped at: Completed quick task 20
+Last session: 2026-03-23T18:44:47Z
+Stopped at: Completed quick task 21
 Resume file: None
 
 ### Paused Work: Phase 7.1
