@@ -30,8 +30,8 @@ Requirements for v1.7 View Royal Intelligence. Each maps to roadmap phases.
 
 ### Email & Notifications
 
-- [ ] **MAIL-01**: Email digest has improved mobile-friendly design with meeting summary at top
-- [ ] **MAIL-02**: Email includes upcoming meeting dates with attendance information
+- [x] **MAIL-01**: Email digest has improved mobile-friendly design with meeting summary at top
+- [x] **MAIL-02**: Email includes upcoming meeting dates with attendance information
 
 ## v2 Requirements
 
@@ -95,8 +95,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MTGX-02 | Phase 37 | Complete |
 | MTGX-03 | Phase 40 | Complete |
 | MTGX-04 | Phase 40 | Complete |
-| MAIL-01 | Phase 40 | Pending |
-| MAIL-02 | Phase 40 | Pending |
+| MAIL-01 | Phase 40 | Complete |
+| MAIL-02 | Phase 40 | Complete |
 
 **Coverage:**
 - v1.7 requirements: 14 total

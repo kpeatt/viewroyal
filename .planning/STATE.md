@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: View Royal Intelligence
 status: executing
-stopped_at: Completed 40-01-PLAN.md
-last_updated: "2026-03-23T23:18:21.867Z"
+stopped_at: Completed 40-02-PLAN.md
+last_updated: "2026-03-23T23:19:13.529Z"
 last_activity: 2026-03-23 -- Completed Phase 40 Plan 01 (Meeting Attendance Info)
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 90
 ---
 
@@ -54,6 +54,7 @@ Progress: [█████████░] 90%
 | Phase 39 P02 | 5min | 2 tasks | 5 files |
 | Phase 39 P03 | 5min | 3 tasks | 8 files |
 | Phase 40 P01 | 2min | 2 tasks | 5 files |
+| Phase 40 P02 | 3min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 - [Phase 39]: General and Administration topics filtered from profile-level policy analysis
 - [Phase 40]: Attendance data driven by municipality.meta JSONB with per-meeting sparse overrides
 - [Phase 40]: Attendance section gated on future dates via Vancouver timezone comparison in server loader
+- [Phase 40]: Compact list format for key decisions in digest email (not cards) for mobile scanning
+- [Phase 40]: Full agenda always shown in pre-meeting email with Following badges on matched items
+- [Phase 40]: Data-driven attendance info from municipality meta with hardcoded fallback chain for graceful degradation
 
 ### Pending Todos
 
@@ -124,8 +128,8 @@ All v1.0-v1.6 decisions archived -- see PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-23T23:18:21.866Z
-Stopped at: Completed 40-01-PLAN.md
+Last session: 2026-03-23T23:19:13.528Z
+Stopped at: Completed 40-02-PLAN.md
 Resume file: None
 
 ### Paused Work: Phase 7.1

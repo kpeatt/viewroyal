@@ -95,7 +95,7 @@
 - [x] **Phase 37: Eval Foundation + Quick Wins** - RAG observability/feedback infrastructure and zero-backend-work UI improvements (summary cards, outcome badges) (completed 2026-03-06)
 - [x] **Phase 38: RAG Intelligence** - LLM reranking and consolidated tool set for better answer quality (completed 2026-03-06)
 - [x] **Phase 39: Council Intelligence** - Topic taxonomy, AI profiles, key vote detection, and redesigned profile page (completed 2026-03-13)
-- [ ] **Phase 40: UX Polish + Email** - Financial transparency, meeting attendance info, and improved email digests
+- [x] **Phase 40: UX Polish + Email** - Financial transparency, meeting attendance info, and improved email digests (completed 2026-03-23)
 
 <details>
 <summary>v1.8 RDOS Ingestion (Deferred)</summary>
@@ -186,4 +186,4 @@ Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parall
 | 37. Eval Foundation + Quick Wins | 2/2 | Complete    | 2026-03-06 | - |
 | 38. RAG Intelligence | 2/2 | Complete    | 2026-03-06 | - |
 | 39. Council Intelligence | 3/3 | Complete    | 2026-03-13 | - |
-| 40. UX Polish + Email | 1/2 | In Progress|  | - |
+| 40. UX Polish + Email | 2/2 | Complete   | 2026-03-23 | - |
