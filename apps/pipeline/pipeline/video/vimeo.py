@@ -100,15 +100,17 @@ class VimeoClient:
         """
         Attempts to find a matching video for a specific date and title.
         Returns a dict with {'url', 'title', 'uri'} or None.
+
+        When multiple videos exist for the same date (e.g. Public Hearing +
+        Council), uses negative matching to avoid cross-assigning videos.
+        Returns None rather than a wrong video when no match is found.
         """
         if not self.token:
             return None
 
-        # We could use the search API, but usually fetching the latest
-        # is enough for new meetings.
         api_url = f"https://api.vimeo.com/users/{self.vimeo_user}/videos"
         params = {
-            "per_page": 20,  # Just check recent ones
+            "per_page": 20,
             "query": date_str,
             "fields": "uri,name,link",
         }
@@ -121,8 +123,8 @@ class VimeoClient:
             data = resp.json()
             items = data.get("data", [])
 
-            # First pass: look for exact title match
-            fallback_match = None
+            # Collect all videos matching this date
+            date_matches = []
             for item in items:
                 title = item.get("name", "")
                 link = item.get("link", "")
@@ -130,25 +132,69 @@ class VimeoClient:
 
                 v_date = utils.extract_date_from_string(title)
                 if v_date == date_str:
-                    # Save first date match as fallback
-                    if fallback_match is None:
-                        fallback_match = {"url": link, "title": title, "uri": uri}
+                    date_matches.append({"url": link, "title": title, "uri": uri})
 
-                    # If we have a title hint, try to match it
-                    if title_hint:
-                        th = title_hint.lower()
-                        tl = title.lower()
-                        # Check for keyword matches
-                        if "council" in th and "council" in tl:
-                            return {"url": link, "title": title, "uri": uri}
-                        if "committee" in th and ("committee" in tl or "cow" in tl):
-                            return {"url": link, "title": title, "uri": uri}
-                        if "public hearing" in th and "public hearing" in tl:
-                            return {"url": link, "title": title, "uri": uri}
+            if not date_matches:
+                return None
 
-            # No exact match found, return fallback (first date match)
-            if fallback_match:
-                return fallback_match
+            # If only one video for this date, return it regardless of hint
+            if len(date_matches) == 1:
+                return date_matches[0]
+
+            # Multiple videos for this date -- use keyword matching with
+            # negative checks to avoid cross-assigning (mirrors orchestrator
+            # _download_vimeo_content logic)
+            has_type_hint = False
+            if title_hint:
+                th = title_hint.lower()
+
+                if "public hearing" in th:
+                    has_type_hint = True
+                    match = next(
+                        (v for v in date_matches
+                         if "public hearing" in v["title"].lower()),
+                        None,
+                    )
+                    if match:
+                        return match
+
+                elif "committee" in th or "cow" in th:
+                    has_type_hint = True
+                    match = next(
+                        (v for v in date_matches
+                         if "committee" in v["title"].lower()
+                         or "cow" in v["title"].lower()),
+                        None,
+                    )
+                    if match:
+                        return match
+
+                elif "council" in th:
+                    has_type_hint = True
+                    # Prefer council video that is NOT a public hearing
+                    match = next(
+                        (v for v in date_matches
+                         if "council" in v["title"].lower()
+                         and "public hearing" not in v["title"].lower()),
+                        None,
+                    )
+                    if match:
+                        return match
+                    # Fallback: any video with "council" in title
+                    match = next(
+                        (v for v in date_matches
+                         if "council" in v["title"].lower()),
+                        None,
+                    )
+                    if match:
+                        return match
+
+            # Only use date-based fallback when there's no specific type hint.
+            # With a type hint but no match, return None to avoid wrong assignment.
+            if not has_type_hint:
+                return date_matches[0]
+
+            return None
 
         except Exception as e:
             print(f"  [!] Vimeo search error: {e}")
