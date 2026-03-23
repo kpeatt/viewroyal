@@ -964,7 +964,7 @@ class MeetingIngester:
                 ):
                     print("  Searching Vimeo for matching video...")
                     v_client = VimeoClient()
-                    v_match = v_client.search_video(meta["meeting_date"], meta["title"])
+                    v_match = v_client.search_video(meta["meeting_date"], m_type_guess or meta["title"])
                     if v_match:
                         print(f"  [+] Found Vimeo match: {v_match['url']}")
                         meeting_data["video_url"] = v_match["url"]
