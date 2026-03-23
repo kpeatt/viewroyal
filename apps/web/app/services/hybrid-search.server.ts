@@ -161,9 +161,10 @@ async function hybridSearchDocumentSections(
     type: "document_section" as const,
     title: row.section_title || "Document Section",
     content: (row.content || "").slice(0, 200),
-    meeting_id: row.meeting_id || null, // Now returned by updated RPC via documents JOIN
+    meeting_id: row.meeting_id || null,
     meeting_date: null,
     document_id: row.document_id || undefined,
+    agenda_item_id: row.agenda_item_id || undefined,
     rank_score: row.rank_score,
   }));
 }

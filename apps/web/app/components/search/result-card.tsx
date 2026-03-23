@@ -79,10 +79,12 @@ function getResultUrl(result: UnifiedSearchResult): string {
         : `/meetings/${result.meeting_id}`;
 
     case "document_section":
-      // Link to document viewer if we have the document ID, otherwise meeting documents page
-      return result.document_id
-        ? `/meetings/${result.meeting_id}/documents/${result.document_id}`
-        : `/meetings/${result.meeting_id}/documents`;
+      // Link to document viewer if we have the document ID, otherwise meeting page with agenda anchor
+      if (result.document_id)
+        return `/meetings/${result.meeting_id}/documents/${result.document_id}`;
+      if (result.agenda_item_id)
+        return `/meetings/${result.meeting_id}#agenda-${result.agenda_item_id}`;
+      return `/meetings/${result.meeting_id}`;
 
     case "transcript_segment":
       // Link to meeting page at the specific timestamp
