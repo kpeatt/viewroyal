@@ -297,6 +297,7 @@ interface MeetingInfo {
   type: string;
   summary?: string;
   has_agenda: boolean;
+  meta?: any;
 }
 
 Deno.serve(async (req: Request) => {
@@ -507,7 +508,7 @@ async function handlePreMeeting(
   // 1. Get meeting data
   const { data: meeting, error: meetingError } = await supabase
     .from("meetings")
-    .select("id, title, meeting_date, type, summary, has_agenda")
+    .select("id, title, meeting_date, type, summary, has_agenda, meta")
     .eq("id", meeting_id)
     .single();
 
@@ -530,6 +531,13 @@ async function handlePreMeeting(
     .order("item_order");
 
   const allItems = (agendaItems || []) as PreMeetingItem[];
+
+  // 2b. Query municipality meta for attendance info
+  const { data: municipality } = await supabase
+    .from("municipalities")
+    .select("meta")
+    .eq("slug", "view-royal")
+    .single();
 
   // 3. Find subscribers via the same RPC
   const { data: subscribers, error: subError } = await supabase.rpc(
@@ -628,6 +636,7 @@ async function handlePreMeeting(
       allItems,
       subscriberSubDetails,
       topicNames,
+      municipality?.meta,
     );
     const meetingDate = new Date(meetingInfo.meeting_date).toLocaleDateString(
       "en-CA",
@@ -787,8 +796,9 @@ function buildPreMeetingHtml(
   meeting: MeetingInfo,
   matchedItems: MatchedPreMeetingItem[],
   allItems: PreMeetingItem[],
-  subscriberSubs: SubscriptionDetail[],
+  _subscriberSubs: SubscriptionDetail[],
   _topicNames: Map<number, string>,
+  municipalityMeta?: any,
 ): string {
   const meetingUrl = `${BASE_URL}/meetings/${meeting.id}`;
   const meetingDate = new Date(meeting.meeting_date).toLocaleDateString(
@@ -801,62 +811,106 @@ function buildPreMeetingHtml(
   );
 
   const hasSpecificMatches = matchedItems.length > 0;
-  const isDigestOnly = subscriberSubs.every((s) => s.type === "digest");
+  const matchedItemIds = new Set(matchedItems.map((m) => m.item.id));
 
-  // Build matched items section
-  let matchedItemsHtml = "";
-  if (hasSpecificMatches) {
-    matchedItemsHtml = `
-    <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:24px 0 12px;">Agenda items that might interest you</h3>
-    ${matchedItems
-      .map((m) => {
-        const reasonBadges = m.reasons
-          .map(
-            (r) =>
-              `<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;margin-left:4px;margin-top:4px;">${r}</span>`,
-          )
-          .join("");
-        const summary = m.item.plain_english_summary
-          ? `<br><span style="color:#52525b;font-size:13px;">${m.item.plain_english_summary}</span>`
-          : "";
-        const address =
-          m.item.related_address && m.item.related_address.length > 0
-            ? `<br><span style="color:#6b7280;font-size:12px;">&#128205; ${m.item.related_address.join(", ")}</span>`
-            : "";
-        return `
-      <div style="padding:12px;background:#f9fafb;border-radius:8px;margin-bottom:8px;border-left:3px solid #2563eb;">
-        <strong style="color:#18181b;">${m.item.title}</strong>
-        <div style="margin-top:4px;">${reasonBadges}</div>
-        ${summary}
-        ${address}
-      </div>`;
-      })
-      .join("")}`;
-  }
-
-  // If user only has digest subscription (no specific matches), show full agenda
-  let fullAgendaHtml = "";
-  if (isDigestOnly && !hasSpecificMatches) {
-    fullAgendaHtml = `
-    <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:24px 0 12px;">On the agenda</h3>
-    ${allItems
-      .map((item) => {
-        const summary = item.plain_english_summary
-          ? `<br><span style="color:#52525b;font-size:13px;">${item.plain_english_summary}</span>`
-          : "";
-        return `
-      <div style="padding:8px 0;border-bottom:1px solid #f4f4f5;">
-        <strong style="color:#18181b;font-size:14px;">${item.title}</strong>
-        ${summary}
-      </div>`;
-      })
-      .join("")}`;
-  }
-
-  // Intro text varies based on whether there are specific matches
+  // --- Intro text ---
   const introText = hasSpecificMatches
-    ? `Your council is meeting on ${meetingDate} and some items on the agenda might interest you.`
+    ? `Your council is meeting on ${meetingDate} and some items on the agenda match your interests.`
     : `Your council is meeting soon. Here's what's on the agenda.`;
+
+  // --- "Why this matters to you" personalization ---
+  let personalizationHtml = "";
+  if (hasSpecificMatches) {
+    const matchLines = matchedItems.map((m) => {
+      const reasons = m.reasons.join(", ");
+      return `<p style="font-size:13px;color:#1e40af;margin:4px 0;line-height:1.4;">&bull; <strong>${m.item.title}</strong> &mdash; ${reasons}</p>`;
+    });
+    personalizationHtml = `
+  <div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin-bottom:24px;border-radius:0 8px 8px 0;">
+    <p style="font-size:13px;color:#1e40af;margin:0 0 6px;font-weight:600;">Why this matters to you</p>
+    ${matchLines.join("")}
+  </div>`;
+  }
+
+  // --- Full Agenda (always show all items) ---
+  const followingBadge = `<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;">Following</span>`;
+
+  const agendaHtml = allItems.length > 0
+    ? `
+  <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:24px 0 12px;font-weight:700;">On the Agenda</h3>
+  ${allItems
+      .map((item) => {
+        const isMatched = matchedItemIds.has(item.id);
+        const borderStyle = isMatched
+          ? "border-left:3px solid #2563eb;padding-left:12px;"
+          : "border-left:3px solid transparent;padding-left:12px;";
+        const badge = isMatched ? followingBadge : "";
+        const categoryBadge = item.category
+          ? ` <span style="display:inline-block;background:#f4f4f5;color:#71717a;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;">${item.category}</span>`
+          : "";
+        const summary = item.plain_english_summary
+          ? `<br><span style="color:#52525b;font-size:13px;line-height:1.4;">${item.plain_english_summary}</span>`
+          : "";
+        const address = item.related_address && item.related_address.length > 0
+          ? `<br><span style="color:#6b7280;font-size:12px;">&#128205; ${item.related_address.join(", ")}</span>`
+          : "";
+        return `
+    <div style="${borderStyle}padding-top:8px;padding-bottom:8px;margin-bottom:4px;">
+      <strong style="color:#18181b;font-size:14px;">${item.title}</strong>${badge}${categoryBadge}
+      ${summary}
+      ${address}
+    </div>`;
+      })
+      .join("")}`
+    : "";
+
+  // --- How to Attend / Watch (data-driven) ---
+  const attendanceDefaults = municipalityMeta?.attendance_info || {};
+  const meetingOverrides = meeting.meta?.attendance_info || {};
+
+  const venue = meetingOverrides.venue || attendanceDefaults.venue || "Council Chambers, View Royal Town Hall";
+  const address = meetingOverrides.address || attendanceDefaults.address || "45 View Royal Ave, Victoria, BC";
+  const mapsUrl = meetingOverrides.maps_url || attendanceDefaults.maps_url || "https://maps.google.com/?q=45+View+Royal+Ave+Victoria+BC";
+  const zoomLink = meetingOverrides.zoom_link || attendanceDefaults.zoom_link;
+  const startTime = meetingOverrides.start_time || attendanceDefaults.default_start_time;
+  const specialInstructions = meetingOverrides.special_instructions;
+
+  // Select process text based on meeting type
+  const processKey = meeting.type === "Public Hearing" ? "public_hearing_process" : "public_input_process";
+  const publicProcess = meetingOverrides[processKey]
+    || meetingOverrides.public_input_process
+    || attendanceDefaults[processKey]
+    || attendanceDefaults.public_input_process
+    || `To speak during public comment, contact the municipal clerk at <a href="mailto:admin@viewroyal.ca" style="color:#2563eb;">admin@viewroyal.ca</a>`;
+
+  // Build online row -- graceful fallback
+  const onlineText = zoomLink
+    ? `<a href="${zoomLink}" style="color:#2563eb;">Watch online</a>`
+    : `Meetings are live-streamed on the <a href="https://www.youtube.com/@TownofViewRoyal" style="color:#2563eb;">Town's YouTube channel</a>`;
+
+  const attendInfoHtml = `
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-top:24px;">
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#166534;margin:0 0 12px;font-weight:700;">How to Attend or Watch</h3>
+    <table style="width:100%;font-size:13px;color:#3f3f46;">
+      <tr>
+        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">When</td>
+        <td style="padding:4px 0;">${meetingDate}${startTime ? ` at ${startTime}` : ` at ${meetingTime}`}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">Where</td>
+        <td style="padding:4px 0;">${venue}, <a href="${mapsUrl}" style="color:#2563eb;">${address}</a></td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">Online</td>
+        <td style="padding:4px 0;">${onlineText}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">Comment</td>
+        <td style="padding:4px 0;">${publicProcess}</td>
+      </tr>
+    </table>
+    ${specialInstructions ? `<p style="font-size:13px;color:#166534;margin:12px 0 0;font-style:italic;">${specialInstructions}</p>` : ""}
+  </div>`;
 
   return `
 <!DOCTYPE html>
@@ -867,7 +921,7 @@ function buildPreMeetingHtml(
     <h1 style="font-size:20px;margin:0;">
       <span style="color:#2563eb;">ViewRoyal</span><span style="color:#18181b;">.ai</span>
     </h1>
-    <p style="color:#71717a;font-size:13px;margin:4px 0 0;">Heads up &mdash; Council is meeting soon</p>
+    <p style="color:#71717a;font-size:13px;margin:4px 0 0;">Upcoming Meeting Alert</p>
   </div>
 
   <div style="background:#f4f4f5;border-radius:12px;padding:20px;margin-bottom:24px;">
@@ -875,37 +929,17 @@ function buildPreMeetingHtml(
     <p style="color:#52525b;font-size:14px;margin:0;">${meetingDate} &bull; ${meetingTime} &bull; ${meeting.type || "Council Meeting"}</p>
   </div>
 
-  <p style="color:#3f3f46;font-size:14px;line-height:1.6;margin-bottom:24px;">${introText}</p>
+  <p style="font-size:15px;line-height:1.6;color:#3f3f46;margin:0 0 24px;">${introText}</p>
 
-  ${matchedItemsHtml}
+  ${personalizationHtml}
 
-  ${fullAgendaHtml}
+  ${agendaHtml}
 
-  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-top:24px;">
-    <h3 style="font-size:14px;color:#166534;margin:0 0 12px;">Want to attend or watch?</h3>
-    <table style="width:100%;font-size:13px;color:#3f3f46;">
-      <tr>
-        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">When</td>
-        <td style="padding:4px 0;">${meetingDate} at ${meetingTime}</td>
-      </tr>
-      <tr>
-        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">Where</td>
-        <td style="padding:4px 0;">Council Chambers, View Royal Town Hall, 45 View Royal Ave</td>
-      </tr>
-      <tr>
-        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">Online</td>
-        <td style="padding:4px 0;">Meetings are live-streamed on the <a href="https://www.youtube.com/@TownofViewRoyal" style="color:#2563eb;">Town's YouTube channel</a></td>
-      </tr>
-      <tr>
-        <td style="padding:4px 8px 4px 0;vertical-align:top;font-weight:600;white-space:nowrap;">Comment</td>
-        <td style="padding:4px 0;">To speak during public comment, contact the municipal clerk at <a href="mailto:admin@viewroyal.ca" style="color:#2563eb;">admin@viewroyal.ca</a></td>
-      </tr>
-    </table>
-  </div>
+  ${attendInfoHtml}
 
   <div style="text-align:center;margin-top:32px;">
     <a href="${meetingUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">
-      View the Full Agenda
+      View Full Agenda
     </a>
   </div>
 
