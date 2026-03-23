@@ -37,7 +37,7 @@ export async function loader({ request }: { request: Request }) {
     // and React Router 7 child loaders cannot access parent loader data on the server.
     const municipality = await getMunicipality(supabase);
     const [data, publicNotices] = await Promise.all([
-      getHomeData(supabase),
+      getHomeData(supabase, (municipality as Municipality)?.meta),
       getPublicNotices((municipality as Municipality)?.rss_url),
     ]);
 
