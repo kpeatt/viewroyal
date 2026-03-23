@@ -28,6 +28,7 @@ export interface UnifiedSearchResult {
   // Type-specific metadata
   agenda_item_id?: number;
   document_id?: number;
+  extracted_document_id?: number;
   motion_result?: string;
   motion_mover?: string;
   motion_seconder?: string;
@@ -164,6 +165,7 @@ async function hybridSearchDocumentSections(
     meeting_id: row.meeting_id || null,
     meeting_date: null,
     document_id: row.document_id || undefined,
+    extracted_document_id: row.extracted_document_id || undefined,
     agenda_item_id: row.agenda_item_id || undefined,
     rank_score: row.rank_score,
   }));
