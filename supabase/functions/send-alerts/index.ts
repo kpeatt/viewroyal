@@ -26,7 +26,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const FROM_EMAIL = "ViewRoyal.ai <alerts@viewroyal.ai>";
+const FROM_EMAIL = "ViewRoyal.ai <alerts@updates.viewroyal.ai>";
 const BASE_URL = "https://viewroyal.ai";
 
 interface DigestPayload {
@@ -399,6 +399,22 @@ async function handleDigest(
     );
   }
 
+  // 2b. Query next upcoming meeting for "Coming Up" footer (once, outside loop)
+  const { data: nextMeeting } = await supabase
+    .from("meetings")
+    .select("title, meeting_date, type")
+    .gt("meeting_date", new Date().toISOString().split("T")[0])
+    .order("meeting_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  // 2c. Query municipality meta for attendance info in Coming Up
+  const { data: municipality } = await supabase
+    .from("municipalities")
+    .select("meta")
+    .eq("slug", "view-royal")
+    .single();
+
   // 3. Deduplicate by email (a user might match multiple subscriptions)
   const emailMap = new Map<string, Subscriber[]>();
   for (const sub of subscribers as Subscriber[]) {
@@ -451,7 +467,7 @@ async function handleDigest(
       subscriberSubDetails,
     );
 
-    const html = buildDigestHtml(digestPayload, highlights);
+    const html = buildDigestHtml(digestPayload, highlights, nextMeeting, municipality?.meta);
     const subject = `What happened at Council: ${digestPayload.meeting.title}`;
 
     const { emailSent, errorMessage } = await sendEmail(email, subject, html);
@@ -905,6 +921,8 @@ function buildPreMeetingHtml(
 function buildDigestHtml(
   digest: DigestPayload,
   highlights: Map<string, HighlightInfo>,
+  nextMeeting?: { title: string; meeting_date: string; type: string } | null,
+  municipalityMeta?: any,
 ): string {
   const meetingUrl = `${BASE_URL}/meetings/${digest.meeting.id}`;
   const meetingDate = new Date(digest.meeting.meeting_date).toLocaleDateString(
@@ -912,78 +930,149 @@ function buildDigestHtml(
     { weekday: "long", year: "numeric", month: "long", day: "numeric" },
   );
 
-  // Build the "Items you follow" summary section if there are highlights
-  let followingSummaryHtml = "";
+  // --- The Lead (summary-first) ---
+  const summaryText = digest.meeting.summary
+    || `Council met on ${meetingDate} and made ${digest.key_decisions.length} decision${digest.key_decisions.length !== 1 ? "s" : ""}.`;
+
+  // --- "Why this matters to you" personalization ---
+  let personalizationHtml = "";
   if (highlights.size > 0) {
     const uniqueReasons = [...new Set([...highlights.values()].map((h) => h.reason))];
-    const reasonListItems = uniqueReasons
-      .map((r) => `<li>${r}</li>`)
-      .join("");
-    followingSummaryHtml = `
-  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:16px;">
-    <strong style="color:#1d4ed8;font-size:13px;">Items you follow appeared in this meeting:</strong>
-    <ul style="margin:8px 0 0;padding-left:16px;color:#1e40af;font-size:13px;">
-      ${reasonListItems}
-    </ul>
+    const reasonLines = uniqueReasons.map((r) => {
+      // Transform raw reasons into natural language
+      if (r.includes("(topic)")) {
+        const topic = r.replace(" (topic)", "");
+        return `You follow <strong>${topic}</strong> topics`;
+      }
+      if (r.includes("(councillor)")) {
+        const name = r.replace(" (councillor)", "");
+        return `You follow councillor <strong>${name}</strong>`;
+      }
+      if (r.startsWith("Matter:")) {
+        const matter = r.replace("Matter: ", "");
+        return `You follow the matter <strong>${matter}</strong>`;
+      }
+      if (r.includes("keyword")) {
+        return `Matches your ${r}`;
+      }
+      if (r === "Near your address") {
+        return `Items <strong>near your address</strong> were discussed`;
+      }
+      return r;
+    });
+    personalizationHtml = `
+  <div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin-bottom:24px;border-radius:0 8px 8px 0;">
+    <p style="font-size:13px;color:#1e40af;margin:0 0 6px;font-weight:600;">Why this matters to you</p>
+    ${reasonLines.map((r) => `<p style="font-size:13px;color:#1e40af;margin:2px 0;">&bull; ${r}</p>`).join("")}
   </div>`;
   }
 
-  const followingBadge = `<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;margin-left:8px;">Following</span>`;
+  // --- Key Decisions (compact list) ---
+  const followingBadge = `<span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;">Following</span>`;
 
-  const decisionsHtml = digest.key_decisions
-    .map((d) => {
-      const icon = d.result === "CARRIED" ? "&#9989;" : "&#10060;";
-      const divided = d.is_divided
-        ? ` <span style="color:#dc2626;font-size:12px;">(Divided: ${d.yes_votes}-${d.no_votes})</span>`
-        : "";
-      const location = d.neighborhood
-        ? `<br><span style="color:#6b7280;font-size:12px;">&#128205; ${d.neighborhood}</span>`
-        : "";
-      const highlight = highlights.has(`decision:${d.motion_id}`)
-        ? followingBadge
-        : "";
-      return `
+  const decisionsHtml = digest.key_decisions.length > 0
+    ? `
+  <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:24px 0 12px;font-weight:700;">What Council Decided</h3>
+  <table style="width:100%;border-collapse:collapse;">${digest.key_decisions
+      .map((d) => {
+        const icon = d.result === "CARRIED" ? "&#9989;" : "&#10060;";
+        const voteInfo = d.is_divided
+          ? ` <span style="color:#dc2626;font-size:12px;font-weight:600;">(${d.yes_votes}\u2013${d.no_votes})</span>`
+          : "";
+        const location = d.neighborhood
+          ? `<br><span style="color:#6b7280;font-size:12px;">&#128205; ${d.neighborhood}</span>`
+          : "";
+        const highlight = highlights.has(`decision:${d.motion_id}`)
+          ? followingBadge
+          : "";
+        return `
         <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #f4f4f5;">
-            ${icon} <strong>${d.agenda_item_title}</strong>${highlight}${divided}
-            <br><span style="color:#52525b;font-size:13px;">${d.motion_text || ""}</span>
+          <td style="padding:10px 0;border-bottom:1px solid #f4f4f5;">
+            <span style="font-size:14px;">${icon}</span> <strong style="color:#18181b;font-size:14px;">${d.agenda_item_title}</strong>${highlight}${voteInfo}
+            ${d.motion_text ? `<br><span style="color:#52525b;font-size:13px;line-height:1.4;">${d.motion_text}</span>` : ""}
             ${location}
           </td>
         </tr>`;
-    })
-    .join("");
+      })
+      .join("")}
+  </table>`
+    : "";
 
-  const controversialHtml =
-    digest.controversial_items.length > 0
-      ? `
-    <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:24px 0 12px;">Where Council Disagreed</h3>
-    ${digest.controversial_items
+  // --- Where Council Disagreed ---
+  const controversialHtml = digest.controversial_items.length > 0
+    ? `
+  <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:24px 0 12px;font-weight:700;">Where Council Disagreed</h3>
+  ${digest.controversial_items
       .map((item) => {
         const highlight = highlights.has(`controversial:${item.id}`)
           ? followingBadge
           : "";
         return `
-      <div style="padding:12px;background:#fef2f2;border-radius:8px;margin-bottom:8px;">
-        <strong style="color:#991b1b;">${item.title}</strong>${highlight}
-        <br><span style="color:#7f1d1d;font-size:13px;">${item.summary || item.debate_summary || ""}</span>
-      </div>`;
+    <div style="padding:12px;background:#fef2f2;border-left:4px solid #fca5a5;border-radius:0 8px 8px 0;margin-bottom:8px;">
+      <strong style="color:#991b1b;font-size:14px;">${item.title}</strong>${highlight}
+      <br><span style="color:#7f1d1d;font-size:13px;line-height:1.4;">${item.summary || item.debate_summary || ""}</span>
+    </div>`;
       })
       .join("")}`
-      : "";
+    : "";
 
-  const attendanceHtml = digest.attendance
-    .map((a) => {
-      const emoji =
-        a.mode === "In Person"
-          ? "&#128100;"
-          : a.mode === "Remote"
-            ? "&#128187;"
-            : a.mode === "Absent" || a.mode === "Regrets"
-              ? "&#10060;"
-              : "&#10067;";
-      return `${emoji} ${a.person_name}`;
-    })
-    .join(" &nbsp;&bull;&nbsp; ");
+  // --- Who Was There ---
+  const attendanceHtml = digest.attendance.length > 0
+    ? (() => {
+        const attendees = digest.attendance.map((a) => {
+          const emoji = a.mode === "In Person"
+            ? "&#128100;"
+            : a.mode === "Remote"
+              ? "&#128187;"
+              : a.mode === "Absent" || a.mode === "Regrets"
+                ? "&#10060;"
+                : "&#10067;";
+          return `${emoji} ${a.person_name}`;
+        }).join(" &nbsp;&bull;&nbsp; ");
+        return `
+  <div style="margin-top:24px;padding:12px;background:#f9fafb;border-radius:8px;">
+    <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#a1a1aa;margin:0 0 8px;font-weight:700;">Who Was There</h4>
+    <p style="font-size:13px;color:#52525b;margin:0;line-height:1.6;">${attendees}</p>
+  </div>`;
+      })()
+    : "";
+
+  // --- Ask AI CTA ---
+  const askAiHtml = `
+  <div style="text-align:center;margin:32px 0;padding:24px;background:#f8fafc;border-radius:12px;">
+    <p style="font-size:15px;color:#18181b;margin:0 0 12px;font-weight:600;">Have questions about this meeting?</p>
+    <a href="${BASE_URL}/search" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">
+      Ask our AI
+    </a>
+  </div>`;
+
+  // --- Coming Up footer ---
+  let comingUpHtml = "";
+  if (nextMeeting) {
+    const nextDate = new Date(nextMeeting.meeting_date).toLocaleDateString(
+      "en-CA",
+      { weekday: "long", year: "numeric", month: "long", day: "numeric" },
+    );
+    const nextTime = new Date(nextMeeting.meeting_date).toLocaleTimeString(
+      "en-CA",
+      { hour: "numeric", minute: "2-digit" },
+    );
+
+    const attendanceDefaults = municipalityMeta?.attendance_info || {};
+    const venue = attendanceDefaults.venue || "Council Chambers, View Royal Town Hall";
+    const mapsUrl = attendanceDefaults.maps_url || "https://maps.google.com/?q=45+View+Royal+Ave+Victoria+BC";
+    const zoomLink = attendanceDefaults.zoom_link;
+
+    comingUpHtml = `
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-top:24px;">
+    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#166534;margin:0 0 8px;font-weight:700;">Coming Up</h3>
+    <p style="font-size:14px;color:#18181b;margin:0 0 4px;font-weight:600;">${nextMeeting.title}</p>
+    <p style="font-size:13px;color:#52525b;margin:0 0 8px;">${nextDate} &bull; ${nextTime} &bull; ${nextMeeting.type || "Council Meeting"}</p>
+    <p style="font-size:13px;color:#52525b;margin:0;">
+      ${venue} &bull; <a href="${mapsUrl}" style="color:#2563eb;text-decoration:none;">Get directions</a>${zoomLink ? ` &bull; <a href="${zoomLink}" style="color:#2563eb;text-decoration:none;">Watch online</a>` : ""}
+    </p>
+  </div>`;
+  }
 
   return `
 <!DOCTYPE html>
@@ -994,7 +1083,7 @@ function buildDigestHtml(
     <h1 style="font-size:20px;margin:0;">
       <span style="color:#2563eb;">ViewRoyal</span><span style="color:#18181b;">.ai</span>
     </h1>
-    <p style="color:#71717a;font-size:13px;margin:4px 0 0;">What happened at Council</p>
+    <p style="color:#71717a;font-size:13px;margin:4px 0 0;">Your Council Meeting Digest</p>
   </div>
 
   <div style="background:#f4f4f5;border-radius:12px;padding:20px;margin-bottom:24px;">
@@ -1002,37 +1091,25 @@ function buildDigestHtml(
     <p style="color:#52525b;font-size:14px;margin:0;">${meetingDate} &bull; ${digest.meeting.type || "Council Meeting"}</p>
   </div>
 
-  <p style="color:#3f3f46;font-size:14px;line-height:1.6;margin-bottom:24px;">Here's a quick rundown of what your council discussed on ${meetingDate}.</p>
+  <p style="font-size:16px;line-height:1.6;color:#18181b;margin:0 0 24px;">${summaryText}</p>
 
-  ${followingSummaryHtml}
+  ${personalizationHtml}
 
-  ${digest.meeting.summary ? `<p style="color:#3f3f46;font-size:14px;line-height:1.6;margin-bottom:24px;">${digest.meeting.summary}</p>` : ""}
-
-  ${
-    digest.key_decisions.length > 0
-      ? `
-  <h3 style="font-size:14px;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:0 0 12px;">What Council Decided</h3>
-  <table style="width:100%;border-collapse:collapse;">${decisionsHtml}</table>`
-      : ""
-  }
+  ${decisionsHtml}
 
   ${controversialHtml}
 
-  ${
-    attendanceHtml
-      ? `
-  <div style="margin-top:24px;padding:12px;background:#f9fafb;border-radius:8px;">
-    <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#a1a1aa;margin:0 0 8px;">Who was there</h4>
-    <p style="font-size:13px;color:#52525b;margin:0;">${attendanceHtml}</p>
-  </div>`
-      : ""
-  }
+  ${attendanceHtml}
 
-  <div style="text-align:center;margin-top:32px;">
-    <a href="${meetingUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">
-      View Full Meeting Details
+  ${askAiHtml}
+
+  <div style="text-align:center;">
+    <a href="${meetingUrl}" style="display:inline-block;color:#2563eb;text-decoration:none;font-weight:600;font-size:14px;">
+      View Full Meeting Details &rarr;
     </a>
   </div>
+
+  ${comingUpHtml}
 
   <hr style="border:none;border-top:1px solid #e4e4e7;margin:32px 0 16px;">
   <p style="text-align:center;font-size:11px;color:#a1a1aa;">
