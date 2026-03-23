@@ -871,7 +871,7 @@ function buildPreMeetingHtml(
   const venue = meetingOverrides.venue || attendanceDefaults.venue || "Council Chambers, View Royal Town Hall";
   const address = meetingOverrides.address || attendanceDefaults.address || "45 View Royal Ave, Victoria, BC";
   const mapsUrl = meetingOverrides.maps_url || attendanceDefaults.maps_url || "https://maps.google.com/?q=45+View+Royal+Ave+Victoria+BC";
-  const zoomLink = meetingOverrides.zoom_link || attendanceDefaults.zoom_link;
+  const zoomLink = meetingOverrides.zoom_link || meetingOverrides.watch_link || attendanceDefaults.zoom_link || attendanceDefaults.watch_link;
   const startTime = meetingOverrides.start_time || attendanceDefaults.default_start_time;
   const specialInstructions = meetingOverrides.special_instructions;
 
@@ -1095,7 +1095,7 @@ function buildDigestHtml(
     const attendanceDefaults = municipalityMeta?.attendance_info || {};
     const venue = attendanceDefaults.venue || "Council Chambers, View Royal Town Hall";
     const mapsUrl = attendanceDefaults.maps_url || "https://maps.google.com/?q=45+View+Royal+Ave+Victoria+BC";
-    const zoomLink = attendanceDefaults.zoom_link;
+    const zoomLink = attendanceDefaults.zoom_link || attendanceDefaults.watch_link;
 
     comingUpHtml = `
   <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-top:24px;">
