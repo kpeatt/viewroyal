@@ -26,6 +26,8 @@ export interface UnifiedSearchResult {
   speaker_name?: string;
   rank_score: number;
   // Type-specific metadata
+  agenda_item_id?: number;
+  document_id?: number;
   motion_result?: string;
   motion_mover?: string;
   motion_seconder?: string;
@@ -81,6 +83,7 @@ async function hybridSearchMotions(
     meeting_id: row.meeting_id,
     meeting_date: null, // Enriched separately
     rank_score: row.rank_score,
+    agenda_item_id: row.agenda_item_id || undefined,
     motion_result: row.result,
     motion_mover: row.mover,
     motion_seconder: row.seconder,
@@ -120,6 +123,7 @@ async function hybridSearchKeyStatements(
     meeting_date: null,
     speaker_name: row.speaker_name,
     rank_score: row.rank_score,
+    agenda_item_id: row.agenda_item_id || undefined,
     statement_type: row.statement_type,
   }));
 }
@@ -159,6 +163,7 @@ async function hybridSearchDocumentSections(
     content: (row.content || "").slice(0, 200),
     meeting_id: row.meeting_id || null, // Now returned by updated RPC via documents JOIN
     meeting_date: null,
+    document_id: row.document_id || undefined,
     rank_score: row.rank_score,
   }));
 }

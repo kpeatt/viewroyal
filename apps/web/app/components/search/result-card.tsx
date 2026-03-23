@@ -64,6 +64,38 @@ const TYPE_CONFIG = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Type-specific URL resolution
+// ---------------------------------------------------------------------------
+
+function getResultUrl(result: UnifiedSearchResult): string {
+  if (!result.meeting_id) return "#";
+
+  switch (result.type) {
+    case "motion":
+    case "key_statement":
+      // Link to meeting page anchored at the parent agenda item
+      return result.agenda_item_id
+        ? `/meetings/${result.meeting_id}#agenda-${result.agenda_item_id}`
+        : `/meetings/${result.meeting_id}`;
+
+    case "document_section":
+      // Link to document viewer if we have the document ID, otherwise meeting documents page
+      return result.document_id
+        ? `/meetings/${result.meeting_id}/documents/${result.document_id}`
+        : `/meetings/${result.meeting_id}/documents`;
+
+    case "transcript_segment":
+      // Link to meeting page at the specific timestamp
+      return result.start_time
+        ? `/meetings/${result.meeting_id}#t=${result.start_time}`
+        : `/meetings/${result.meeting_id}`;
+
+    default:
+      return `/meetings/${result.meeting_id}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ResultCard component
 // ---------------------------------------------------------------------------
 
@@ -77,11 +109,7 @@ export function ResultCard({ result, query, position }: ResultCardProps) {
   const config = TYPE_CONFIG[result.type];
   const { Icon, iconColor, hoverBorder } = config;
 
-  const linkTo = result.meeting_id
-    ? result.type === "transcript_segment" && result.start_time
-      ? `/meetings/${result.meeting_id}#t=${result.start_time}`
-      : `/meetings/${result.meeting_id}`
-    : "#";
+  const linkTo = getResultUrl(result);
 
   return (
     <Link
@@ -91,6 +119,7 @@ export function ResultCard({ result, query, position }: ResultCardProps) {
           result_type: result.type,
           result_position: position,
           meeting_id: result.meeting_id,
+          destination: linkTo,
         })
       }
       className={cn(
