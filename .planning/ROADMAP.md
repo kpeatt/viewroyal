@@ -168,11 +168,11 @@ Plans:
   2. Upcoming meetings show attendance information including location, how to attend, and public input process
   3. Email digest has a mobile-friendly design with meeting summary section at the top
   4. Email digest includes upcoming meeting dates with attendance information
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 40-01: Financial transparency and meeting attendance info
-- [ ] 40-02: Email digest redesign
+- [ ] 40-01-PLAN.md -- Meeting attendance info + financial visibility confirmation (MTGX-03, MTGX-04)
+- [ ] 40-02-PLAN.md -- Email digest and pre-meeting template redesign (MAIL-01, MAIL-02)
 
 ## Progress
 
