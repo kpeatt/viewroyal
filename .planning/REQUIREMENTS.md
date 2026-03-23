@@ -25,8 +25,8 @@ Requirements for v1.7 View Royal Intelligence. Each maps to roadmap phases.
 
 - [x] **MTGX-01**: Meeting list shows summary cards with key decisions and topic indicators
 - [x] **MTGX-02**: Motion outcomes display as colored badges (passed/defeated/tabled/deferred)
-- [ ] **MTGX-03**: Agenda items with financial cost/funding data show it visually
-- [ ] **MTGX-04**: Upcoming meetings show attendance info (how to attend, location, public input process)
+- [x] **MTGX-03**: Agenda items with financial cost/funding data show it visually
+- [x] **MTGX-04**: Upcoming meetings show attendance info (how to attend, location, public input process)
 
 ### Email & Notifications
 
@@ -93,8 +93,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CNCL-04 | Phase 39 | Complete |
 | MTGX-01 | Phase 37 | Complete |
 | MTGX-02 | Phase 37 | Complete |
-| MTGX-03 | Phase 40 | Pending |
-| MTGX-04 | Phase 40 | Pending |
+| MTGX-03 | Phase 40 | Complete |
+| MTGX-04 | Phase 40 | Complete |
 | MAIL-01 | Phase 40 | Pending |
 | MAIL-02 | Phase 40 | Pending |
 
