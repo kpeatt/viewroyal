@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.7 View Royal Intelligence (Shipped: 2026-03-24)
+
+**Phases completed:** 4 phases, 9 plans
+**Timeline:** 18 days (2026-03-06 -> 2026-03-23), ~36 minutes execution
+**Git range:** 89f8e656..50bf7d6c (18 feat commits, 93 files changed, +10,314/-975 lines)
+**Requirements:** 14/14 complete (SRCH-01..04, CNCL-01..04, MTGX-01..04, MAIL-01..02)
+
+**Key accomplishments:**
+1. RAG observability with trace logging, user feedback (thumbs up/down), and LLM reranking via Gemini Flash Lite for measurably better answer quality
+2. Consolidated 10 RAG tools to 4 with parallel sub-queries, eliminating tool confusion and reducing agent round-trips
+3. Topic taxonomy classification (SQL-first + Gemini fallback) for 12K+ agenda items and key vote detection algorithm (minority/close/ally-break)
+4. AI-generated councillor narrative profiles synthesizing voting, speaking, and stance data with evidence links
+5. Redesigned council member profile page with 6-tab layout: Profile, Policy, Key Votes, Votes, Speaking, Attendance
+6. Meeting attendance info driven by municipality meta JSONB, redesigned email digests with summary-first layout and personalization
+
+**Delivered:** Citizens get smarter AI answers through reranked search, can rate answer quality, see richer meeting cards with topic chips and motion badges, explore councillor profiles with AI summaries and key votes, view attendance info for upcoming meetings, and receive redesigned email digests with meeting summaries and personalized highlights.
+
+---
+
 ## v1.5 Document Experience (Shipped: 2026-02-28)
 
 **Phases completed:** 4 phases, 7 plans, 0 tasks
