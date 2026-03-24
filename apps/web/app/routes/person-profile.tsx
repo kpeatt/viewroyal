@@ -401,32 +401,32 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
           {/* Main Content with Tabs */}
           <div className="lg:col-span-8 space-y-4">
             <Tabs defaultValue="profile" className="space-y-6">
-              <div className="bg-white p-2 rounded-xl border border-zinc-200 shadow-sm sticky top-20 z-10 overflow-x-auto">
-                <TabsList className="bg-transparent border-none flex-wrap">
+              <div className="bg-white p-2 rounded-xl border border-zinc-200 shadow-sm sticky top-20 z-10">
+                <TabsList className="bg-transparent border-none flex flex-wrap w-full gap-1">
                   <TabsTrigger
                     value="profile"
-                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                    className="flex-none font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Profile
                   </TabsTrigger>
                   <TabsTrigger
                     value="policy"
-                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                    className="flex-none font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <Target className="h-4 w-4 mr-2" />
                     Policy
                   </TabsTrigger>
                   <TabsTrigger
                     value="key-votes"
-                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                    className="flex-none font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <Scale className="h-4 w-4 mr-2" />
                     Key Votes
                   </TabsTrigger>
                   <TabsTrigger
                     value="votes"
-                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                    className="flex-none font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <VoteIcon className="h-4 w-4 mr-2" />
                     Votes
@@ -434,7 +434,7 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                   {hasSpeakingData && (
                     <TabsTrigger
                       value="speaking"
-                      className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                      className="flex-none font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                     >
                       <Mic className="h-4 w-4 mr-2" />
                       Speaking
@@ -442,7 +442,7 @@ export default function PersonProfile({ loaderData }: Route.ComponentProps) {
                   )}
                   <TabsTrigger
                     value="attendance"
-                    className="font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
+                    className="flex-none font-bold data-[state=active]:bg-zinc-900 data-[state=active]:text-white rounded-lg px-4"
                   >
                     <History className="h-4 w-4 mr-2" />
                     Attendance
