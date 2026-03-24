@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { captureServerEvent } from "../lib/analytics.server";
 
 // Simple rate limiter (same pattern as api.ask.tsx)
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -90,6 +91,13 @@ export async function action({ request }: { request: Request }) {
         { status: 500 },
       );
     }
+
+    // Fire-and-forget PostHog $ai_feedback event linking to the original generation
+    captureServerEvent("$ai_feedback", clientIP, {
+      $ai_trace_id: traceId,
+      $ai_is_positive: rating === 1,
+      $ai_feedback_text: comment || undefined,
+    });
 
     return Response.json({ ok: true });
   } catch (error: any) {
