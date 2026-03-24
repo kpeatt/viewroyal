@@ -3,9 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: View Royal Intelligence
 status: completed
-stopped_at: Milestone v1.7 archived
-last_updated: "2026-03-24T16:58:32.262Z"
-last_activity: 2026-03-24 - Completed quick task 22: set up posthog LLM analytics
+stopped_at: "Completed quick-23: fix tab bar overflow"
+last_updated: "2026-03-24T23:02:08.611Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -91,12 +90,13 @@ All v1.0-v1.7 decisions archived -- see PROJECT.md Key Decisions table.
 | 20 | Fix agenda/transcript sidebar alignment on large screens | 2026-03-23 | cf907592 | [20-fix-agenda-transcript-sidebar-alignment-](./quick/20-fix-agenda-transcript-sidebar-alignment-/) |
 | 21 | Fix search result cards to deep-link to specific items | 2026-03-23 | 0463b45e | [21-fix-search-result-cards-link-to-items](./quick/21-fix-search-result-cards-link-to-items/) |
 | 22 | Set up PostHog LLM analytics | 2026-03-24 | 8c1eb123 | [22-set-up-posthog-llm-analytics](./quick/22-set-up-posthog-llm-analytics/) |
+| 23 | Fix overflowing tab bar on councillor profile pages | 2026-03-24 | 35d0b44c | [23-fix-the-overflowing-tab-bar-on-the-couns](./quick/23-fix-the-overflowing-tab-bar-on-the-couns/) |
 
 ## Session Continuity
 
-Last session: 2026-03-24
-Stopped at: Milestone v1.7 archived
+Last session: 2026-03-24T23:02:08.609Z
+Stopped at: Completed quick-23: fix tab bar overflow
 
 ### Paused Work: Phase 7.1
-Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
+Resume file: None
 Status: 309 meetings queued for re-extraction. 40,805 sections need embeddings. Waiting on Gemini quota.
