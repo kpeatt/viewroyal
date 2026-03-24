@@ -53,7 +53,8 @@ function getClientIP(request: Request): string {
  * GET /api/search?q=...&mode=ai     -> force AI answer (streaming SSE)
  * GET /api/search?id=abc123         -> retrieve cached AI answer (JSON)
  */
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, context: loaderContext }: Route.LoaderArgs) {
+  const waitUntil = loaderContext.cloudflare?.ctx?.waitUntil?.bind(loaderContext.cloudflare.ctx);
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   const query = url.searchParams.get("q");
@@ -236,7 +237,7 @@ export async function loader({ request }: Route.LoaderArgs) {
               $ai_stream: true,
               source_count: allSources.length,
               tool_call_count: toolCallCount,
-            });
+            }, waitUntil);
 
             enqueue({ type: "done" });
           } else {
@@ -253,7 +254,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           $ai_http_status: 500,
           $ai_is_error: true,
           $ai_error: error.message,
-        });
+        }, waitUntil);
         const errorEvent: AgentEvent = {
           type: "final_answer_chunk",
           chunk: `\n\n**Error:** An unexpected error occurred. (${error.message})`,

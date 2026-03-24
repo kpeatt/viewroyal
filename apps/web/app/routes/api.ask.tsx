@@ -101,7 +101,7 @@ function createStreamingResponse(question: string, context?: string, municipalit
                 $ai_stream: true,
                 source_count: sourceCount,
                 tool_call_count: toolCallCount,
-              });
+              }, waitUntil);
             }
 
             // Insert trace row to Supabase (fire-and-forget)
@@ -137,7 +137,7 @@ function createStreamingResponse(question: string, context?: string, municipalit
             $ai_http_status: 500,
             $ai_is_error: true,
             $ai_error: error.message,
-          });
+          }, waitUntil);
         }
         const errorEvent: AgentEvent = {
           type: "final_answer_chunk",
@@ -182,7 +182,8 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 // Also support GET for simple queries
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, context: loaderContext }: Route.LoaderArgs) {
+  const waitUntil = loaderContext.cloudflare?.ctx?.waitUntil?.bind(loaderContext.cloudflare.ctx);
   const url = new URL(request.url);
   const question = url.searchParams.get("q");
   const context = url.searchParams.get("context") || undefined;

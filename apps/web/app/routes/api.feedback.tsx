@@ -31,7 +31,8 @@ function getClientIP(request: Request): string {
   );
 }
 
-export async function action({ request }: { request: Request }) {
+export async function action({ request, context }: { request: Request; context: any }) {
+  const waitUntil = context?.cloudflare?.ctx?.waitUntil?.bind(context?.cloudflare?.ctx);
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -97,7 +98,7 @@ export async function action({ request }: { request: Request }) {
       $ai_trace_id: traceId,
       $ai_is_positive: rating === 1,
       $ai_feedback_text: comment || undefined,
-    });
+    }, waitUntil);
 
     return Response.json({ ok: true });
   } catch (error: any) {
