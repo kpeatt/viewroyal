@@ -5,126 +5,131 @@ describe("buildToolSummary", () => {
   // --- Empty / falsy inputs ---
 
   it("returns 'No results found' for empty array", () => {
-    expect(buildToolSummary("search_motions", [])).toBe("No results found");
+    expect(buildToolSummary("search_matters", [])).toBe("No results found");
   });
 
   it("returns 'No results found' for null", () => {
-    expect(buildToolSummary("search_motions", null)).toBe("No results found");
+    expect(buildToolSummary("search_council_records", null)).toBe("No results found");
   });
 
   it("returns 'No results found' for undefined", () => {
-    expect(buildToolSummary("search_motions", undefined)).toBe("No results found");
+    expect(buildToolSummary("search_documents", undefined)).toBe("No results found");
   });
 
   // --- String passthrough ---
 
   it("returns short string as-is", () => {
-    expect(buildToolSummary("search_transcript_segments", "No relevant segments found")).toBe(
+    expect(buildToolSummary("search_council_records", "No relevant segments found")).toBe(
       "No relevant segments found",
     );
   });
 
   it("truncates long strings to 200 chars", () => {
     const long = "x".repeat(300);
-    const result = buildToolSummary("search_transcript_segments", long);
+    const result = buildToolSummary("search_council_records", long);
     expect(result.length).toBeLessThanOrEqual(203); // 200 + "..."
   });
 
-  // --- search_motions ---
+  // --- search_council_records (composite object) ---
 
-  it("summarizes motions with count and date range", () => {
-    const motions = [
-      { meetings: { meeting_date: "2024-03-15" }, text_content: "..." },
-      { meetings: { meeting_date: "2024-06-20" }, text_content: "..." },
-      { meetings: { meeting_date: "2025-01-10" }, text_content: "..." },
-      { meetings: { meeting_date: "2024-11-05" }, text_content: "..." },
-    ];
-    const result = buildToolSummary("search_motions", motions);
-    expect(result).toContain("4");
-    expect(result).toContain("motion");
-    expect(result).toContain("2024-03-15");
-    expect(result).toContain("2025-01-10");
+  it("summarizes council records with motions and transcripts", () => {
+    const result = buildToolSummary("search_council_records", {
+      motions: [
+        { meetings: { meeting_date: "2024-03-15" }, text_content: "..." },
+        { meetings: { meeting_date: "2024-06-20" }, text_content: "..." },
+        { meetings: { meeting_date: "2025-01-10" }, text_content: "..." },
+        { meetings: { meeting_date: "2024-11-05" }, text_content: "..." },
+      ],
+      transcripts: [
+        { speaker_name: "Mayor", text_content: "..." },
+        { speaker_name: "Clerk", text_content: "..." },
+      ],
+      statements: [],
+      agenda_items: [],
+    });
+    expect(result).toContain("4 motions");
+    expect(result).toContain("2 transcripts");
   });
 
-  // --- search_bylaws ---
-
-  it("summarizes bylaws with count and unique bylaw numbers", () => {
-    const bylaws = [
-      { bylaw_number: "1234", bylaw_title: "Zoning", text_content: "..." },
-      { bylaw_number: "1234", bylaw_title: "Zoning", text_content: "..." },
-      { bylaw_number: "5678", bylaw_title: "Fees", text_content: "..." },
-    ];
-    const result = buildToolSummary("search_bylaws", bylaws);
-    expect(result).toContain("3");
-    expect(result).toContain("bylaw");
-    expect(result).toContain("1234");
-    expect(result).toContain("5678");
+  it("summarizes council records with statements and agenda items", () => {
+    const result = buildToolSummary("search_council_records", {
+      motions: [],
+      transcripts: [],
+      statements: [
+        { speaker_name: "Smith", statement_type: "proposal" },
+        { speaker_name: "Jones", statement_type: "objection" },
+      ],
+      agenda_items: [
+        { title: "Item 1" },
+      ],
+    });
+    expect(result).toContain("2 statements");
+    expect(result).toContain("1 agenda item");
   });
 
-  // --- search_key_statements ---
-
-  it("summarizes key statements with count and speakers", () => {
-    const statements = [
-      { speaker_name: "Smith", statement_type: "proposal", meetings: { meeting_date: "2024-05-01" } },
-      { speaker_name: "Jones", statement_type: "objection", meetings: { meeting_date: "2024-05-01" } },
-    ];
-    const result = buildToolSummary("search_key_statements", statements);
-    expect(result).toContain("2");
-    expect(result).toContain("statement");
-    expect(result).toContain("Smith");
-    expect(result).toContain("Jones");
+  it("returns 'No results found' for empty council records", () => {
+    const result = buildToolSummary("search_council_records", {
+      motions: [],
+      transcripts: [],
+      statements: [],
+      agenda_items: [],
+    });
+    expect(result).toBe("No results found");
   });
 
-  // --- get_voting_history ---
+  // --- search_documents (composite object) ---
 
-  it("summarizes voting history with stats", () => {
-    const voting = { stats: { total: 50, yes: 45, no: 5 } };
-    const result = buildToolSummary("get_voting_history", voting);
+  it("summarizes document sections and bylaws", () => {
+    const result = buildToolSummary("search_documents", {
+      document_sections: [
+        { heading: "Background", document_title: "Report" },
+        { heading: "Analysis", document_title: "Report" },
+      ],
+      bylaws: [
+        { bylaw_number: "1234", bylaw_title: "Zoning" },
+        { bylaw_number: "5678", bylaw_title: "Fees" },
+        { bylaw_number: "1234", bylaw_title: "Zoning" },
+      ],
+    });
+    expect(result).toContain("2 document sections");
+    expect(result).toContain("3 bylaw sections");
+  });
+
+  it("returns 'No results found' for empty documents", () => {
+    const result = buildToolSummary("search_documents", {
+      document_sections: [],
+      bylaws: [],
+    });
+    expect(result).toBe("No results found");
+  });
+
+  // --- get_person_info (composite object) ---
+
+  it("summarizes person info with voting stats", () => {
+    const result = buildToolSummary("get_person_info", {
+      stats: { total: 50, yes: 45, no: 5 },
+      transcript_segments: [],
+      key_statements: [],
+    });
     expect(result).toContain("50");
-    expect(result).toContain("45");
-    expect(result).toContain("5");
+    expect(result).toContain("voting record");
   });
 
-  // --- search_transcript_segments (array) ---
-
-  it("summarizes transcript segments with speakers", () => {
-    const segments = [
-      { speaker_name: "Mayor", text_content: "...", meetings: { meeting_date: "2024-01-01" } },
-      { speaker_name: "Clerk", text_content: "...", meetings: { meeting_date: "2024-02-01" } },
-      { speaker_name: "Mayor", text_content: "...", meetings: { meeting_date: "2024-02-01" } },
-    ];
-    const result = buildToolSummary("search_transcript_segments", segments);
-    expect(result).toContain("3");
-    expect(result).toContain("transcript");
-    expect(result).toContain("Mayor");
-    expect(result).toContain("Clerk");
+  it("summarizes person info with statements and segments", () => {
+    const result = buildToolSummary("get_person_info", {
+      transcript_segments: [
+        { speaker_name: "Mayor", text_content: "..." },
+        { speaker_name: "Mayor", text_content: "..." },
+      ],
+      key_statements: [
+        { speaker_name: "Mayor", statement_type: "proposal" },
+      ],
+      stats: null,
+    });
+    expect(result).toContain("3 statements");
   });
 
-  // --- search_document_sections ---
-
-  it("summarizes document sections with count", () => {
-    const sections = [
-      { heading: "Background", document_title: "Report", meeting_date: "2024-03-01" },
-      { heading: "Analysis", document_title: "Report", meeting_date: "2024-06-01" },
-    ];
-    const result = buildToolSummary("search_document_sections", sections);
-    expect(result).toContain("2");
-    expect(result).toContain("document");
-  });
-
-  // --- search_agenda_items ---
-
-  it("summarizes agenda items with count", () => {
-    const items = [
-      { title: "Item 1", meetings: { meeting_date: "2024-01-01" } },
-      { title: "Item 2", meetings: { meeting_date: "2024-02-01" } },
-    ];
-    const result = buildToolSummary("search_agenda_items", items);
-    expect(result).toContain("2");
-    expect(result).toContain("agenda");
-  });
-
-  // --- search_matters ---
+  // --- search_matters (array) ---
 
   it("summarizes matters with count", () => {
     const matters = [
