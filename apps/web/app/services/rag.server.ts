@@ -1385,7 +1385,7 @@ Return JSON: {"scores": [{"index": 0, "score": 8}, ...]}`;
   const start = Date.now();
   try {
     const response = await getGenAI()!.models.generateContent({
-      model: "gemini-2.5-flash-lite-preview-06-17",
+      model: "gemini-2.5-flash-lite",
       contents: [prompt],
       config: { responseMimeType: "application/json" },
     });
