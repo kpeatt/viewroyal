@@ -8,8 +8,8 @@
 - ✅ **v1.3 Platform APIs** -- Phases 15-18 (shipped 2026-02-22) -- [Archive](milestones/v1.3-ROADMAP.md)
 - ✅ **v1.4 Developer Documentation Portal** -- Phases 19-24 (shipped 2026-02-25) -- [Archive](milestones/v1.4-ROADMAP.md)
 - ✅ **v1.5 Document Experience** -- Phases 25-28 (shipped 2026-02-28) -- [Archive](milestones/v1.5-ROADMAP.md)
-- ✅ **v1.6 Search Experience** -- Phases 29-31 (shipped 2026-03-01)
-- 🚧 **v1.7 View Royal Intelligence** -- Phases 37-40 (in progress)
+- ✅ **v1.6 Search Experience** -- Phases 29-31 (shipped 2026-03-01) -- [Archive](milestones/v1.6-ROADMAP.md)
+- ✅ **v1.7 View Royal Intelligence** -- Phases 37-40 (shipped 2026-03-24) -- [Archive](milestones/v1.7-ROADMAP.md)
 - 📋 **v1.8 RDOS Ingestion** -- Phases 32-36 (deferred)
 
 ## Phases
@@ -88,17 +88,18 @@
 
 </details>
 
-### v1.7 View Royal Intelligence (In Progress)
+<details>
+<summary>✅ v1.7 View Royal Intelligence (Phases 37-40) -- SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** Deepen the single-municipality (View Royal) experience with smarter search, richer council member profiles, better meeting UX, and improved email alerts -- making the existing platform substantially more useful before expanding to other municipalities.
+- [x] Phase 37: Eval Foundation + Quick Wins (2/2 plans) -- completed 2026-03-06
+- [x] Phase 38: RAG Intelligence (2/2 plans) -- completed 2026-03-06
+- [x] Phase 39: Council Intelligence (3/3 plans) -- completed 2026-03-13
+- [x] Phase 40: UX Polish + Email (2/2 plans) -- completed 2026-03-23
 
-- [x] **Phase 37: Eval Foundation + Quick Wins** - RAG observability/feedback infrastructure and zero-backend-work UI improvements (summary cards, outcome badges) (completed 2026-03-06)
-- [x] **Phase 38: RAG Intelligence** - LLM reranking and consolidated tool set for better answer quality (completed 2026-03-06)
-- [x] **Phase 39: Council Intelligence** - Topic taxonomy, AI profiles, key vote detection, and redesigned profile page (completed 2026-03-13)
-- [x] **Phase 40: UX Polish + Email** - Financial transparency, meeting attendance info, and improved email digests (completed 2026-03-23)
+</details>
 
 <details>
-<summary>v1.8 RDOS Ingestion (Deferred)</summary>
+<summary>📋 v1.8 RDOS Ingestion (Deferred)</summary>
 
 **Milestone Goal:** Ingest RDOS Board of Directors meetings (2025+) through the full pipeline -- scrape from Escribemeetings, download YouTube video, diarize, AI refine, and embed -- proving multi-municipality ingestion works end-to-end.
 
@@ -108,82 +109,4 @@
 - [ ] **Phase 35: Board Members** - Scrape RDOS board members and election data into people tables
 - [ ] **Phase 36: End-to-End Integration** - Full 5-phase pipeline run for RDOS Board meetings
 
-See RDOS requirement details in REQUIREMENTS.md v2 section.
-
 </details>
-
-## Phase Details
-
-### Phase 37: Eval Foundation + Quick Wins
-**Goal**: Users can rate AI answers and see richer meeting information at a glance, while RAG traces provide a measurement baseline for subsequent improvements
-**Depends on**: Nothing (first phase of v1.7)
-**Requirements**: SRCH-03, SRCH-04, MTGX-01, MTGX-02
-**Success Criteria** (what must be TRUE):
-  1. User can give thumbs up or thumbs down on any AI answer, and the feedback is persisted
-  2. RAG traces (query text, tools invoked, latency, source count) are logged to the database for every AI answer
-  3. Meeting list page shows summary cards with key decisions and topic indicators for each meeting
-  4. Motion outcomes throughout the app display as colored badges indicating passed, defeated, tabled, or deferred
-**Plans**: 2 plans
-
-Plans:
-- [ ] 37-01-PLAN.md -- RAG trace logging and user feedback infrastructure (SRCH-03, SRCH-04)
-- [ ] 37-02-PLAN.md -- Motion outcome badges and enhanced meeting summary cards (MTGX-01, MTGX-02)
-
-### Phase 38: RAG Intelligence
-**Goal**: AI answers are measurably more relevant through LLM reranking and a streamlined tool set
-**Depends on**: Phase 37 (observability baseline needed to measure improvements)
-**Requirements**: SRCH-01, SRCH-02
-**Success Criteria** (what must be TRUE):
-  1. Search results and RAG evidence are reranked by LLM relevance scoring, with the reranking step visible in RAG traces
-  2. RAG agent uses approximately 5 consolidated tools instead of the current 9 overlapping ones
-  3. Answer quality is maintained or improved as measured by feedback ratings compared to the Phase 37 baseline
-**Plans**: 2 plans
-
-Plans:
-- [ ] 38-01-PLAN.md -- RAG tool consolidation from 10 to 4, system prompt update, UI labels (SRCH-02)
-- [ ] 38-02-PLAN.md -- LLM reranking with Gemini Flash Lite, trace logging, UI research step (SRCH-01)
-
-### Phase 39: Council Intelligence
-**Goal**: Users can understand each councillor's priorities, positions, and notable votes through AI-generated profiles grounded in evidence
-**Depends on**: Phase 37 (topic taxonomy tables created in Phase 37 migrations)
-**Requirements**: CNCL-01, CNCL-02, CNCL-03, CNCL-04
-**Success Criteria** (what must be TRUE):
-  1. Agenda items are classified into a hierarchical topic taxonomy extending the existing 8-topic system
-  2. Each councillor has an AI-generated profile summary synthesizing their voting record, speaking patterns, and stance positions
-  3. Key votes are algorithmically detected and displayed (minority position votes, close votes, ally breaks)
-  4. Council member profile page shows at-a-glance stats card, AI summary, policy positions organized by topic, and a key votes section
-**Plans**: 3 plans
-
-Plans:
-- [ ] 39-01-PLAN.md -- Topic taxonomy classification and agenda item backfill (CNCL-01)
-- [ ] 39-02-PLAN.md -- Key vote detection algorithm and AI profile narrative generation (CNCL-02, CNCL-03)
-- [ ] 39-03-PLAN.md -- Council member profile page redesign with new tabs (CNCL-04)
-
-### Phase 40: UX Polish + Email
-**Goal**: Users see financial data on relevant agenda items, know how to attend upcoming meetings, and receive better-designed email digests
-**Depends on**: Phase 37 (summary cards and badges established)
-**Requirements**: MTGX-03, MTGX-04, MAIL-01, MAIL-02
-**Success Criteria** (what must be TRUE):
-  1. Agenda items with financial cost or funding source data display it visually (amount and/or source)
-  2. Upcoming meetings show attendance information including location, how to attend, and public input process
-  3. Email digest has a mobile-friendly design with meeting summary section at the top
-  4. Email digest includes upcoming meeting dates with attendance information
-**Plans**: 2 plans
-
-Plans:
-- [ ] 40-01-PLAN.md -- Meeting attendance info + financial visibility confirmation (MTGX-03, MTGX-04)
-- [ ] 40-02-PLAN.md -- Email digest and pre-meeting template redesign (MAIL-01, MAIL-02)
-
-## Progress
-
-**Execution Order:**
-Phases execute in numeric order: 37 -> 38 -> 39 -> 40
-
-Note: Phase 39 depends on Phase 37 (not 38) so could theoretically run in parallel with Phase 38, but sequential execution is simpler and lets RAG improvements stabilize first.
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|----------------|--------|-----------|
-| 37. Eval Foundation + Quick Wins | 2/2 | Complete    | 2026-03-06 | - |
-| 38. RAG Intelligence | 2/2 | Complete    | 2026-03-06 | - |
-| 39. Council Intelligence | 3/3 | Complete    | 2026-03-13 | - |
-| 40. UX Polish + Email | 2/2 | Complete    | 2026-03-23 | - |

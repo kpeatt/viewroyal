@@ -87,20 +87,23 @@ Citizens can understand what their council decided, why, and who said what — w
 - ✓ Grouped citation badges with hover/tap source preview cards — v1.6
 - ✓ Keyword search time/type filters with URL state persistence — v1.6
 - ✓ Collapsible source panel and follow-up suggestions redesign — v1.6
+- ✓ RAG trace logging with query, tools, latency, sources for every AI answer — v1.7
+- ✓ User feedback (thumbs up/down) on AI answers with anonymous and authenticated support — v1.7
+- ✓ LLM reranking of search results via Gemini Flash Lite with flatten-rerank-unflatten pattern — v1.7
+- ✓ Consolidated RAG agent from 10 tools to 4 with parallel sub-queries — v1.7
+- ✓ Topic taxonomy classification (SQL-first + Gemini fallback) for agenda items — v1.7
+- ✓ Key vote detection algorithm (minority position, close votes, ally breaks) with composite scoring — v1.7
+- ✓ AI-generated councillor narrative profiles synthesizing voting, speaking, and stance data — v1.7
+- ✓ Council member profile page redesigned with 6-tab layout (Profile, Policy, Key Votes, Votes, Speaking, Attendance) — v1.7
+- ✓ Meeting cards with topic chips, motion tallies, and summary text — v1.7
+- ✓ Motion outcome badges (passed/defeated/tabled/withdrawn) replacing inline logic across 17 files — v1.7
+- ✓ Meeting attendance info driven by municipality meta JSONB with per-meeting overrides — v1.7
+- ✓ Email digest redesigned with summary-first layout, Ask AI CTA, and Coming Up footer — v1.7
+- ✓ Pre-meeting email with full agenda, subscription highlights, and data-driven attendance info — v1.7
 
 ### Active
 
-## Current Milestone: v1.7 View Royal Intelligence
-
-**Goal:** Deepen the single-municipality (View Royal) experience with smarter search, richer council member profiles, better meeting UX, and improved email alerts — making the existing platform substantially more useful before expanding to other municipalities.
-
-**Target features:**
-- RAG improvements: LLM reranking, redesigned tool set, conversation memory, observability & feedback
-- Council member intelligence: AI profile generation with topic taxonomy, stance analysis, key vote detection
-- Council member profile page redesign with at-a-glance cards and policy positions
-- UX features: meeting summary cards, topic/issue clustering, meeting outcome badges, financial transparency
-- Pipeline: speaker identification/fingerprinting, neighbourhood relevance filtering
-- Email alerts: better digest design, upcoming meeting attendance info, link to join in-progress meetings
+(No active milestone — run `/gsd:new-milestone` to define v1.8 or next priorities)
 
 ### Out of Scope
 - RDOS / multi-municipality ingestion — deferred to v1.8
@@ -112,10 +115,9 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ## Context
 
-Shipped v1.5 with ~39,000 LOC TypeScript web app, 40+ database tables, developer docs portal at docs.viewroyal.ai.
-v1.5: 4 phases, 7 plans. v1.6: 3 phases, 7 plans.
-Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview), fastembed, fumadocs v16 + Next.js 16 (docs).
-v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.3: 4 phases, 14 plans. v1.4: 6 phases, 10 plans. v1.5: 4 phases, 7 plans.
+Shipped v1.7 with ~49,000 LOC (TypeScript + Python), 40+ database tables, developer docs portal at docs.viewroyal.ai.
+Tech stack: React Router 7, Cloudflare Workers, Hono + chanfana (API), Supabase PostgreSQL + pgvector, Google Gemini (gemini-3-flash-preview + gemini-2.5-flash-lite-preview for reranking), fastembed, fumadocs v16 + Next.js 16 (docs).
+v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.3: 4 phases, 14 plans. v1.4: 6 phases, 10 plans. v1.5: 4 phases, 7 plans. v1.6: 3 phases, 7 plans. v1.7: 4 phases, 9 plans.
 
 **Known technical debt:**
 - `bootstrap.sql` is out of date with 30+ applied migrations
@@ -126,6 +128,7 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 - `slugs.ts` utility created but unused (slugs resolved via DB columns)
 - API search is keyword-only; hybrid vector+keyword descoped
 - Rate Limit binding pricing needs verification before production launch
+- Gemini cost projection: reranking + classification + profiling add new API consumers
 
 ## Constraints
 
@@ -166,6 +169,17 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 | UUID v5 via Web Crypto for OCD IDs | No npm dependency, deterministic IDs from entity PKs, Cloudflare-compatible | ✓ Good |
 | Plain Hono handlers for OCD (not chanfana) | OCD has its own spec; OpenAPI generation unnecessary for those endpoints | ✓ Good |
 | Serializer allowlist pattern | Never spread ...row; explicitly construct output objects to prevent field leakage | ✓ Good |
+| Fire-and-forget trace insert | No await on rag_traces insert to avoid blocking SSE stream delivery | ✓ Good |
+| Dual-write PostHog + Supabase traces | Same traceId in both for gradual migration path | ✓ Good |
+| normalizeMotionResult canonical utility | Single RESULT_MAP covering all 11 DB values + typos, replaces 17 inline implementations | ✓ Good |
+| Consolidated RAG tools (10 -> 4) | Promise.all sub-queries in each tool reduce agent confusion and round-trips | ✓ Good |
+| Gemini Flash Lite for reranking | Fast and cheap model sufficient for relevance scoring; graceful degradation on failure | ✓ Good |
+| SQL-first topic classification | bulk_classify_topics_by_category RPC handles majority; Gemini only for unmapped categories | ✓ Good |
+| Vote counts from votes table | Not from motions.yes_votes/no_votes columns due to data quality issues | ✓ Good |
+| Composite key vote scoring | minority*3 + closeness*2 + ally_breaks*1 balances detection pattern importance | ✓ Good |
+| 6-tab profile page layout | Profile tab as default shows AI narrative first; General/Administration topics filtered | ✓ Good |
+| Municipality meta for attendance | JSONB meta field with per-meeting sparse overrides; zero-migration deployment | ✓ Good |
+| Compact email list format | Cards take too much vertical space; compact list scans better on mobile | ✓ Good |
 | Fumadocs v16 + Next.js 16 static export | No server runtime needed; static `out/` served by Workers Static Assets | ✓ Good |
 | Cloudflare Workers Static Assets (not Pages) | Pages deprecated; `[assets]` directive in wrangler.toml is the modern approach | ✓ Good |
 | generateFiles() for OpenAPI MDX | No RSC server available in static export; prebuild generates MDX at build time | ✓ Good |
@@ -174,4 +188,4 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-03-05 after v1.7 View Royal Intelligence milestone started (RDOS deferred to v1.8)*
+*Last updated: 2026-03-24 after v1.7 View Royal Intelligence milestone completed*
