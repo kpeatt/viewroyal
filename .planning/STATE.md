@@ -1,16 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: View Royal Intelligence
-status: completed
-stopped_at: Milestone v1.7 archived
-last_updated: "2026-03-24"
-last_activity: 2026-03-24 -- Archived v1.7 View Royal Intelligence milestone
+milestone: v1.0
+milestone_name: milestone
+status: 309 meetings queued for re-extraction. 40,805 sections need embeddings. Waiting on Gemini quota.
+last_updated: "2026-03-24T16:58:32.262Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -66,5 +64,5 @@ All v1.0-v1.7 decisions archived -- see PROJECT.md Key Decisions table.
 - Gemini cost projection: reranking + classification + profiling add new API consumers
 
 ### Paused Work: Phase 7.1
-Resume file: .planning/phases/07.1-upgrade-document-extraction-with-docling-and-gemini/.continue-here.md
+Resume file: None
 Status: 309 meetings queued for re-extraction. 40,805 sections need embeddings. Waiting on Gemini quota.
