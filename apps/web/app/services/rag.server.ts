@@ -120,6 +120,7 @@ export type AgentEvent =
   | { type: "sources"; sources: any[] }
   | { type: "suggested_followups"; followups: string[] }
   | { type: "trace_id"; traceId: string }
+  | { type: "usage_metadata"; inputTokens: number; outputTokens: number }
   | { type: "done" };
 
 interface Tool<T extends Record<string, any>, R> {
@@ -1500,6 +1501,8 @@ export async function* runQuestionAgent(
 
   const history: string[] = [];
   const allSources: NormalizedSource[] = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
   if (context) {
     history.push(
@@ -1522,6 +1525,10 @@ Respond with a single JSON object. No markdown fences.`;
         userPrompt,
       ],
     });
+    if (result.usageMetadata) {
+      totalInputTokens += result.usageMetadata.promptTokenCount ?? 0;
+      totalOutputTokens += result.usageMetadata.candidatesTokenCount ?? 0;
+    }
     const responseText = (result.text ?? "").trim();
 
     let agentResponse;
@@ -1646,7 +1653,13 @@ Synthesize a final answer based *only* on the evidence above. Use [1], [2], etc.
   });
   for await (const chunk of stream) {
     yield { type: "final_answer_chunk", chunk: chunk.text ?? "" };
+    // Accumulate token usage from the last chunk (which contains final counts)
+    if (chunk.usageMetadata) {
+      totalInputTokens += chunk.usageMetadata.promptTokenCount ?? 0;
+      totalOutputTokens += chunk.usageMetadata.candidatesTokenCount ?? 0;
+    }
   }
 
+  yield { type: "usage_metadata", inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
   yield { type: "done" };
 }

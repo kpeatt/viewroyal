@@ -51,6 +51,8 @@ function createStreamingResponse(question: string, context?: string, municipalit
       let fullAnswer = "";
       let toolCallCount = 0;
       let sourceCount = 0;
+      let inputTokens = 0;
+      let outputTokens = 0;
       const toolCalls: { name: string; args: any }[] = [];
       let sourcesData: any[] = [];
 
@@ -73,6 +75,9 @@ function createStreamingResponse(question: string, context?: string, municipalit
           } else if (event.type === "sources") {
             sourceCount = (event.sources || []).length;
             sourcesData = event.sources || [];
+          } else if (event.type === "usage_metadata") {
+            inputTokens = event.inputTokens;
+            outputTokens = event.outputTokens;
           }
 
           if (event.type === "done") {
@@ -91,6 +96,9 @@ function createStreamingResponse(question: string, context?: string, municipalit
                 $ai_output_choices: [fullAnswer],
                 $ai_latency: latencyMs / 1000,
                 $ai_http_status: 200,
+                $ai_input_tokens: inputTokens,
+                $ai_output_tokens: outputTokens,
+                $ai_stream: true,
                 source_count: sourceCount,
                 tool_call_count: toolCallCount,
               });
@@ -120,6 +128,17 @@ function createStreamingResponse(question: string, context?: string, municipalit
         }
       } catch (error: any) {
         console.error("Streaming RAG error:", error);
+        if (clientIP) {
+          captureServerEvent("$ai_generation", clientIP, {
+            $ai_trace_id: traceId,
+            $ai_model: "gemini-3-flash-preview",
+            $ai_provider: "google",
+            $ai_input: question,
+            $ai_http_status: 500,
+            $ai_is_error: true,
+            $ai_error: error.message,
+          });
+        }
         const errorEvent: AgentEvent = {
           type: "final_answer_chunk",
           chunk: `\n\n**Error:** An unexpected error occurred. (${error.message})`,

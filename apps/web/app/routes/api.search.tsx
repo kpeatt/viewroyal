@@ -10,6 +10,7 @@ import { runQuestionAgent, type AgentEvent } from "../services/rag.server";
 import { createSupabaseServerClient } from "../lib/supabase.server";
 import { getMunicipality } from "../services/municipality";
 import { GoogleGenAI } from "@google/genai";
+import { captureServerEvent } from "../lib/analytics.server";
 
 // Simple in-memory rate limiter: max requests per IP within a window
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -145,6 +146,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Collect streamed chunks for caching after completion
   let fullAnswer = "";
   let allSources: any[] = [];
+  const streamStartTime = Date.now();
+  let toolCallCount = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -165,6 +170,11 @@ export async function loader({ request }: Route.LoaderArgs) {
             fullAnswer += event.chunk;
           } else if (event.type === "sources") {
             allSources = event.sources;
+          } else if (event.type === "tool_call") {
+            toolCallCount++;
+          } else if (event.type === "usage_metadata") {
+            inputTokens = event.inputTokens;
+            outputTokens = event.outputTokens;
           }
 
           // Stream all events except "done" (we add followups + cache_id before it)
@@ -213,6 +223,21 @@ export async function loader({ request }: Route.LoaderArgs) {
               enqueue({ type: "cache_id", id: cacheId });
             }
 
+            captureServerEvent("$ai_generation", getClientIP(request), {
+              $ai_trace_id: crypto.randomUUID(),
+              $ai_model: "gemini-3-flash-preview",
+              $ai_provider: "google",
+              $ai_input: query,
+              $ai_output_choices: [fullAnswer],
+              $ai_latency: (Date.now() - streamStartTime) / 1000,
+              $ai_http_status: 200,
+              $ai_input_tokens: inputTokens,
+              $ai_output_tokens: outputTokens,
+              $ai_stream: true,
+              source_count: allSources.length,
+              tool_call_count: toolCallCount,
+            });
+
             enqueue({ type: "done" });
           } else {
             enqueue(event);
@@ -220,6 +245,15 @@ export async function loader({ request }: Route.LoaderArgs) {
         }
       } catch (error: any) {
         console.error("Streaming search error:", error);
+        captureServerEvent("$ai_generation", getClientIP(request), {
+          $ai_trace_id: crypto.randomUUID(),
+          $ai_model: "gemini-3-flash-preview",
+          $ai_provider: "google",
+          $ai_input: query,
+          $ai_http_status: 500,
+          $ai_is_error: true,
+          $ai_error: error.message,
+        });
         const errorEvent: AgentEvent = {
           type: "final_answer_chunk",
           chunk: `\n\n**Error:** An unexpected error occurred. (${error.message})`,
