@@ -1,116 +1,110 @@
 # Feature Landscape
 
-**Domain:** Civic intelligence platform v1.7 enhancements (RAG, profiling, UX, pipeline, email)
-**Researched:** 2026-03-05
+**Domain:** Esquimalt ingestion and subdomain-based multi-site launch
+**Researched:** 2026-03-30
 
 ## Table Stakes
 
-Features users expect once the existing v1.0-1.6 foundation is in place. Missing = platform feels half-finished for returning users.
+Features required for Esquimalt to feel like a real launch, not a broken mirror of View Royal.
 
-| Feature | Why Expected | Complexity | Dependencies on Existing | Notes |
-|---------|--------------|------------|-------------------------|-------|
-| LLM reranking of RAG results | Users already get AI answers; poor retrieval quality is noticeable when the answer misses obvious context or cites irrelevant segments. Reranking is the single highest-ROI RAG improvement. | Medium | Existing hybrid search RPCs (4 content types), Gemini API, RRF scoring | Pointwise scoring with Gemini Flash is simplest. Score each retrieved chunk 1-5 for relevance before passing to synthesis. Gemini Flash benchmarks at 0.68 NDCG@10 -- not as good as purpose-built cross-encoders but eliminates a new dependency. Inject existing RRF/BM25 scores into the prompt for 3-16% further gains per InsertRank research. |
-| Meeting summary cards | Every meeting page already has a `summary` field and agenda items. Users landing on meetings list expect a quick "what happened" preview without clicking through. | Low | `meetings.summary`, `agenda_items.plain_english_summary`, existing motions data | Card should show: meeting date/type, 1-2 sentence summary, count of decisions, whether any votes were divided, attendance count. Data already exists -- this is a pure frontend feature. |
-| Meeting outcome badges | Users see motions with text results ("CARRIED", "DEFEATED") but lack visual scan-ability. Colored badges per outcome are standard in any decision-tracking UI. | Low | `motions.result` field, existing MotionsOverview component | Simple mapping: CARRIED = green badge, DEFEATED = red badge, TABLED/DEFERRED = amber badge, WITHDRAWN = gray badge. Already have Badge component from shadcn/ui. |
-| Improved email digest design | Current digest HTML is functional but dense. Users receiving digests expect scannable, mobile-friendly emails with clear hierarchy. | Low-Med | Existing `send-alerts` Edge Function, Resend integration, `build_meeting_digest` RPC | Current email uses inline styles correctly (email-safe). Improvements: add meeting summary at top, group decisions by outcome, add "TL;DR" one-liner, improve mobile padding, add unsubscribe one-click link per CAN-SPAM / CASL. |
-| RAG observability and feedback | Users who get bad answers have no way to report it. Developers have no way to measure RAG quality. Without feedback loops, quality stagnates. | Medium | `rag.server.ts` orchestrator/synthesis pipeline, existing streaming SSE | Minimum: thumbs up/down on AI answers stored in a `rag_feedback` table. Track: question, answer hash, tool calls made, latency, user rating. This is the eval foundation for every other RAG improvement. |
+| Feature | Why Expected | Complexity | Dependencies | Notes |
+|---------|--------------|------------|--------------|-------|
+| Legistar HTML scraper (not Web API) | **CRITICAL:** The existing `LegistarScraper` uses the Legistar Web API (`webapi.legistar.com`), but Esquimalt has NOT enabled API access. All calls to `webapi.legistar.com/v1/esquimalt/...` return 500 with "LegistarConnectionString setting is not set up in InSite." Must scrape `esquimalt.ca.legistar.com` HTML instead. | High | Replaces or augments existing `scrapers/legistar.py` | This is the single biggest risk. The entire scraper needs rewriting from JSON API calls to HTML parsing of Legistar's ASP.NET pages. Calendar.aspx, MeetingDetail.aspx, View.ashx patterns are the scraping surface. |
+| Hostname-based subdomain routing | Users at `esquimalt.viewroyal.ai` must see Esquimalt data, not View Royal. Currently `getMunicipality()` is hardcoded to `slug = "view-royal"`. | Med | wrangler.toml route config, DNS wildcard, Worker fetch handler | Worker extracts hostname, maps subdomain to municipality slug, passes to root loader. |
+| Municipality context from hostname in root loader | Root loader must derive municipality slug from `request.url` hostname instead of hardcoded default. | Low | Hostname routing working | `getMunicipality(supabase, slug)` already accepts a slug parameter -- just need to extract it from hostname. |
+| Esquimalt municipality row in DB | `municipalities` table needs an Esquimalt entry with correct `source_config`, `map_center_lat/lng`, `website_url`, etc. | Low | None | Seed via migration or manual insert. `source_config` must reflect actual scraping approach (HTML, not API). |
+| Esquimalt organizations in DB | Council, Committee of the Whole, Advisory Planning Commission, etc. from Legistar's department list. | Low | Municipality row exists | Legistar shows 11 body types: Council, COTW, Special Meeting, APC, APC Design Review, Board of Variance, Local Grant Committee, etc. |
+| Full pipeline run for Esquimalt | Scrape, download PDFs, ingest (AI refine), embed. No diarization initially (Granicus video is a separate concern). | Med | Scraper working, municipality row seeded | Pipeline already supports `--municipality esquimalt`. Ingester already takes `municipality_id`. |
+| Unknown subdomain 404 | `random.viewroyal.ai` must return a proper 404, not crash or show View Royal data. | Low | Hostname routing | Lookup slug in `municipalities` table; if not found, return 404 response. |
+| Wildcard DNS + SSL for `*.viewroyal.ai` | Subdomains must resolve and have valid TLS certificates. | Low | Cloudflare DNS access | Cloudflare provides free wildcard SSL. Add `*.viewroyal.ai` CNAME or use route patterns. |
+| View Royal still works at apex domain | `viewroyal.ai` (no subdomain) must continue serving View Royal data, not break. | Low | Hostname routing | Map empty subdomain / apex to `view-royal` slug as default. |
 
 ## Differentiators
 
-Features that set ViewRoyal.ai apart from generic civic platforms. Not expected, but create the "wow" moment.
+Features that would enhance the launch but are not strictly required for MVP.
 
-| Feature | Value Proposition | Complexity | Dependencies on Existing | Notes |
-|---------|-------------------|------------|-------------------------|-------|
-| AI-generated council member profiles | No other small-municipality civic platform auto-generates comprehensive "who is this councillor" profiles from voting/speaking data. Currently stances exist but are per-topic; a synthesized profile overview is the differentiator. | Medium-High | `councillor_stances` table, `councillor_highlights` table, speaking time RPCs, voting history, `key_statements` | Generate a ~200-word narrative profile per councillor: top 3 policy priorities (derived from speaking time + stance data), voting tendencies (consensus vs. independent), notable positions. Store in a `councillor_profiles` table. Regenerate when new meeting data arrives. Must include "generated from X meetings, Y votes" provenance to maintain credibility. |
-| Topic taxonomy and issue clustering | Current topics are hardcoded via `normalize_category_to_topic()` SQL function mapping ~300 CivicWeb categories to 8 broad topics. A real taxonomy would let users explore "Housing > Affordable Housing > 123 Main St rezoning" hierarchically. | High | `normalize_category_to_topic()` function, `topics` table, `agenda_items.category` field, matter categories | Two-tier approach: (1) Keep existing 8 normalized topics as top-level categories. (2) Use LLM clustering on agenda item titles + summaries to generate sub-topics within each category. Store as `topic_id` + `subtopic` on agenda items. Enables "show me everything about affordable housing" filtering. Full unsupervised taxonomy construction (TaxoGen-style) is overkill for ~700 meetings -- LLM-assisted labeling within known top-level categories is more practical. |
-| Persistent conversation memory | Current 5-turn memory passes previous Q&A as a `context` string parameter via URL. True persistent memory would let users return days later and continue a research thread. | Medium-High | Current `context` parameter in `api.ask.tsx`, client-side conversation state in `search.tsx` | Requires: `rag_conversations` table (id, user_id, created_at), `rag_messages` table (conversation_id, role, content, tool_calls, created_at). Client sends `conversation_id` instead of raw context string. Server loads last N turns from DB. Unauthenticated users get session-scoped memory (localStorage conversation_id). Authenticated users get persistent cross-session memory. |
-| Financial transparency per agenda item | `agenda_items.financial_cost` and `motions.financial_cost` fields exist in the schema but are rarely surfaced. Showing "$X approved this meeting" rollups would be unique among small-municipality platforms. | Low-Med | `agenda_items.financial_cost`, `motions.financial_cost`, `agenda_items.funding_source` fields (already in schema/types) | Surface as: per-meeting financial summary card ("Council approved $X in spending"), per-agenda-item cost badges, per-motion cost display. Must verify these fields are actually populated by the pipeline -- they exist in TypeScript types but may be aspirational. Check actual DB population before building UI. |
-| Speaker identification improvements | Pipeline already does MLX diarization with voice fingerprints. Improving accuracy means fewer "Unknown Speaker" segments, which improves RAG answer attribution and profile accuracy. | High | `voice_fingerprint_id` on people table, MLX diarization pipeline, `speaker_aliases` table, `transcript_segments.person_id` | Current system: diarize then manually alias speaker labels to people. Improvement: build a speaker embedding database from known segments (where `person_id` is set). On new meetings, compare diarized embeddings against the database for automatic identification. Threshold-based matching (cosine similarity > 0.85) auto-assigns; below threshold flags for review. Pipeline-only change -- no web UI needed initially. |
-| Council member profile page redesign | Current profile page has stats but no narrative "at a glance" section. A redesigned page with summary card, policy position grid, and voting pattern visualization would be a clear differentiator. | Medium | All existing profile data: stances, highlights, speaking time, voting history, attendance, alignment scores | Layout: hero card with photo/role/tenure, AI-generated overview paragraph, "Top Issues" grid (3-4 topic cards with stance indicators), voting pattern donut chart, recent activity timeline. Most data already fetched by the 15-query `getPersonProfile()` function. |
-| RAG redesigned tool set | Current RAG has 9 tools plus `get_current_date`. Some overlap (e.g., `search_agenda_items` and `search_key_statements` both surface discussion content from different angles). A redesigned tool set would consolidate and add smarter routing. | Medium | All 9 existing RAG tools in `rag.server.ts`, orchestrator prompt strategy guide | Consolidation: merge `search_transcript_segments` and `search_key_statements` into a unified `search_discussions` tool that returns both. Add a `get_meeting_summary` tool for "what happened at the last meeting" questions. Add `search_financial` tool wrapping financial_cost queries. Fewer, more purposeful tools reduce orchestrator LLM confusion and wasted tool calls. |
-| Upcoming meeting alerts with join link | Pre-meeting emails exist but don't include a direct link to the live stream. Citizens want one-click access to watch a meeting that's about to start. | Low | Existing pre-meeting alert flow in `send-alerts` Edge Function, YouTube live stream URL | Add YouTube channel link prominently in pre-meeting email (already partially there in the "Want to attend?" section). For meetings in progress, add a "Watch Now" CTA. Attendance data is typically recorded during/after meetings, so pre-meeting attendance info is limited to expected attendees based on memberships. |
+| Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---------|-------------------|------------|--------------|-------|
+| Granicus video integration | Esquimalt uses `esquimalt.ca.granicus.com` for meeting recordings. Linking to or embedding these videos would provide feature parity with View Royal's Vimeo integration. | Med | Video URL extraction from Legistar HTML or Granicus API | Granicus player URLs follow `player/clip/{id}?view_id=1` pattern. Could store as external link initially without download/diarization. |
+| Granicus video download + diarization | Full transcript extraction from Esquimalt meetings via yt-dlp or Granicus stream download, then MLX diarization. | High | Granicus video integration, yt-dlp Granicus support | Would give Esquimalt transcript search + RAG Q&A from video. Major effort; defer to post-launch. |
+| Structured data fast path for Legistar | Legistar HTML has structured agenda items, motions, and vote records already parsed. Skip Gemini AI refinement for data that's already structured. | Med | HTML scraper complete | The PROJECT.md mentions "Legistar scraper with structured data fast path" as v1.0. If Legistar HTML exposes vote roll calls and motion text, ingest directly without AI. |
+| People auto-discovery from Legistar | Legistar lists council members with titles and seats. Auto-seed `people` table from scraped data instead of manual entry. | Low | HTML scraper | Legistar's Departments.aspx and MainBody.aspx list members. |
+| Cross-municipality search | Users searching on one subdomain could optionally see results from other municipalities. | High | Both municipalities ingested | Defer -- scope creep. Each subdomain is its own silo for now. |
+| Municipality landing page | A page at `viewroyal.ai` (apex) showing all available municipalities with links to their subdomains. | Low | Multiple municipalities exist | Nice touch for discovery. Could be simple card grid. |
 
 ## Anti-Features
 
-Features to explicitly NOT build for v1.7.
+Features to explicitly NOT build for this milestone.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Full budget explorer / interactive visualization | Scope creep. Budget data doesn't flow through the pipeline -- it would require a separate data source, new scraper, and new data model. The `financial_cost` fields on agenda items are per-item extractions, not a full municipal budget. | Surface per-item and per-meeting financial rollups from existing `financial_cost` fields. Defer full budget visualization to a future milestone if user demand materializes. |
-| Real-time RAG tool call visibility | Showing the orchestrator's "thinking" (tool selections, intermediate results) to users is technically interesting but confuses non-technical civic users. v1.6 already improved agent reasoning display with tool-type icons. | Keep streaming final answer. Add observability/logging server-side for quality debugging. The existing citation badges with hover preview serve the "show your work" need. |
-| Sentiment analysis badges on transcript segments | The `sentiment_score` field exists on `transcript_segments` but sentiment analysis on civic proceedings is fraught -- "passionate advocacy" reads as "angry" to models. Creates a misleading impression of bias. | Focus on stance analysis (supports/opposes/mixed) which is grounded in voting behavior, not tone interpretation. Sentiment scores can remain in the pipeline for internal analysis but should not be user-facing. |
-| Social/collaborative features | Undermines the platform's credibility as an objective civic record. User annotations risk looking like official commentary. Per PROJECT.md: "Social features -- undermines official record credibility." | Keep the platform read-only with personal subscriptions. The RAG Q&A serves the "research assistant" role without social dynamics. |
-| Multi-municipality topic comparison | Comparing "how does View Royal's housing policy compare to Esquimalt's" requires both municipalities ingested with normalized topic taxonomies. RDOS/multi-muni is deferred to v1.8. | Build topic taxonomy for View Royal only. Design the schema to be municipality-scoped so it's ready for cross-municipality comparison later. |
-| Push notifications / native app wrapper | Out of scope per PROJECT.md. Overkill for current user base size. | Email alerts are the notification channel. Improve design and content quality instead. |
-| SMS notifications | Cost/compliance overhead unjustified at current scale per PROJECT.md. | Email-only for v1.7. |
+| Shared authentication across subdomains | Supabase Auth cookies are domain-scoped. Cross-subdomain SSO adds complexity (shared cookie domain, token relay). | Each subdomain has independent auth. Users sign up per-municipality. Acceptable at current scale. |
+| Custom domains per municipality (e.g., `esquimalt.civic.ai`) | Requires Cloudflare for Platforms, custom hostname provisioning, SSL cert management. Way over-engineered for 2 municipalities. | Subdomain pattern (`{slug}.viewroyal.ai`) is sufficient. Revisit if/when serving 10+ municipalities. |
+| Esquimalt-specific UI theming | Different colors/logos per municipality adds maintenance burden and brand confusion. | Shared UI with municipality name/classification dynamically rendered (already done in v1.7 multi-tenancy work). |
+| Video diarization for Esquimalt at launch | Granicus video download + MLX diarization is a significant effort. Esquimalt meetings are useful even without transcripts. | Launch with documents only. Add video in a follow-up phase. Link to Granicus player as external video source. |
+| Backfilling all historical Esquimalt meetings | Hundreds of meetings going back years. Unnecessary for launch validation. | Scrape recent 6-12 months. Backfill later once scraper is proven stable. |
+| Legistar Web API integration | API is not enabled for Esquimalt. Don't waste time trying to get Granicus to enable it. | Scrape HTML directly. More resilient anyway -- many Canadian municipalities don't enable the API. |
 
 ## Feature Dependencies
 
 ```
-RAG Observability & Feedback ────────────> LLM Reranking (need eval baseline before measuring reranking gains)
-                              └──────────> RAG Tool Redesign (need feedback data to know which tools underperform)
+Esquimalt municipality row in DB
+  --> Esquimalt organizations in DB
+  --> Legistar HTML scraper working
+    --> Full pipeline run (scrape + ingest + embed)
+      --> Granicus video links (differentiator)
+      --> Structured data fast path (differentiator)
 
-Topic Taxonomy ──────────────────────────> AI Council Member Profiles (profiles reference topic taxonomy)
-                              └──────────> Topic-based clustering in search UI (depends on taxonomy existing)
-
-Speaker Fingerprinting (pipeline) ───────> AI Council Member Profiles (better attribution = better profiles)
-                              └──────────> More accurate speaking time stats
-
-Meeting Summary Cards ───────────────────> (standalone, no blockers -- data exists)
-
-Meeting Outcome Badges ──────────────────> (standalone, no blockers -- Badge component exists)
-
-Persistent Conversation Memory ──────────> (standalone, but benefits from RAG observability for debugging)
-
-Email Digest Redesign ───────────────────> (standalone, existing Edge Function)
-
-Financial Transparency ──────────────────> VERIFY pipeline populates financial_cost fields first
-                                           (if not populated, this becomes a pipeline extraction task)
-
-Council Member Profile Redesign ─────────> AI Council Member Profiles (needs generated profile data)
-                              └──────────> Topic Taxonomy (topic cards on profile page reference taxonomy)
+Wildcard DNS + SSL
+  --> Hostname routing in Worker
+    --> Municipality context from hostname in root loader
+      --> Unknown subdomain 404
+      --> View Royal apex domain still works
 ```
 
 ## MVP Recommendation
 
-**Phase 1 -- Quick wins and eval foundation (ship fast, 1-2 weeks):**
-1. Meeting summary cards (pure frontend, data exists in `meetings.summary`)
-2. Meeting outcome badges (pure frontend, Badge component exists)
-3. RAG observability and feedback (`rag_feedback` table + thumbs up/down UI -- needed before any RAG changes)
-4. Email digest design improvements (incremental HTML changes to Edge Function)
+**Phase 1: Scraper validation (highest risk)**
+1. Rewrite Legistar scraper from Web API to HTML scraping of `esquimalt.ca.legistar.com`
+2. Seed Esquimalt municipality + organizations in DB
+3. Run pipeline for recent meetings (3-6 months)
+4. Verify data quality in DB
 
-**Phase 2 -- RAG intelligence (highest user-visible impact, 2-3 weeks):**
-5. LLM reranking with Gemini Flash pointwise scoring (measure improvement against feedback baseline)
-6. RAG tool set redesign (consolidate overlapping tools, add `get_meeting_summary`)
-7. Conversation memory persistence (new tables, client sends `conversation_id`)
+**Phase 2: Subdomain routing**
+1. Add wildcard route to wrangler.toml (`*.viewroyal.ai/*`)
+2. Extract subdomain from hostname in Worker fetch handler
+3. Pass municipality slug to root loader's `getMunicipality()`
+4. Handle unknown subdomains with 404
+5. Verify View Royal apex domain unaffected
 
-**Phase 3 -- Council member intelligence (deepest differentiator, 2-3 weeks):**
-8. Topic taxonomy (LLM-assisted sub-topic clustering within existing 8 normalized categories)
-9. AI-generated council member profiles (synthesize from stances + voting + speaking data)
-10. Council member profile page redesign (frontend consuming new profile data)
+**Defer:**
+- Granicus video integration: add as external links only, no download/diarization
+- Historical backfill: do recent meetings first, expand once stable
+- Cross-municipality search: not needed with 2 municipalities
 
-**Phase 4 -- Pipeline and polish (1-2 weeks):**
-11. Speaker fingerprinting improvements (pipeline-only, build embedding database from known segments)
-12. Financial transparency (verify data population in DB, then surface in UI)
-13. Upcoming meeting alert improvements (better CTAs, live stream link prominence)
+## Critical Research Finding
 
-**Defer to later:**
-- Full budget explorer (no data source exists in the pipeline)
-- Cross-session conversation memory for unauthenticated users (session-scoped via localStorage is sufficient)
-- Topic-based search filtering UI (depends on taxonomy, can ship after Phase 3)
+**The existing Legistar scraper (`pipeline/scrapers/legistar.py`) will NOT work for Esquimalt.** It calls `webapi.legistar.com/v1/{client_id}/Events` which returns HTTP 500 because Esquimalt hasn't enabled the Legistar Web API in their Granicus/InSite configuration. The error message is explicit: "LegistarConnectionString setting is not set up in InSite for client: esquimalt."
+
+This means the scraper must be rewritten to parse HTML from `esquimalt.ca.legistar.com` (ASP.NET WebForms pages: Calendar.aspx, MeetingDetail.aspx, View.ashx). This is the single highest-complexity, highest-risk item in this milestone.
+
+Esquimalt's Legistar HTML site exposes:
+- Calendar with all meeting types (Council, COTW, APC, Special Meetings, etc.)
+- Agenda and Minutes PDFs via `View.ashx?M=A&ID={id}` and `View.ashx?M=M&ID={id}`
+- Meeting detail pages with agenda items and attachments
+- Video links to Granicus player (`esquimalt.ca.granicus.com/player/clip/{id}`)
+- 11 body types across council and advisory committees
+
+The `opencivicdata/python-legistar-scraper` project on GitHub is a maintained reference implementation for HTML-based Legistar scraping that could inform the approach.
 
 ## Sources
 
-- [ZeroEntropy - Ultimate Guide to Reranking Models 2026](https://www.zeroentropy.dev/articles/ultimate-guide-to-choosing-the-best-reranking-model-in-2025) -- reranking model landscape and benchmarks
-- [ZeroEntropy - LLM as Reranker Pros/Cons](https://www.zeroentropy.dev/articles/llm-as-reranker-guide) -- Gemini Flash benchmarks at 0.68 NDCG@10
-- [Google Vertex AI RAG Engine Reranking Docs](https://cloud.google.com/vertex-ai/generative-ai/docs/rag-engine/retrieval-and-ranking) -- Gemini reranking in Vertex
-- [InsertRank: LLMs reason over BM25 scores](https://arxiv.org/html/2506.14086v1) -- 3-16% gains from injecting BM25 scores into reranking prompt
-- [Voyage AI - Case Against LLMs as Rerankers](https://blog.voyageai.com/2025/10/22/the-case-against-llms-as-rerankers/) -- counterpoint: LLM score instability across runs
-- [NLP for Local Governance Meeting Records](https://arxiv.org/html/2602.08162v1) -- academic survey of NLP for municipal meetings, topic clustering methods
-- [Postmark - Transactional Email Best Practices 2026](https://postmarkapp.com/guides/transactional-email-best-practices) -- digest batching, branding, accessibility
-- [SendPulse - Email Digest Design](https://sendpulse.com/blog/email-digest-design) -- layout patterns and content hierarchy
-- [CivicPatterns.org](http://civicpatterns.org/) -- civic technology design patterns
-- [Picovoice - Speaker Diarization vs Identification](https://picovoice.ai/blog/speaker-diarization-vs-speaker-recognition-identification/) -- fingerprinting vs diarization distinction
-- [Gemini Cookbook - Search Reranking](https://github.com/google-gemini/cookbook/blob/main/examples/Search_reranking_using_embeddings.ipynb) -- Google's own reranking example with embeddings
-- [Civic Tech Budget Explorers Directory](https://directory.civictech.guide/listing-category/budget-explorers) -- existing civic tech budget visualization projects
-- Codebase analysis: `rag.server.ts` (9 tools, orchestrator prompt, synthesis), `profiling.ts` (stances, highlights, speaking time), `people.ts` (15-query profile loader), `send-alerts/index.ts` (digest + pre-meeting email HTML), `types.ts` (schema types including `financial_cost`, `voice_fingerprint_id`), `normalize_category_to_topic()` SQL function (8 broad topic categories from ~300 CivicWeb categories)
+- [Esquimalt Legistar Calendar](https://esquimalt.ca.legistar.com/Calendar.aspx) - Verified HTML scraping surface
+- [Esquimalt Council Meetings page](https://www.esquimalt.ca/government-bylaws/council-meetings/council-committee-meetings-online-legistar) - Confirms Legistar usage
+- [CDP Scrapers - Finding Legistar ID](https://councildataproject.org/cdp-scrapers/finding_legistar_id.html) - Legistar client ID discovery process
+- [CDP Scrapers - Legistar Notes](https://councildataproject.org/cdp-scrapers/legistar_scraper.html) - API-based approach (won't work here)
+- [opencivicdata/python-legistar-scraper](https://github.com/opencivicdata/python-legistar-scraper) - HTML scraping reference implementation
+- [Cloudflare Workers Routes docs](https://developers.cloudflare.com/workers/configuration/routing/routes/) - Wildcard subdomain routing
+- [Cloudflare Custom Domains docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) - Alternative to routes
+- [Esquimalt Granicus video example](https://esquimalt.ca.granicus.com/player/clip/1182?meta_id=141966) - Confirms Granicus for meeting video
+- Legistar Web API error response (tested 2026-03-30): HTTP 500 for `esquimalt`, `esquimalt.ca`, `esquimaltca`, `Esquimalt` client IDs - all return "LegistarConnectionString not set up in InSite"

@@ -1,550 +1,349 @@
 # Architecture Patterns
 
-**Domain:** Civic intelligence platform — v1.7 feature integration
-**Researched:** 2026-03-05
-**Confidence:** HIGH (based on direct codebase analysis of all touched files)
+**Domain:** Esquimalt municipality ingestion + hostname-based subdomain routing
+**Researched:** 2026-03-30
+**Confidence:** HIGH (based on direct codebase analysis + Cloudflare docs verification)
 
-## Current Architecture Snapshot
+## Current Architecture Summary
 
-The system has three deployment boundaries and two data stores:
+The platform already has multi-tenancy built in:
+- **Pipeline:** `--municipality esquimalt` flag, `MunicipalityConfig` from DB, pluggable scraper registry with `LegistarScraper` registered for `"legistar"` type, per-municipality archive directories via `get_municipality_archive_root()`
+- **Web app:** `getMunicipality(supabase, slug)` in root loader, municipality context flows through all routes via `getMunicipalityFromMatches()`, API routes use `:municipality` URL param with middleware resolution
+- **Database:** `municipalities` table with `source_config` JSONB, `municipality_id` FK on all core tables (meetings, motions, agenda_items, documents, key_statements, etc.)
 
-```
-                   +-------------------+       +-------------------+
-                   | Cloudflare Worker |       | Supabase Edge Fn  |
-                   | (React Router 7 + |       | (send-alerts)     |
-                   |  Hono API)        |       +--------+----------+
-                   +--------+----------+                |
-                            |                           |
-                   +--------v----------+                |
-                   |   Supabase PG     <----------------+
-                   |   (40+ tables,    |
-                   |    pgvector,      |
-                   |    RPCs, RLS)     |
-                   +--------+----------+
-                            ^
-                   +--------+----------+
-                   | Python Pipeline   |
-                   | (local Mac Mini)  |
-                   +-------------------+
-```
+**The gap:** The web app hardcodes `slug = "view-royal"` as the default parameter in `getMunicipality()`, and there is no hostname-to-slug resolution. The pipeline's Legistar scraper exists but is untested against real Esquimalt data.
 
-Key architectural patterns already in place:
-- **Lazy singletons** for Supabase/Gemini clients (avoids `setInterval` in Workers)
-- **Orchestrator+Synthesizer two-model RAG** (Gemini orchestrator gathers evidence, separate Gemini call synthesizes answer)
-- **Hybrid search with RRF** across 4 content types via Supabase RPCs
-- **SSE streaming** for real-time RAG answers
-- **In-memory rate limiting** (Map-based, per-isolate, adequate for current scale)
-- **Conversation context** passed as a single string concatenation of previous Q&A
+## Integration Architecture
 
-## Recommended Architecture Changes
+### Component 1: Hostname-to-Municipality Resolution (Worker)
 
-### Component Map: New vs Modified
+**What changes:** The Worker's fetch handler (`workers/app.ts`) needs to resolve municipality from the request hostname and pass it through to React Router.
 
-| Component | Status | Location | Changes |
-|-----------|--------|----------|---------|
-| RAG tool definitions | **MODIFY** | `rag.server.ts` tools array | Consolidate 9 tools to ~5, add LLM reranking |
-| Conversation memory (KV) | **NEW** | `rag.server.ts` + wrangler.toml | KV namespace for multi-turn state |
-| Topic taxonomy tables | **NEW** | Supabase migration | `topic_taxonomy`, `agenda_item_topic_tags` |
-| Speaker fingerprint storage | **MODIFY** | `people` table + pipeline | `voice_embedding` column, pipeline writes |
-| Council profile pipeline | **MODIFY** | `profile_agent.py`, `stance_generator.py` | Richer output, topic taxonomy integration |
-| Meeting summary generation | **NEW** | Pipeline + `meetings` table | Gemini summarization in pipeline Phase 4 |
-| Meeting summary cards | **NEW** | `meeting-detail.tsx` | UI component consuming `meetings.summary` |
-| Email template improvements | **MODIFY** | `send-alerts/index.ts` | Better HTML, meeting link, attendance |
-| RAG observability | **NEW** | `rag.server.ts` + new table | `rag_traces` table or structured logging |
-| RAG feedback | **NEW** | New API route + table | `rag_feedback` table, thumbs up/down |
-
-### Data Flow Changes
+**How it works:**
 
 ```
-BEFORE (v1.6):
-  Question -> Orchestrator (Gemini, tools) -> Evidence -> Synthesizer (Gemini) -> Stream
-
-AFTER (v1.7):
-  Question -> KV load context -> Orchestrator (Gemini, redesigned tools)
-           -> Evidence -> LLM Rerank -> Synthesizer (Gemini)
-           -> Stream + KV save context + log trace
+Request: https://esquimalt.viewroyal.ai/meetings
+  -> Worker fetch() extracts hostname "esquimalt.viewroyal.ai"
+  -> Static map resolves subdomain "esquimalt" to slug "esquimalt"
+  -> Slug passed via AppLoadContext to React Router
+  -> Root loader calls getMunicipality(supabase, "esquimalt")
+  -> Municipality context propagates to all downstream routes
 ```
 
-```
-BEFORE (v1.6 pipeline):
-  Scrape -> Download -> Diarize -> Ingest -> Embed
-
-AFTER (v1.7 pipeline):
-  Scrape -> Download -> Diarize -> Ingest -> Embed
-                           |          |
-                           v          v
-                    Fingerprint   Generate
-                    Storage       Meeting Summary
-                                  + Topic Tags
-                                  + Profile Regen
-```
-
-## Component Integration Details
-
-### 1. RAG Tool Redesign
-
-**Current state:** 9 tools with overlapping search domains. The orchestrator frequently makes suboptimal tool choices (e.g., retrying `search_agenda_items` with synonyms instead of switching to `search_document_sections`).
-
-**Integration approach:** Modify the `tools` array and tool function signatures in `rag.server.ts`. No new files needed.
-
-**Recommended consolidated tool set:**
-
-| New Tool | Replaces | Rationale |
-|----------|----------|-----------|
-| `search_council_records(query, types?, after_date?)` | `search_motions`, `search_agenda_items`, `search_key_statements`, `search_document_sections`, `search_transcript_segments` | Single entry point with type filter. Runs searches in parallel internally, merges with RRF. Eliminates tool selection mistakes. |
-| `search_bylaws(query)` | `search_bylaws` | Keep separate -- fundamentally different domain (reference docs vs meeting records) |
-| `search_matters(query, status?)` | `search_matters` | Keep separate -- cross-meeting topic tracker, different schema |
-| `get_person_record(person_name, include?)` | `get_statements_by_person`, `get_voting_history` | Merged person tool. `include` param: `["statements", "votes", "stances"]` |
-| `get_current_date()` | `get_current_date` | Keep as-is |
-
-**Key change:** The merged `search_council_records` tool calls existing search functions in parallel and returns a unified result set with type labels. The orchestrator sees one tool instead of five, reducing hallucinated tool names and redundant calls.
+**Implementation approach:**
 
 ```typescript
-// Pseudo-signature
-async function search_council_records({
-  query,
-  types?: ("motion" | "statement" | "document" | "transcript" | "agenda")[],
-  after_date?: string,
-}): Promise<{ results: TaggedResult[]; summary: string }>
+// workers/app.ts
+
+const HOSTNAME_MAP: Record<string, string> = {
+  "viewroyal.ai": "view-royal",
+  "www.viewroyal.ai": "view-royal",
+  "esquimalt.viewroyal.ai": "esquimalt",
+};
+
+function resolveSlugFromHostname(hostname: string): string | null {
+  if (HOSTNAME_MAP[hostname]) return HOSTNAME_MAP[hostname];
+  if (hostname.endsWith(".workers.dev") || hostname === "localhost") return "view-royal";
+  return null; // Unknown subdomain -> 404
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const url = new URL(request.url);
+    const slug = resolveSlugFromHostname(url.hostname);
+
+    if (!slug) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    if (url.pathname.startsWith("/api/v1/") || /* ... */) {
+      return apiApp.fetch(request, env, ctx);
+    }
+
+    return requestHandler(request, {
+      cloudflare: { env, ctx, municipalitySlug: slug },
+    });
+  },
+};
 ```
 
-**Files touched:**
-- `apps/web/app/services/rag.server.ts` -- Tool definitions, orchestrator prompt, source normalization
+**Why static map over DB lookup:** The number of municipalities is tiny (2 now, maybe 5 ever). A hardcoded map avoids an extra Supabase query on every request. Adding a municipality requires a deploy anyway (to add the custom domain in wrangler.toml and DNS).
 
-**Dependencies:** None. Can be built first.
+### Component 2: AppLoadContext Type Extension
 
-### 2. LLM Reranking
-
-**Current state:** RAG tools return results ranked by vector similarity or FTS score. The orchestrator sees raw results and must mentally filter noise.
-
-**Integration approach:** Add a reranking step between evidence gathering and synthesis. Uses the same Gemini client (lazy singleton already exists).
-
-**Architecture:**
-
-```
-Tool results (15-50 items) -> LLM Rerank prompt -> Top 10-15 -> Synthesizer
-```
-
-**Implementation:** New function in `rag.server.ts` called between the orchestrator loop and the synthesis step. Takes `allSources` + the original question, asks Gemini to score/filter.
+**What changes:** Extend the `AppLoadContext` interface to carry the resolved slug:
 
 ```typescript
-async function rerankSources(
-  question: string,
-  sources: NormalizedSource[],
-  maxResults: number = 15,
-): Promise<NormalizedSource[]> {
-  // Call Gemini with a reranking prompt
-  // Return reordered + filtered sources
+declare module "react-router" {
+  export interface AppLoadContext {
+    cloudflare: {
+      env: Env;
+      ctx: ExecutionContext;
+      municipalitySlug: string; // NEW
+    };
+  }
 }
 ```
 
-**Placement in flow:** After `sourceMap` deduplication (line ~1485 of current rag.server.ts), before `numberedEvidence` construction.
+### Component 3: Root Loader Reads Slug from Context
 
-**Gemini cost:** One additional non-streaming call with ~2KB prompt. Fast with gemini-3-flash-preview (~200ms).
-
-**Files touched:**
-- `apps/web/app/services/rag.server.ts` -- New `rerankSources` function, called in `runQuestionAgent`
-
-**Dependencies:** Logically builds on tool redesign but technically independent.
-
-### 3. KV-Based Conversation Memory
-
-**Current state:** Conversation context is a single `context` string parameter containing the previous question text. No actual conversation history is stored. The client appends previous Q&A manually.
-
-**Integration approach:** Use Cloudflare Workers KV (already available via wrangler.toml) to store multi-turn conversation state keyed by a conversation ID.
-
-**KV Schema:**
+**What changes:** `root.tsx` loader reads slug from `AppLoadContext` instead of using the hardcoded default.
 
 ```typescript
-// Key: `conv:{conversationId}` (UUID)
-// Value: JSON
-interface ConversationState {
-  turns: Array<{
-    question: string;
-    answer: string;       // Summary, not full text
-    sources: number[];    // Source IDs referenced
-    timestamp: number;
-  }>;
-  created_at: number;
-  municipality_id?: number;
+// root.tsx
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const slug = context.cloudflare.municipalitySlug;
+  const { supabase, headers } = createSupabaseServerClient(request);
+  const [{ data: { user } }, municipality] = await Promise.all([
+    supabase.auth.getUser(),
+    getMunicipality(supabase, slug),
+  ]);
+  // ... rest unchanged
 }
-// TTL: 24 hours (conversations expire)
 ```
 
-**Wrangler binding:**
+**What does NOT change downstream:** Every route already reads municipality from root loader data via `getMunicipalityFromMatches(matches)`. All Supabase service queries already filter by `municipality_id`. No changes needed in any route loader or component.
+
+### Component 4: getMunicipality Signature Update
+
+**What changes:** Remove the default `"view-royal"` parameter from `getMunicipality()` in `app/services/municipality.ts` to make the slug required:
+
+```typescript
+// Before
+export async function getMunicipality(supabase: SupabaseClient, slug = "view-royal")
+
+// After
+export async function getMunicipality(supabase: SupabaseClient, slug: string)
+```
+
+This surfaces any callers that forgot to pass a slug (currently `root.tsx`, `home.tsx`, `meeting-detail.tsx`, `api.vimeo-url.ts`). All need updating to read from context.
+
+### Component 5: Cloudflare Custom Domain Configuration
+
+**What changes:** Add `esquimalt.viewroyal.ai` as a custom domain route in `wrangler.toml`:
 
 ```toml
-# Add to wrangler.toml
-[[kv_namespaces]]
-binding = "CONVERSATIONS"
-id = "xxx"  # Created via wrangler kv:namespace create
+routes = [
+  { pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" },
+  { pattern = "esquimalt.viewroyal.ai/*", zone_name = "viewroyal.ai", custom_domain = true }
+]
 ```
 
-**Integration points:**
+**DNS:** Cloudflare Custom Domains automatically create the required DNS records when configured through wrangler. Verify the `viewroyal.ai` zone is proxied in Cloudflare dashboard.
 
-1. **`api.search.tsx` / `api.ask.tsx`:** Accept `conversation_id` parameter. Load context from KV before calling `runQuestionAgent`. Save updated context after streaming completes.
+**Confidence:** MEDIUM -- Custom domain with `custom_domain = true` is the documented approach per Cloudflare docs. The exact interaction with the existing bare-domain route entry should be verified during deployment.
 
-2. **`rag.server.ts`:** `runQuestionAgent` receives structured conversation history (not a raw string). The orchestrator system prompt includes prior turns as structured context.
+### Component 6: Dynamic Meta/OG Tags
 
-3. **Client-side (`search.tsx`):** Generate UUID on first question, pass `conversation_id` with follow-ups instead of raw context string. Store conversation ID in component state.
+**What changes:** The root `meta` function already reads municipality from matches, but several strings are hardcoded:
 
-**Why KV over Supabase:** Conversation state is ephemeral (24h TTL), high-frequency read/write, no relational queries needed. KV is co-located with the Worker (zero network hop), while Supabase adds ~50ms latency per call. The current `search_results_cache` table in Supabase is fine for shareable URLs (long-lived, query-by-ID), but conversation state is a different access pattern.
+| Current Hardcoded Value | Should Be |
+|------------------------|-----------|
+| `"ViewRoyal.ai \| Council Meeting Intelligence"` | `"{short_name}.ai \| Council Meeting Intelligence"` |
+| `"https://viewroyal.ai"` | Dynamic from request hostname |
+| `"ViewRoyal.ai"` (og:site_name) | Dynamic from municipality |
 
-**Files touched:**
-- `apps/web/wrangler.toml` -- KV namespace binding
-- `apps/web/app/routes/api.search.tsx` -- Conversation ID handling
-- `apps/web/app/routes/api.ask.tsx` -- Conversation ID handling
-- `apps/web/app/services/rag.server.ts` -- Accept structured history, save to KV
-- `apps/web/app/routes/search.tsx` -- Client-side conversation ID management
-- `apps/web/workers/app.ts` -- Pass KV binding through env (if not already wired)
+The `Navbar` and `Footer` components may also contain hardcoded "ViewRoyal" text that needs checking.
 
-**Dependencies:** Requires understanding current context flow. Independent of tool redesign.
+### Component 7: Esquimalt Municipality Row in Supabase
 
-### 4. Topic Taxonomy Tables
-
-**Current state:** Topics are stored in a `topics` table (id, name, description) with a many-to-many `agenda_item_topics` join table. The `normalize_category_to_topic` SQL function maps ~470 agenda_item categories to 8 predefined topics. The pipeline's `stance_generator.py` mirrors this in Python.
-
-**Integration approach:** Extend the existing topic system with hierarchical taxonomy and richer metadata.
-
-**New tables:**
+**What changes:** Insert Esquimalt row into `municipalities` table:
 
 ```sql
--- Hierarchical topic taxonomy
-CREATE TABLE topic_taxonomy (
-    id bigint generated by default as identity primary key,
-    name text NOT NULL UNIQUE,
-    parent_id bigint REFERENCES topic_taxonomy(id),
-    description text,
-    slug text UNIQUE,
-    icon text,  -- lucide icon name for UI
-    display_order int DEFAULT 0,
-    created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now()
-);
-
--- Many-to-many: agenda items tagged with taxonomy topics
--- Replaces/supplements existing agenda_item_topics
-CREATE TABLE agenda_item_topic_tags (
-    agenda_item_id bigint REFERENCES agenda_items(id) ON DELETE CASCADE,
-    topic_taxonomy_id bigint REFERENCES topic_taxonomy(id) ON DELETE CASCADE,
-    confidence float DEFAULT 1.0,  -- AI classification confidence
-    source text DEFAULT 'ai',      -- 'ai', 'manual', 'category_map'
-    PRIMARY KEY (agenda_item_id, topic_taxonomy_id)
+INSERT INTO municipalities (slug, name, short_name, province, classification, website_url, source_config)
+VALUES (
+  'esquimalt',
+  'Township of Esquimalt',
+  'Esquimalt',
+  'BC',
+  'Township',
+  'https://www.esquimalt.ca',
+  '{
+    "type": "legistar",
+    "client_id": "esquimalt",
+    "timezone": "America/Vancouver",
+    "video_source": {"type": "legistar_inline"}
+  }'::jsonb
 );
 ```
 
-**Migration strategy:** Seed `topic_taxonomy` with the 8 existing topics as top-level entries, then add subcategories. Backfill `agenda_item_topic_tags` from existing `agenda_item_topics` and the category normalization function. Keep existing `topics` + `agenda_item_topics` for backward compatibility.
+This should be done as a Supabase migration or direct insert. The `source_config` matches what `LegistarScraper.__init__` expects.
 
-**Pipeline integration:** Extend the AI refiner (`ai_refiner.py`) to classify agenda items into taxonomy topics during ingestion. The Gemini prompt already generates categories -- add taxonomy tag assignment as a post-processing step.
+### Component 8: Pipeline Execution for Esquimalt
 
-**Web integration:** Topic pages, topic-based filtering on search, subscription to taxonomy topics.
+**What changes:** Nothing structural. The pipeline already supports:
 
-**Files touched:**
-- New Supabase migration SQL
-- `apps/pipeline/pipeline/ingestion/ai_refiner.py` -- Topic classification
-- `apps/web/app/services/` -- New topic service for fetching taxonomy
-- `apps/web/app/routes/` -- Topic listing/detail pages
-
-**Dependencies:** None. Can be built in parallel with other DB work.
-
-### 5. Speaker Fingerprint Storage
-
-**Current state:** The `people` table has a `voice_fingerprint_id` text column (exists in bootstrap.sql). The diarization pipeline (`pipeline/diarization/`) generates speaker embeddings via ResNet and clusters them, but the embeddings are not persisted after diarization. Speaker assignment uses `meeting_speaker_aliases` to map `SPEAKER_00` labels to `people.id`.
-
-**Integration approach:** Store speaker voice embeddings in the database for cross-meeting speaker identification.
-
-**Schema change:**
-
-```sql
--- Voice embeddings for speaker identification
-CREATE TABLE speaker_fingerprints (
-    id bigint generated by default as identity primary key,
-    person_id bigint REFERENCES people(id) ON DELETE CASCADE NOT NULL,
-    embedding vector(256),  -- ResNet embedding dimension
-    source_meeting_id bigint REFERENCES meetings(id),
-    quality_score float,    -- Segment quality (length, SNR)
-    created_at timestamptz DEFAULT now(),
-    UNIQUE(person_id, source_meeting_id)
-);
-
-CREATE INDEX idx_speaker_fingerprints_person
-    ON speaker_fingerprints(person_id);
-CREATE INDEX idx_speaker_fingerprints_embedding
-    ON speaker_fingerprints USING hnsw (embedding vector_cosine_ops);
+```bash
+cd apps/pipeline
+uv run python main.py --municipality esquimalt --limit 5    # Test run
+uv run python main.py --municipality esquimalt               # Full run
 ```
 
-**Pipeline integration point:** In `pipeline/diarization/pipeline.py`, after clustering, extract the centroid embedding per speaker cluster and write to `speaker_fingerprints`. In subsequent diarization runs, load known fingerprints and use them as cluster seeds.
+The Legistar scraper is registered in `__init__.py`. The `Archiver` class reads `source_config.type` to select the scraper and `get_municipality_archive_root("esquimalt")` creates `archive/esquimalt/`.
 
-**Flow:**
+**Potential issues requiring fixes during testing:**
+- Date parsing edge cases in Legistar API responses (the `EventDate` field format)
+- Missing or null fields that the scraper assumes exist (`EventAgendaFile`, `EventMinutesFile`, `EventVideoPath`)
+- Attachment URL formats may differ from expectations
+- Organization/body name mapping for Esquimalt committee structures
+- Rate limiting from the Legistar public API during bulk discovery
+- Video URL handling -- `legistar_inline` video source type may need implementation in the video abstraction layer
+
+**No diarization needed initially:** Esquimalt meetings may have video but diarization is optional. Documents-only ingestion works through the existing pipeline.
+
+## Data Flow Diagram
 
 ```
-1. New meeting audio arrives
-2. Diarize (segment + embed + cluster)
-3. For each cluster, compare centroid to speaker_fingerprints via cosine similarity
-4. If similarity > threshold: assign known person_id
-5. If no match: flag for manual assignment
-6. After assignment: store centroid as new fingerprint for that person
+                    PIPELINE (one-time + daily)
+                    ==========================
+   Legistar API  -->  LegistarScraper  -->  Archiver  -->  Supabase
+   (esquimalt)       (discover+download)   (ingest+embed)  (municipality_id=N)
+
+                    WEB APP (per-request)
+                    =====================
+   Browser: esquimalt.viewroyal.ai/meetings
+       |
+       v
+   Worker fetch()
+       |-- Extract hostname -> "esquimalt.viewroyal.ai"
+       |-- Static map -> slug = "esquimalt"
+       |-- Fail-fast 404 if unknown subdomain
+       |-- Pass slug via AppLoadContext
+       |
+       +-- /api/v1/* -> Hono (already has :municipality param)
+       |
+       +-- Everything else -> React Router
+               |
+               v
+           Root loader
+               |-- getMunicipality(supabase, "esquimalt")
+               |-- Returns municipality context (id=N)
+               |
+               v
+           Route loaders
+               |-- All queries filter by municipality_id
+               |-- Identical code paths as View Royal
+               |
+               v
+           SSR Response -> Browser
 ```
 
-**Key constraint:** Diarization runs locally on Apple Silicon (MLX). The fingerprint storage and retrieval happen via Supabase, which the pipeline already accesses.
+## New vs Modified Components
 
-**Files touched:**
-- New Supabase migration SQL
-- `apps/pipeline/pipeline/diarization/pipeline.py` -- Fingerprint save/load
-- `apps/pipeline/pipeline/diarization/clustering.py` -- Seed clusters from known fingerprints
-- `apps/pipeline/pipeline/ingestion/ingester.py` -- Trigger fingerprint storage post-assignment
+| Component | Status | File(s) | Change Description |
+|-----------|--------|---------|-------------------|
+| Hostname resolver | **NEW** | `workers/app.ts` | Static map + `resolveSlugFromHostname()` function |
+| AppLoadContext type | **MODIFY** | `workers/app.ts` | Add `municipalitySlug: string` field |
+| Root loader | **MODIFY** | `app/root.tsx` | Read slug from context, pass to `getMunicipality()` |
+| getMunicipality | **MODIFY** | `app/services/municipality.ts` | Remove default slug, make param required |
+| Other callers of getMunicipality | **MODIFY** | `home.tsx`, `meeting-detail.tsx`, `api.vimeo-url.ts` | Pass slug from context/root data |
+| Root meta function | **MODIFY** | `app/root.tsx` | Dynamic municipality name in OG tags |
+| wrangler.toml | **MODIFY** | `wrangler.toml` | Add esquimalt custom domain route |
+| Esquimalt DB row | **NEW** | SQL migration or direct insert | Municipality row with source_config |
+| Legistar scraper | **MODIFY** (bugfixes) | `pipeline/scrapers/legistar.py` | Fixes discovered during real-data testing |
+| Navbar/Footer | **AUDIT** | Various components | Check for hardcoded "ViewRoyal" text |
 
-**Dependencies:** Requires diarization pipeline changes. Independent of web app features.
-
-### 6. Council Profile Generation Pipeline
-
-**Current state:** Two-stage profiling already exists:
-1. `stance_generator.py` -- Per-councillor per-topic stance summaries (8 topics x N councillors). Writes to `councillor_stances`.
-2. `profile_agent.py` -- Embedding-powered profile with theme discovery, temporal diversity, Gemini synthesis. Writes to `councillor_highlights` (overview + highlights array).
-
-Both are mature and working. The profile agent uses a 4-step process: context gathering, theme discovery via vector search, deep dive with temporal diversity, and Gemini synthesis.
-
-**Integration approach:** Extend existing pipeline rather than replacing it.
-
-**Enhancements:**
-1. **Topic taxonomy integration:** Replace the 8 hardcoded topics in `stance_generator.py` with topics from `topic_taxonomy` table. This makes stance generation dynamic.
-
-2. **Key vote detection:** Add a step to `profile_agent.py` that identifies "key votes" -- divided votes, votes where the councillor was in the minority, votes on high-impact motions. Currently `get_voting_history` in `rag.server.ts` fetches opposed votes, but the pipeline doesn't persist "key vote" flags.
-
-3. **Meeting summary consumption:** Profile generation should incorporate meeting summaries (once generated) as additional context for the Gemini synthesis prompt.
-
-**New table for key votes:**
-
-```sql
-CREATE TABLE councillor_key_votes (
-    id bigint generated by default as identity primary key,
-    person_id bigint REFERENCES people(id) ON DELETE CASCADE NOT NULL,
-    motion_id bigint REFERENCES motions(id) ON DELETE CASCADE NOT NULL,
-    vote text NOT NULL,
-    significance text,  -- 'minority_vote', 'divided', 'tie_breaking', 'high_impact'
-    topic_taxonomy_id bigint REFERENCES topic_taxonomy(id),
-    created_at timestamptz DEFAULT now(),
-    UNIQUE(person_id, motion_id)
-);
-```
-
-**Files touched:**
-- `apps/pipeline/pipeline/profiling/stance_generator.py` -- Dynamic topic loading
-- `apps/pipeline/pipeline/profiling/profile_agent.py` -- Key vote detection, summary integration
-- New Supabase migration SQL
-- `apps/pipeline/pipeline/orchestrator.py` -- Trigger profile regen after new meeting
-
-**Dependencies:** Topic taxonomy tables should exist first. Meeting summaries (below) should be built concurrently.
-
-### 7. Meeting Summary Generation
-
-**Current state:** The `meetings` table has a `summary` text column that is populated by the AI refiner during ingestion. Looking at the current data, some meetings have summaries and some don't. The email digest (`send-alerts`) already uses `digest.meeting.summary`.
-
-**Integration approach:** Improve summary generation quality and consistency.
-
-**Current flow in `ai_refiner.py`:** The Gemini prompt generates meeting-level summaries as part of the agenda item refinement. This works but produces inconsistent quality because the prompt is optimized for agenda item extraction, not meeting summarization.
-
-**Recommended change:** Add a dedicated meeting summarization step in the pipeline after ingestion completes (post-Phase 4). This step:
-
-1. Gathers all agenda items with summaries + motions with results + key statements
-2. Calls Gemini with a summarization-focused prompt
-3. Generates a 3-5 sentence plain-English summary
-4. Updates `meetings.summary`
-
-**Why a separate step:** The current summary is generated before all agenda items are processed (it is per-batch). A post-ingestion summary sees the complete picture.
-
-**Pipeline placement:** New function called in `orchestrator.py` after embed phase, before email alerts.
-
-**Files touched:**
-- New file: `apps/pipeline/pipeline/ingestion/summarizer.py`
-- `apps/pipeline/pipeline/orchestrator.py` -- Call summarizer after embed phase
-- `apps/pipeline/main.py` -- Optional `--summarize-only` flag
-
-**Dependencies:** None. Independent feature.
-
-### 8. Email Template Improvements
-
-**Current state:** `supabase/functions/send-alerts/index.ts` contains two HTML builders:
-- `buildDigestHtml` -- Post-meeting digest with decisions, controversial items, attendance
-- `buildPreMeetingHtml` -- Pre-meeting alert with matched agenda items
-
-Both use inline CSS (required for email), hardcoded "View Royal" references, and a basic layout.
-
-**Integration approach:** Enhance within the existing Edge Function file. No architectural change needed.
-
-**Specific improvements:**
-
-1. **Meeting summary in digest:** Already partially done -- `digest.meeting.summary` is rendered if present. Improve placement and formatting.
-
-2. **Attendance info in pre-meeting:** Add expected attendees based on `attendance` records for previous meetings or confirmed attendance.
-
-3. **Link to live stream:** Already present in pre-meeting template (YouTube channel link). Could add Vimeo link from `meetings.video_url` if available.
-
-4. **Better mobile rendering:** Improve responsive inline CSS. Current emails use `max-width:600px` which is good, but some elements could be better on small screens.
-
-5. **Unsubscribe improvements:** Current link goes to `/settings`. Could add one-click unsubscribe for specific subscriptions via a signed URL.
-
-**Files touched:**
-- `supabase/functions/send-alerts/index.ts` -- Template improvements
-- Potentially a new Supabase migration for unsubscribe tokens
-
-**Dependencies:** Meeting summary generation (above) improves digest quality but is not required.
-
-### 9. RAG Observability and Feedback
-
-**Current state:** PostHog `$ai_generation` events are captured with trace ID, model, latency, source count, and tool call count. This happens in both `api.ask.tsx` and `api.search.tsx`. However, there is no persistent server-side trace log and no user feedback mechanism.
-
-**Integration approach:**
-
-**Option A: Supabase table (recommended)**
-
-```sql
-CREATE TABLE rag_traces (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    question text NOT NULL,
-    conversation_id text,
-    tool_calls jsonb,       -- [{name, args, result_count, latency_ms}]
-    source_ids jsonb,       -- [source IDs used]
-    answer_length int,
-    total_latency_ms int,
-    model text DEFAULT 'gemini-3-flash-preview',
-    created_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE rag_feedback (
-    id bigint generated by default as identity primary key,
-    trace_id uuid REFERENCES rag_traces(id),
-    cache_id text,          -- Links to search_results_cache
-    rating smallint,        -- 1 = thumbs up, -1 = thumbs down
-    comment text,
-    created_at timestamptz DEFAULT now()
-);
-```
-
-**Option B: Cloudflare Workers Analytics Engine** -- Lower latency, but less queryable for analysis. Not recommended given the existing Supabase infrastructure.
-
-**Web integration:**
-- New API route `api.feedback.tsx` for submitting thumbs up/down
-- Modify `AiAnswer` component to show feedback buttons after answer completes
-- `rag.server.ts` emits trace data that gets saved
-
-**Files touched:**
-- New Supabase migration SQL
-- `apps/web/app/services/rag.server.ts` -- Emit trace events
-- `apps/web/app/routes/api.search.tsx` -- Save traces after streaming
-- New file: `apps/web/app/routes/api.feedback.tsx`
-- `apps/web/app/components/search/ai-answer.tsx` -- Feedback UI
-
-**Dependencies:** None. Can be built independently.
+**Unchanged components:** All route loaders, all service files (meetings.ts, people.ts, etc.), all Supabase RPCs, all API endpoints, email functions, pipeline orchestrator, scraper registry.
 
 ## Patterns to Follow
 
-### Pattern 1: Lazy Singleton for External Services
-**What:** Initialize clients on first use, not at module load time.
-**When:** Any new service that calls external APIs (Gemini, OpenAI, Supabase).
-**Why:** Cloudflare Workers prohibit `setInterval` and heavy initialization in global scope.
-**Example:**
-```typescript
-let _kv: KVNamespace | null = null;
-function getKV(env: Env): KVNamespace {
-  if (!_kv) _kv = env.CONVERSATIONS;
-  return _kv;
-}
-```
+### Pattern 1: Static Hostname Map
+**What:** Hardcode hostname-to-slug mapping in the Worker.
+**When:** Number of municipalities is small (<10) and changes require a deploy anyway.
+**Why:** Eliminates a DB round-trip on every request. Unknown hostnames get 404 instantly. Adding a municipality requires a deploy to add the custom domain in wrangler.toml anyway.
 
-### Pattern 2: Supabase RPC for Complex Queries
-**What:** Write PostgreSQL functions for queries involving joins, aggregations, or vector operations.
-**When:** Hybrid search, filtered vector similarity, cross-table aggregates.
-**Why:** Supabase client does not support complex SQL. RPCs run server-side with full SQL power.
-**Example:** All `hybrid_search_*` and `match_*` functions follow this pattern.
+### Pattern 2: Context Passthrough (Not Global State)
+**What:** Pass municipality slug through `AppLoadContext` rather than global state, cookies, or environment variables.
+**When:** Always, for request-scoped data in Cloudflare Workers.
+**Why:** Workers handle concurrent requests across isolates. Global state would cause municipality cross-contamination. `AppLoadContext` is per-request by design.
 
-### Pattern 3: SSE Streaming for Long-Running Operations
-**What:** Use Server-Sent Events via `ReadableStream` for operations that take >1s.
-**When:** RAG answers, any AI-generated content.
-**Why:** Workers have a 30s CPU time limit. Streaming lets the response start immediately while processing continues.
+### Pattern 3: Fail-Fast Unknown Subdomains
+**What:** Return 404 from the Worker fetch handler before React Router processes the request.
+**When:** Hostname does not map to a known municipality.
+**Why:** Saves SSR rendering cost, DB queries, and auth checks for invalid hosts.
 
-### Pattern 4: Serializer Allowlist
-**What:** Never spread `...row` into response objects. Explicitly construct output.
-**When:** Any API response, any data passed from loader to component.
-**Why:** Prevents field leakage (e.g., exposing internal IDs, embeddings, or auth tokens).
-
-### Pattern 5: Environment Variable Inlining
-**What:** All env vars are inlined at build time via `vite.config.ts define` block.
-**When:** Accessing any configuration value in the Worker.
-**Why:** `process.env` does not exist in Cloudflare Workers. Vite replaces references at build time.
-**Implication for KV:** The KV binding comes via the `env` parameter in the Worker fetch handler, not via `process.env`. Need to thread it through to `rag.server.ts`.
+### Pattern 4: Slug-Required Function Signatures
+**What:** Remove default slug values from `getMunicipality()` and similar functions.
+**When:** Transitioning from single-tenant defaults to explicit multi-tenant routing.
+**Why:** Compile-time enforcement that every call site provides a municipality slug. Prevents silent fallback to View Royal when a route forgets to pass the slug.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Global State for Conversation Memory
-**What:** Storing conversation state in module-level `Map` objects.
-**Why bad:** Workers isolates are ephemeral -- memory is not shared across invocations or edge locations. The current in-memory rate limiter works because rate limiting is best-effort. Conversation state requires durability.
-**Instead:** Use KV with TTL.
+### Anti-Pattern 1: DB Lookup for Hostname Resolution
+**What:** Querying `municipalities` table on every request to resolve hostname to slug.
+**Why bad:** Adds latency and a DB round-trip to every page load. The municipalities table changes extremely rarely.
+**Instead:** Static map in Worker code.
 
-### Anti-Pattern 2: Blocking AI Calls in Middleware
-**What:** Making AI calls (reranking, summarization) in the critical request path without streaming.
-**Why bad:** Workers CPU time limit (30s default, 50ms per event in free tier). A blocking Gemini call + synthesis can exceed limits.
-**Instead:** Use streaming for user-facing AI, or offload to queue/pipeline for non-interactive operations.
+### Anti-Pattern 2: Wildcard Subdomain Pattern
+**What:** Using `*.viewroyal.ai/*` as a route pattern in wrangler.toml.
+**Why bad:** Cloudflare Custom Domains do not support wildcard DNS records. Each subdomain must be explicitly configured. Wildcards would also catch unintended subdomains.
+**Instead:** Explicit route per municipality subdomain.
 
-### Anti-Pattern 3: Embedding Data in Email HTML
-**What:** Including large data payloads (base64 images, embedded styles) directly in email HTML.
-**Why bad:** Email clients have size limits (~100KB for Gmail) and aggressive content filtering.
-**Instead:** Keep emails lightweight, link to web app for details.
+### Anti-Pattern 3: Separate Workers Per Municipality
+**What:** Deploying a separate Cloudflare Worker for each municipality.
+**Why bad:** Code duplication, separate deployments, separate secret management. The codebase is already multi-tenant.
+**Instead:** Single Worker, differentiated by hostname.
 
-### Anti-Pattern 4: Monolithic Pipeline Steps
-**What:** Adding meeting summarization, topic tagging, profile regeneration, and fingerprint storage into a single pipeline phase.
-**Why bad:** Failure in one step blocks all others. Hard to re-run individual operations.
-**Instead:** Each new operation should be independently runnable via CLI flag (e.g., `--summarize-only`, `--tag-topics`, `--regenerate-profiles`).
+### Anti-Pattern 4: Modifying Downstream Route Loaders
+**What:** Adding hostname/municipality resolution logic to individual route loaders.
+**Why bad:** Municipality context already flows from root loader. Per-route resolution creates redundancy and risks inconsistency.
+**Instead:** Resolve once in Worker + root loader.
+
+### Anti-Pattern 5: Subdomain-Implied API Municipality
+**What:** Making `esquimalt.viewroyal.ai/api/v1/meetings` automatically scope to Esquimalt without the `:municipality` URL param.
+**Why bad:** The API is already built with explicit `:municipality` in the URL path. API consumers (developers, docs) reference this convention. Changing it breaks the existing contract.
+**Instead:** Keep API routes with explicit municipality slug. Subdomain routing is for the web UI only.
 
 ## Suggested Build Order
 
-Based on dependency analysis and risk:
+Dependencies dictate this sequence:
 
 ```
-Phase 1: Foundation (DB + Pipeline)
-  1a. Topic taxonomy tables (migration)
-  1b. Meeting summary generation (pipeline)
-  1c. Speaker fingerprint table (migration)
-  1d. RAG traces + feedback tables (migration)
-
-Phase 2: RAG Improvements (Web)
-  2a. RAG tool redesign (rag.server.ts)
-  2b. LLM reranking (rag.server.ts)
-  2c. KV conversation memory (wrangler + routes + rag.server)
-  2d. RAG observability + feedback (routes + components)
-
-Phase 3: Council Intelligence (Pipeline + Web)
-  3a. Profile pipeline enhancements (stance_generator, profile_agent)
-  3b. Topic taxonomy backfill + classification (pipeline)
-  3c. Speaker fingerprint pipeline integration
-  3d. Council profile page redesign (web)
-
-Phase 4: UX + Email
-  4a. Meeting summary cards (web)
-  4b. Email template improvements (edge function)
-  4c. Topic/issue clustering UI (web)
+1. Esquimalt DB row (no code deps, enables everything else)
+   |
+   +-- 2a. Pipeline: Test Legistar scraper (--municipality esquimalt --limit 5)
+   |        |
+   |        +-- 2b. Pipeline: Fix scraper bugs found in testing
+   |        |
+   |        +-- 2c. Pipeline: Full Esquimalt ingest
+   |
+   +-- 3a. Worker: Hostname resolver + AppLoadContext extension
+   |        |
+   |        +-- 3b. Root loader + getMunicipality signature change
+   |        |
+   |        +-- 3c. Fix all other getMunicipality callers
+   |        |
+   |        +-- 3d. Dynamic meta/OG tags + audit hardcoded strings
+   |
+   +-- 4. wrangler.toml: Add esquimalt custom domain route
+         |
+         +-- 5. Deploy + verify esquimalt.viewroyal.ai works
 ```
 
-**Rationale for ordering:**
-- Phase 1 creates the data structures everything else depends on
-- Phase 2 improves the highest-traffic feature (search/ask) with no DB dependencies beyond traces table
-- Phase 3 leverages Phase 1 tables and Phase 2 improvements
-- Phase 4 is purely presentational, can happen anytime after Phase 1b
+**Steps 2a-2c and 3a-3d can run in parallel** since pipeline and web app are independent.
+
+**Recommended milestone phases:**
+
+1. **Foundation** -- DB row + pipeline validation (test scraper, fix bugs)
+2. **Data** -- Full Esquimalt pipeline run (scrape, ingest, embed)
+3. **Routing** -- Hostname resolver, context passthrough, getMunicipality changes, dynamic meta
+4. **Ship** -- wrangler.toml update, DNS, deploy, end-to-end verification
 
 ## Scalability Considerations
 
-| Concern | Current (~100 users) | At 1K users | At 10K users |
-|---------|---------------------|-------------|--------------|
-| KV conversation store | Fine (KV handles millions of keys) | Fine | Fine, KV scales horizontally |
-| Gemini API calls (reranking) | ~10 req/day | ~100 req/day ($0.50) | Need caching or batch |
-| Speaker fingerprint search | <50 embeddings, trivial | Same | Same (council is small) |
-| RAG traces table | ~10 rows/day | ~100/day | Add partition by month |
-| Email sending (Resend) | Free tier | Free tier | Need paid plan at ~300 emails/day |
+| Concern | At 2 municipalities | At 10 municipalities | At 50 municipalities |
+|---------|---------------------|----------------------|----------------------|
+| Hostname map | 3-4 entries, trivial | 15-20 entries, fine | Consider DB lookup with KV edge cache |
+| wrangler.toml routes | 2 routes | 10 routes, manageable | Script to generate wrangler.toml |
+| Pipeline runs | Sequential per municipality | `--all` flag or parallel | Queue-based job scheduling |
+| DB query performance | `municipality_id` indexes handle it | Same | Partition if data exceeds millions |
+| Worker cold start | Negligible | Negligible | Negligible |
+
+At current scale (2 municipalities), the static map approach is ideal. Revisit at 10+.
 
 ## Sources
 
-- Direct codebase analysis of all files listed in "Files touched" sections
-- `sql/bootstrap.sql` for existing schema
-- `wrangler.toml` for Worker configuration
-- Cloudflare Workers KV documentation (training data, HIGH confidence)
-- Supabase pgvector documentation (training data, HIGH confidence)
+- [Cloudflare Workers Custom Domains docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) -- MEDIUM confidence
+- [Cloudflare Workers Routes docs](https://developers.cloudflare.com/workers/configuration/routing/routes/) -- MEDIUM confidence
+- [Wrangler Configuration Reference](https://developers.cloudflare.com/workers/wrangler/configuration/) -- HIGH confidence
+- Codebase analysis: `workers/app.ts`, `root.tsx`, `municipality.ts`, `municipality-helpers.ts`, `legistar.py`, `scrapers/__init__.py`, `orchestrator.py`, `paths.py`, `main.py`, `api/index.ts`, `api/middleware/municipality.ts` -- HIGH confidence
