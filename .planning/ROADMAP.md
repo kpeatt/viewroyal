@@ -99,7 +99,7 @@
 
 </details>
 
-### 🚧 v1.8 Esquimalt Launch (In Progress)
+### v1.8 Esquimalt Launch (In Progress)
 
 **Milestone Goal:** Validate the Legistar InSite scraper against Esquimalt, ingest recent meetings through the full pipeline, add hostname-based municipality routing, and deploy Esquimalt at esquimalt.viewroyal.ai with the full feature set.
 
@@ -119,11 +119,12 @@
   2. Searching on viewroyal.ai returns only View Royal results across all content types (keyword and vector)
   3. Asking the RAG agent a question on viewroyal.ai produces answers citing only View Royal sources
   4. Service layer functions all accept and filter by municipality_id (no unscoped queries remain)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 41-01: TBD
-- [ ] 41-02: TBD
+- [ ] 41-01-PLAN.md -- SQL RPC migrations + direct-table service scoping + route loader updates
+- [ ] 41-02-PLAN.md -- Search stack + people/profiling/analytics scoping
+- [ ] 41-03-PLAN.md -- RAG agent scoping + municipality scoping tests
 
 ### Phase 42: Esquimalt Scraper
 **Goal**: Recent Esquimalt council meeting data is ingested into the database through the full pipeline
@@ -171,7 +172,7 @@ Plans:
 - [ ] 44-02: TBD
 
 <details>
-<summary>📋 v1.8 RDOS Ingestion (Deferred)</summary>
+<summary>v1.8 RDOS Ingestion (Deferred)</summary>
 
 **Milestone Goal:** Ingest RDOS Board of Directors meetings (2025+) through the full pipeline -- scrape from Escribemeetings, download YouTube video, diarize, AI refine, and embed -- proving multi-municipality ingestion works end-to-end.
 
@@ -191,7 +192,7 @@ Note: Phases 42 and 43 can execute in parallel (independent tracks) once Phase 4
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 41. Data Isolation | v1.8 | 0/2 | Not started | - |
+| 41. Data Isolation | v1.8 | 0/3 | Not started | - |
 | 42. Esquimalt Scraper | v1.8 | 0/2 | Not started | - |
 | 43. Subdomain Routing | v1.8 | 0/1 | Not started | - |
 | 44. Branding & Ship | v1.8 | 0/2 | Not started | - |
