@@ -1,7 +1,7 @@
 # Requirements: ViewRoyal.ai v1.8 Esquimalt Launch
 
 **Defined:** 2026-03-30
-**Core Value:** Citizens can understand what their council decided, why, and who said what — without attending meetings or reading hundreds of pages of PDFs.
+**Core Value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
 
 ## v1.8 Requirements
 
@@ -70,25 +70,25 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCOPE-01 | — | Pending |
-| SCOPE-02 | — | Pending |
-| SCOPE-03 | — | Pending |
-| SCRP-01 | — | Pending |
-| SCRP-02 | — | Pending |
-| SCRP-03 | — | Pending |
-| SCRP-04 | — | Pending |
-| SCRP-05 | — | Pending |
-| ROUT-01 | — | Pending |
-| ROUT-02 | — | Pending |
-| ROUT-03 | — | Pending |
-| BRND-01 | — | Pending |
-| BRND-02 | — | Pending |
+| SCOPE-01 | Phase 41 | Pending |
+| SCOPE-02 | Phase 41 | Pending |
+| SCOPE-03 | Phase 41 | Pending |
+| SCRP-01 | Phase 42 | Pending |
+| SCRP-02 | Phase 42 | Pending |
+| SCRP-03 | Phase 42 | Pending |
+| SCRP-04 | Phase 42 | Pending |
+| SCRP-05 | Phase 42 | Pending |
+| ROUT-01 | Phase 43 | Pending |
+| ROUT-02 | Phase 43 | Pending |
+| ROUT-03 | Phase 43 | Pending |
+| BRND-01 | Phase 44 | Pending |
+| BRND-02 | Phase 44 | Pending |
 
 **Coverage:**
 - v1.8 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after initial definition*
+*Last updated: 2026-03-30 after roadmap creation*

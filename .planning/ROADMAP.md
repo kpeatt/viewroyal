@@ -10,6 +10,7 @@
 - ✅ **v1.5 Document Experience** -- Phases 25-28 (shipped 2026-02-28) -- [Archive](milestones/v1.5-ROADMAP.md)
 - ✅ **v1.6 Search Experience** -- Phases 29-31 (shipped 2026-03-01) -- [Archive](milestones/v1.6-ROADMAP.md)
 - ✅ **v1.7 View Royal Intelligence** -- Phases 37-40 (shipped 2026-03-24) -- [Archive](milestones/v1.7-ROADMAP.md)
+- 🚧 **v1.8 Esquimalt Launch** -- Phases 41-44 (in progress)
 - 📋 **v1.8 RDOS Ingestion** -- Phases 32-36 (deferred)
 
 ## Phases
@@ -98,6 +99,77 @@
 
 </details>
 
+### 🚧 v1.8 Esquimalt Launch (In Progress)
+
+**Milestone Goal:** Validate the Legistar InSite scraper against Esquimalt, ingest recent meetings through the full pipeline, add hostname-based municipality routing, and deploy Esquimalt at esquimalt.viewroyal.ai with the full feature set.
+
+- [ ] **Phase 41: Data Isolation** - Municipality-scope all service layer queries, search RPCs, and RAG agent to prevent cross-municipality data leakage
+- [ ] **Phase 42: Esquimalt Scraper** - Build Legistar InSite HTML scraper, run full pipeline for recent Esquimalt meetings
+- [ ] **Phase 43: Subdomain Routing** - Hostname-based municipality resolution, DNS/wrangler config, unknown subdomain 404
+- [ ] **Phase 44: Branding & Ship** - Dynamic municipality branding across all pages, end-to-end verification, go-live
+
+## Phase Details
+
+### Phase 41: Data Isolation
+**Goal**: Every page, search, and AI answer returns data from only the current municipality
+**Depends on**: Nothing (first phase of v1.8)
+**Requirements**: SCOPE-01, SCOPE-02, SCOPE-03
+**Success Criteria** (what must be TRUE):
+  1. Visiting viewroyal.ai shows only View Royal meetings, motions, people, and matters -- no Esquimalt data appears
+  2. Searching on viewroyal.ai returns only View Royal results across all content types (keyword and vector)
+  3. Asking the RAG agent a question on viewroyal.ai produces answers citing only View Royal sources
+  4. Service layer functions all accept and filter by municipality_id (no unscoped queries remain)
+**Plans**: TBD
+
+Plans:
+- [ ] 41-01: TBD
+- [ ] 41-02: TBD
+
+### Phase 42: Esquimalt Scraper
+**Goal**: Recent Esquimalt council meeting data is ingested into the database through the full pipeline
+**Depends on**: Phase 41
+**Requirements**: SCRP-01, SCRP-02, SCRP-03, SCRP-04, SCRP-05
+**Success Criteria** (what must be TRUE):
+  1. Running the pipeline with `--municipality esquimalt` scrapes meetings from Esquimalt's Legistar Calendar.aspx
+  2. Scraped meetings include agenda items, attachments, vote records, and linked PDFs
+  3. Esquimalt body types (Council, COTW, APC, etc.) appear as distinct organizations in the database
+  4. Granicus video URLs are extracted and stored for meetings that have video
+  5. Full pipeline completes (scrape, ingest, embed) for at least 6 months of recent Esquimalt meetings
+**Plans**: TBD
+
+Plans:
+- [ ] 42-01: TBD
+- [ ] 42-02: TBD
+
+### Phase 43: Subdomain Routing
+**Goal**: Requests to esquimalt.viewroyal.ai resolve to Esquimalt data and unknown subdomains are rejected
+**Depends on**: Phase 41
+**Requirements**: ROUT-01, ROUT-02, ROUT-03
+**Success Criteria** (what must be TRUE):
+  1. Visiting esquimalt.viewroyal.ai loads the web app with Esquimalt municipality context
+  2. Visiting viewroyal.ai continues to load View Royal as before
+  3. Visiting garbage.viewroyal.ai returns a 404 page
+  4. The esquimalt subdomain DNS record resolves and the Worker receives the request
+**Plans**: TBD
+
+Plans:
+- [ ] 43-01: TBD
+
+### Phase 44: Branding & Ship
+**Goal**: Esquimalt users see Esquimalt branding everywhere and the platform is verified end-to-end before go-live
+**Depends on**: Phase 42, Phase 43
+**Requirements**: BRND-01, BRND-02
+**Success Criteria** (what must be TRUE):
+  1. Page titles, navbar, footer, and OG meta on esquimalt.viewroyal.ai display "Township of Esquimalt" (not "ViewRoyal.ai")
+  2. The about page on esquimalt.viewroyal.ai describes Esquimalt's data sources and council structure
+  3. Meetings, motions, people, and search on esquimalt.viewroyal.ai show only Esquimalt data with correct branding
+  4. View Royal pages remain unchanged -- no regressions in branding or data
+**Plans**: TBD
+
+Plans:
+- [ ] 44-01: TBD
+- [ ] 44-02: TBD
+
 <details>
 <summary>📋 v1.8 RDOS Ingestion (Deferred)</summary>
 
@@ -110,3 +182,16 @@
 - [ ] **Phase 36: End-to-End Integration** - Full 5-phase pipeline run for RDOS Board meetings
 
 </details>
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 41 -> 42 -> 43 -> 44
+Note: Phases 42 and 43 can execute in parallel (independent tracks) once Phase 41 completes.
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 41. Data Isolation | v1.8 | 0/2 | Not started | - |
+| 42. Esquimalt Scraper | v1.8 | 0/2 | Not started | - |
+| 43. Subdomain Routing | v1.8 | 0/1 | Not started | - |
+| 44. Branding & Ship | v1.8 | 0/2 | Not started | - |
