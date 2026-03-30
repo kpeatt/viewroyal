@@ -1,258 +1,300 @@
 # Domain Pitfalls
 
-**Domain:** Adding LLM reranking, conversation memory, topic taxonomy, speaker fingerprinting, AI profiling, and email redesign to an existing civic intelligence platform
-**Researched:** 2026-03-05
+**Domain:** Adding Esquimalt municipality ingestion (Legistar scraper) + subdomain-based multi-site routing to existing single-municipality civic platform
+**Researched:** 2026-03-30
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites or major issues.
+Mistakes that cause data leakage between municipalities, broken production, or rewrites.
 
-### Pitfall 1: LLM Reranking Latency Blowing Up Response Times
+### Pitfall 1: Web App Service Layer Has Zero Municipality Scoping
 
-**What goes wrong:** Adding an LLM reranking pass between retrieval and synthesis doubles or triples RAG latency. The current agent loop already makes 2-6 Gemini calls (orchestrator steps) plus a final synthesis call. Adding a reranking call per tool invocation (or a single pass over aggregated results) pushes total latency past the point where users abandon the interaction. On Cloudflare Workers, the 30-second CPU time limit becomes a real constraint.
+**What goes wrong:** Every Supabase query in `apps/web/app/services/` (meetings.ts, people.ts, site.ts, etc.) queries tables WITHOUT filtering by `municipality_id`. Once Esquimalt data exists in the database, the View Royal site shows Esquimalt meetings, motions, matters, and people mixed in with View Royal data. The home page shows Esquimalt decisions in the feed. Search returns cross-municipality results.
 
-**Why it happens:** Reranking seems like a simple "add one more call" improvement, but the RAG pipeline is already streaming SSE events through multiple orchestrator turns. Each reranking call adds 1-3 seconds of Gemini latency. If you rerank per-tool (6 tools x 1-3s), you add 6-18 seconds. If you rerank once at the end, the user sees no streaming progress during the reranking pause.
+**Why it happens:** The app was built for a single municipality. The API layer (Hono endpoints in `apps/web/app/api/`) was properly scoped with `municipality_id` filters in v1.3, but the React Router service layer that feeds the web UI was never updated.
 
-**Consequences:** Users see a long "thinking" pause with no feedback. Cloudflare Workers may hit CPU limits. The perceived improvement in answer quality doesn't justify the latency hit for most queries.
+**Consequences:** Data leakage between municipalities. View Royal users see Esquimalt agenda items. Esquimalt users see View Royal motions. Stats on the about page aggregate both towns. The home page "active matters" and "recent decisions" mix data from both municipalities.
 
-**Prevention:**
-- Rerank only once, after all tool results are collected, not per-tool-call. This is a single additional LLM call.
-- Use the orchestrator model itself for reranking by injecting a "select the N most relevant sources" step before synthesis, rather than a separate reranking API call. Gemini already sees all the evidence.
-- Set a strict latency budget: if reranking would push total time past 15 seconds, skip it and use RRF scores as-is.
-- Consider reranking only when result count exceeds a threshold (e.g., >20 results) where RRF ordering might genuinely be suboptimal.
+**Evidence found:**
+- `apps/web/app/services/meetings.ts` -- no `municipality_id` filter on any query
+- `apps/web/app/services/` -- grep for `municipality_id` returns zero matches across all service files
+- `apps/web/app/services/people.ts:419` -- uses `organization_id` with hardcoded fallback `|| 1`
+- `apps/web/app/services/site.ts` -- `getAboutStats()` and `getHomeData()` query all rows globally with no municipality filter
+- Contrast with `apps/web/app/api/endpoints/` which correctly filters `.eq("municipality_id", muni.id)` on every query
 
-**Detection:** Monitor P95 RAG response times before and after. If P95 exceeds 12 seconds, reranking is too expensive.
+**Prevention:** Before ingesting ANY Esquimalt data, add `municipality_id` filtering to every service function. The root loader already fetches the municipality object -- pass `municipality.id` down to all service calls. The meetings table already has `municipality_id` via its organization FK. The API layer in `apps/web/app/api/endpoints/` shows exactly how to do this.
 
-**Phase:** RAG improvements phase. Build with a feature flag so it can be toggled off per-request.
+**Detection:** After ingesting even one Esquimalt meeting, visit viewroyal.ai and check if Esquimalt data appears on the home page, meetings list, people list, matters list, or search results.
 
----
-
-### Pitfall 2: Conversation Memory in KV Creating Stale/Corrupt Context
-
-**What goes wrong:** Moving conversation memory from the current client-side `context` string to Cloudflare KV introduces a new class of bugs: stale context, orphaned sessions, and context window overflow. The current approach sends the previous Q&A as a context string in the POST body (see `api.ask.tsx` line 114 and `rag.server.ts` line 1360-1364). It's simple and stateless. KV-backed memory adds state, and state rots.
-
-**Why it happens:** The current system passes `context` as a simple string containing the previous question. It works because it's ephemeral and bounded. Moving to KV means:
-- Sessions need TTLs, but what TTL? Too short (5 min) and users lose context mid-research. Too long (24h) and you're paying for storage and feeding irrelevant old context to the LLM.
-- Context accumulation: 5 turns of Q&A context can easily exceed 8,000 tokens, consuming the LLM's attention budget and degrading answer quality for the current question.
-- KV eventual consistency: a follow-up question might arrive before the previous answer's KV write propagates (Cloudflare KV is eventually consistent, not strongly consistent).
-
-**Consequences:** Users get answers that reference conversations they didn't have (stale KV). Or the LLM ignores the current question because old context dominates. Or follow-ups fail silently because KV hasn't propagated yet.
-
-**Prevention:**
-- Keep the conversation window to 3-5 turns max. Summarize older turns into a single "previous context" paragraph rather than keeping full Q&A history.
-- Use KV with `expirationTtl: 1800` (30 minutes) -- matches a realistic research session.
-- Store a version counter and validate it on read. If the version doesn't match, start fresh.
-- For the KV consistency issue: write with `{metadata: {turn: N}}` and on read, verify the turn count matches expectations. If not, fall back to the client-side context string.
-- Consider: is KV actually needed? The current client-side approach works. The main gap is that full-page refreshes lose context. An alternative is `sessionStorage` on the client, which is synchronous and strongly consistent.
-
-**Detection:** Log context token counts per RAG call. If context exceeds 4,000 tokens, the conversation window is too long.
-
-**Phase:** RAG improvements phase. Evaluate whether KV is truly needed vs. client-side `sessionStorage`.
+**Phase:** Must be the very first task, before any Esquimalt data enters the database.
 
 ---
 
-### Pitfall 3: The neighbourhood Column Ghost
+### Pitfall 2: getMunicipality() Hardcoded to "view-royal" Slug
 
-**What goes wrong:** The `neighborhood` field exists in the TypeScript `AgendaItem` type (types.ts line 109) but does NOT exist as a column in the actual `agenda_items` database table. This is explicitly documented in CLAUDE.md and MEMORY.md. Building neighbourhood filtering against this ghost column will produce silent query failures -- Supabase `.select()` with a non-existent column returns no error, just omits the field.
+**What goes wrong:** `apps/web/app/services/municipality.ts` has `slug = "view-royal"` as the default parameter. The root loader calls `getMunicipality(supabase)` with no slug argument. Every page load resolves to View Royal regardless of what hostname the request came from. Esquimalt subdomain will render with View Royal's name, map center, meta, RSS URL, and branding.
 
-**Why it happens:** The TypeScript types were written aspirationally, ahead of the schema. The `send-alerts` Edge Function already references `neighborhood` in its `DigestPayload` interface (line 51), and the subscription system supports `neighborhood` subscriptions (line 82). But the actual DB column was never added because the data source (CivicWeb PDFs) doesn't reliably provide neighbourhood information.
+**Why it happens:** No hostname-to-slug resolution exists. The function signature has a default parameter that was never wired to hostname detection.
 
-**Consequences:** If you build neighbourhood filtering UI that queries `agenda_items.neighborhood`, it will always return null/empty, and no items will match any neighbourhood filter. The feature will appear to work (no errors) but produce zero results.
+**Consequences:** esquimalt.viewroyal.ai loads but displays "Town of View Royal" everywhere, uses View Royal's map center for geographic features, fetches View Royal's RSS feed for public notices, and passes View Royal's municipality ID for all data queries (compounding Pitfall 1).
 
-**Prevention:**
-- **Before any neighbourhood work**: Add the column to the database via a Supabase migration. Decide the column type (text vs. text[], since an item might span neighbourhoods).
-- **Data population strategy**: Neighbourhood assignment must be solved in the pipeline, not the web app. Options: (a) geocode `related_address` and map to neighbourhood polygons (the `vrneighbourhoods.geojson` file already exists in `data/`), (b) have Gemini classify during ingestion based on addresses/descriptions, (c) both.
-- **Backfill**: Existing ~700 meetings need neighbourhood assignment. This is a pipeline batch job, not a one-off script.
-- **Test with real data** before building UI: Run the pipeline on a few meetings with known addresses and verify neighbourhood assignment accuracy.
+**Evidence found:**
+- `apps/web/app/services/municipality.ts:7` -- `slug = "view-royal"` default
+- `apps/web/app/root.tsx:79` -- `getMunicipality(supabase)` called with no slug
+- `apps/web/app/routes/home.tsx:38` -- same pattern, no slug passed
 
-**Detection:** Query `SELECT COUNT(*) FROM agenda_items WHERE neighborhood IS NOT NULL` -- if it returns 0 after the migration, the population strategy isn't working.
+**Prevention:** Add hostname parsing in the Worker entry point (`workers/app.ts`) or root loader. Extract subdomain from `request.url`, map it to a municipality slug, and pass it through. The `getMunicipality` function already accepts a slug parameter -- it just needs to receive the correct one based on the hostname.
 
-**Phase:** Pipeline improvements phase (must come before UX filtering phase). The DB migration and pipeline classification must ship before any frontend filtering.
+**Detection:** Visit esquimalt.viewroyal.ai and check the page title, hero section text, and map center location.
 
----
-
-### Pitfall 4: Speaker Fingerprinting Regression on Existing Diarization
-
-**What goes wrong:** Adding speaker fingerprinting to the existing MLX diarization pipeline breaks previously-correct speaker assignments. The current clustering system (see `diarization/clustering.py`) uses agglomerative clustering with a cosine distance threshold of 0.7. Adding a fingerprint database that maps known speakers to embedding centroids can conflict with the unsupervised clustering, creating split speakers (one person assigned two labels) or merged speakers (two people merged because one's fingerprint is too close to the other's centroid).
-
-**Why it happens:** The existing diarization pipeline works as a standalone unsupervised system. It clusters embeddings within a single meeting without knowing who anyone is. Speaker fingerprinting adds a supervised element: "this cluster matches Councillor X's stored embedding." The tension is:
-- If you match against fingerprints first, then cluster unmatched segments, the threshold for "close enough to a fingerprint" interacts badly with the clustering threshold.
-- Council members' voices change over time (colds, aging, microphone position) -- stored fingerprints drift.
-- New speakers (public delegates, new staff) will get incorrectly matched to the closest councillor fingerprint if the threshold is too loose.
-
-**Consequences:** Previously-correct diarizations get worse. Users who relied on accurate speaker attribution lose trust. Re-diarizing 700+ meetings with a buggy fingerprinting system creates a massive data quality regression.
-
-**Prevention:**
-- **Never re-diarize old meetings with new fingerprinting by default.** Apply fingerprinting only to new meetings. Provide a `--refingerprint` flag for intentional re-runs.
-- **Two-phase approach:** First, run unsupervised clustering as-is. Then, match cluster centroids against the fingerprint DB with a strict threshold (cosine similarity > 0.85). Unmatched clusters stay as "Speaker 1", "Speaker 2".
-- **Build a validation set:** Pick 10 meetings with known speaker assignments. Run fingerprinting. Compare results against ground truth before deploying.
-- **Store fingerprints as rolling averages** of per-meeting centroids, not single snapshots. Update after each successful match. This handles voice drift.
-- **Confidence scoring:** When a cluster matches a fingerprint, store the similarity score. UI can show "likely Councillor X (92% confident)" vs. "Speaker 3 (unidentified)".
-
-**Detection:** Before/after comparison on the validation set. If speaker assignment accuracy drops by more than 5%, the fingerprinting threshold needs tuning.
-
-**Phase:** Pipeline improvements phase. Must be implemented and validated before any web app changes that display fingerprinted speaker names.
+**Phase:** Routing/subdomain phase -- must come before or alongside data ingestion.
 
 ---
 
-### Pitfall 5: AI Profile Generation Without Freshness Strategy
+### Pitfall 3: Hardcoded "ViewRoyal.ai" Branding Across 30+ Files
 
-**What goes wrong:** AI-generated councillor profiles (stance summaries, highlights, policy positions) become stale and misleading. The current stance generator (`profiling/stance_generator.py`) generates stances per-topic per-councillor. But there's no automatic regeneration when new evidence arrives. A councillor who changed position on housing six months ago still shows their old stance.
+**What goes wrong:** The brand name "ViewRoyal.ai" is hardcoded in page titles, OG meta tags, the navbar logo, footer copyright, OG image generator, about page, settings page, and more. Esquimalt users see "ViewRoyal.ai" as the site name everywhere.
 
-**Why it happens:** Profile generation is expensive (one Gemini call per councillor-topic pair, 7 councillors x 8 topics = 56 API calls). Running it after every pipeline ingestion is wasteful. But without automatic regeneration, profiles drift from reality. Worse, the current stances table has no `stale_after` or `evidence_cutoff_date` field, so there's no way to know if a stance was generated before or after a councillor's most recent relevant statement.
+**Why it happens:** Branding was treated as a constant, not a municipality-derived value. The multi-tenancy work in v1.0 made data queries municipality-aware but never addressed branding strings.
 
-**Consequences:** A citizen reads "Councillor X supports the bike lane project" when Councillor X actually voted against it last month. This is worse than showing no stance at all -- it's actively misleading in a civic transparency context.
+**Consequences:** Esquimalt users see confusing "ViewRoyal.ai" branding everywhere. SEO metadata references "ViewRoyal.ai" on Esquimalt pages. OG images say "ViewRoyal.ai". Social shares look wrong.
 
-**Prevention:**
-- **Add `evidence_cutoff_date` to councillor_stances table.** Set it to the most recent meeting date included in the evidence when generating.
-- **Staleness check:** When displaying a stance, compare `evidence_cutoff_date` against the most recent meeting with relevant content. If there's newer evidence, show a "may be outdated" indicator.
-- **Incremental regeneration:** After pipeline ingestion, check which councillors had new key_statements or votes. Only regenerate stances for those councillors on affected topics. This reduces the 56-call batch to 2-5 calls per pipeline run.
-- **Date-bounded evidence gathering:** The current `_gather_evidence` function has no date filtering. Add optional `since_date` parameter to gather only new evidence, then merge with existing stance rather than regenerating from scratch.
-- **Show generation date in UI:** The profile page should display "Analysis current as of [date]" so users can judge recency.
+**Evidence found (partial list of hardcoded locations):**
+- `apps/web/app/root.tsx:30,35,42` -- title, og:title, og:url all hardcoded to "ViewRoyal.ai"
+- `apps/web/app/components/navbar.tsx:146` -- `ViewRoyal<span>.ai</span>` hardcoded logo text
+- `apps/web/app/components/footer.tsx:8` -- copyright text "ViewRoyal.ai"
+- `apps/web/app/components/footer.tsx:12` -- docs link to `https://docs.viewroyal.ai`
+- `apps/web/app/lib/og.ts:1` -- `const BASE = "https://viewroyal.ai"` hardcoded base URL
+- `apps/web/app/routes/about.tsx:24-30` -- hardcoded title, description, OG tags
+- `apps/web/app/routes/meetings.tsx:14-15` -- "ViewRoyal.ai" in page title
+- `apps/web/app/routes/compare.tsx:73,89` -- hardcoded in meta
+- `apps/web/app/routes/search.tsx:31-36` -- hardcoded in meta
+- `apps/web/app/routes/document-viewer.tsx:37,41,244,549,556` -- page title + image URLs hardcoded to `images.viewroyal.ai`
+- `apps/web/app/routes/settings.api-keys.tsx:176,271` -- "ViewRoyal.ai API" in body copy
+- `apps/web/app/routes/api.og-image.tsx:27,33,54` -- OG image generator hardcoded brand
+- `apps/web/app/lib/analytics.server.ts:1` -- PostHog host `https://k.viewroyal.ai`
+- `apps/web/app/components/posthog-provider.tsx:26` -- same PostHog proxy
 
-**Detection:** Query for stances where `evidence_cutoff_date < (SELECT MAX(meeting_date) FROM meetings WHERE has_transcript = true)`. These are stale.
+**Prevention:** Create a branding utility or extend the municipality context with site name and base URL. Replace all hardcoded instances. For `meta` functions, use `getMunicipalityFromMatches()` which already exists but is only used in a few places. Grep for "ViewRoyal" and "viewroyal.ai" across `apps/web/app/` to find all instances (77 files match).
 
-**Phase:** Council member intelligence phase. Ship the DB migration and staleness check before building the new profile page design.
+**Detection:** Deploy with subdomain routing and view-source any Esquimalt page -- "ViewRoyal" will appear dozens of times.
+
+**Phase:** Branding cleanup phase, which should be part of the routing/subdomain work.
+
+---
+
+### Pitfall 4: Legistar API 1000-Result Limit Without Pagination
+
+**What goes wrong:** The Legistar scraper's `discover_meetings()` makes a single API call to the Events endpoint with no pagination. The Legistar API documentation explicitly states query replies are limited to 1000 responses. Esquimalt has been on Legistar for years with regular council meetings, committee meetings, advisory commission meetings, and more. If they have more than 1000 total events, the scraper silently truncates the result set.
+
+**Why it happens:** The scraper was written but never tested against real Esquimalt data. No `$top`/`$skip` OData pagination parameters are used.
+
+**Consequences:** Missing meetings with no error. The scraper reports N meetings discovered but older meetings are silently dropped. The API returns 200 OK with exactly 1000 results and the scraper treats it as complete.
+
+**Evidence found:**
+- `apps/pipeline/pipeline/scrapers/legistar.py:66-70` -- single `_get("Events", params)` call, no pagination loop
+- Legistar API Help Page confirms 1000-result limit
+- Legistar API recommends paging by `$top`/`$skip` or filtering by ID for stable pagination
+
+**Prevention:** Add OData pagination: loop with `$top=1000&$skip=N` until fewer than 1000 results return. Or use `$filter` with `EventId gt {last_id}` for ID-based paging as Legistar recommends for busy sites.
+
+**Detection:** Compare the count returned by the scraper vs the count visible on the esquimalt.ca.legistar.com calendar. If exactly 1000, pagination is needed.
+
+**Phase:** Must be fixed before the initial Esquimalt scrape to avoid missing historical data.
+
+---
+
+### Pitfall 5: Wrangler Routes Only Match viewroyal.ai, Not Subdomains
+
+**What goes wrong:** `wrangler.toml` has `routes = [{ pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" }]`. This pattern matches ONLY `viewroyal.ai/*`. Requests to `esquimalt.viewroyal.ai` will NOT be routed to the Worker. They will hit Cloudflare's default behavior -- a DNS error or Cloudflare error page, depending on DNS configuration.
+
+**Why it happens:** The route was configured for a single domain. Cloudflare route patterns require explicit wildcard subdomain matching.
+
+**Consequences:** esquimalt.viewroyal.ai returns a Cloudflare error page. The Worker never receives the request. The entire feature is broken at the infrastructure level.
+
+**Evidence found:**
+- `apps/web/wrangler.toml:7` -- `pattern = "viewroyal.ai/*"` (no wildcard for subdomains)
+- Cloudflare Workers Routes docs confirm patterns like `*.viewroyal.ai/*` are needed for subdomain matching
+- Must also set up DNS (CNAME or A record) for the subdomain or use a wildcard DNS record
+
+**Prevention:** Update wrangler.toml to add the subdomain route:
+```toml
+routes = [
+  { pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" },
+  { pattern = "*.viewroyal.ai/*", zone_name = "viewroyal.ai" }
+]
+```
+Also create a DNS record: either a specific CNAME for `esquimalt.viewroyal.ai` or a wildcard `*.viewroyal.ai` record pointing to the Worker. Use Cloudflare's proxied mode (orange cloud) for faster propagation.
+
+**Detection:** Deploy and try to visit esquimalt.viewroyal.ai -- it will fail without this fix.
+
+**Phase:** Infrastructure/routing phase. This is a prerequisite for everything else.
 
 ## Moderate Pitfalls
 
-### Pitfall 6: Topic Taxonomy Mismatch Between Pipeline and Web App
+### Pitfall 6: Legistar Organization Name Mapping Loss
 
-**What goes wrong:** The current system uses two parallel topic systems: (a) the `normalize_category_to_topic` SQL function that maps ~300 CivicWeb categories to 8 topics (Administration, Bylaw, Development, Environment, Finance, General, Public Safety, Transportation), and (b) free-text `category` strings on agenda items. Adding a richer topic taxonomy (for clustering, filtering, or profile generation) creates a third system that doesn't align with either existing one.
+**What goes wrong:** The Legistar scraper sets `organization_name=self.municipality.name` for every meeting. Esquimalt has multiple bodies visible on their Legistar: Regular Council, Committee of the Whole, Advisory Planning Commission, and others. The scraper assigns the municipality name ("Corporation of the Township of Esquimalt") as the organization for ALL meetings, losing body differentiation entirely.
 
-**Why it happens:** The 8-topic normalization was designed for stance generation and is baked into an IMMUTABLE SQL function. It can't be extended without dropping and recreating it (and rerunning stances). The free-text categories come from CivicWeb and are inconsistent ("Public Hearing", "PUBLIC HEARING", "Public Hearings"). A new taxonomy needs to map to both.
+**Why it happens:** `meeting_type=event.get("EventBodyName")` is set correctly (it captures the body name), but `organization_name` uses the municipality name instead. The ingestion layer likely creates or matches organizations using `organization_name`, so all meetings end up under one org.
 
-**Prevention:**
-- **Start from the existing 8 topics.** Extend them with subcategories rather than replacing. E.g., "Development > Rezoning", "Development > Subdivision". This preserves stance generation compatibility.
-- **Create a `topic_taxonomy` table** with parent-child relationships. Map the existing 8 topics as top-level nodes. New subcategories are children.
-- **Don't store computed topics as new columns.** Use the taxonomy table as a lookup. Agenda items reference taxonomy nodes via a junction table.
-- **Migration path:** Update `normalize_category_to_topic` to return taxonomy node IDs instead of strings. This is breaking -- plan for a stance regeneration run.
+**Evidence found:**
+- `apps/pipeline/pipeline/scrapers/legistar.py:91` -- `organization_name=self.municipality.name`
+- Esquimalt's Legistar shows multiple bodies: Council, Committee of the Whole, Advisory Planning Commission, etc.
 
-**Phase:** Council member intelligence phase. Must precede profile redesign since profiles display topic-based data.
+**Prevention:** Set `organization_name=event.get("EventBodyName")` so each Legistar body becomes its own organization in the database. Verify how the ingestion layer handles organization creation from this field.
 
----
-
-### Pitfall 7: Meeting Summary Cards Duplicating Existing Summaries
-
-**What goes wrong:** Building "meeting summary cards" for the meeting list page creates duplication with the existing `meeting.summary` field. If the cards use a new AI-generated summary, it may contradict the existing summary. If they use the existing summary, the feature is just a UI reskin.
-
-**Why it happens:** The existing `summary` field on meetings is populated by the AI refiner during pipeline ingestion. It's a single paragraph. "Meeting summary cards" implies a richer, structured summary (key decisions, attendance, controversy flag). These are different things, but both get called "summary."
-
-**Prevention:**
-- **Define clearly what the card shows** before building it. Proposed: structured card with (1) meeting type badge, (2) 2-3 key decisions as bullet points from motions, (3) attendance count, (4) controversy indicator if any agenda item is_controversial. This is assembled from existing data, not a new AI summary.
-- **Don't generate new summaries.** Use existing motions, attendance, and is_controversial flags. This avoids Gemini costs and summary drift.
-- **Keep the existing `summary` field** for the meeting detail page header. The card is a different view of the same data.
-
-**Phase:** UX features phase.
+**Phase:** Scraper validation phase.
 
 ---
 
-### Pitfall 8: Email Template Redesign Breaking Resend Delivery
+### Pitfall 7: View Royal-Specific Hero Map Background on All Subdomains
 
-**What goes wrong:** Resend email delivery is sensitive to HTML structure. Complex email templates with nested CSS, web fonts, or modern CSS features (flexbox, grid) render incorrectly or trigger spam filters. The current Edge Function (`send-alerts/index.ts`) builds email HTML inline. A redesign that introduces a template library or complex markup can break delivery.
+**What goes wrong:** The home page hero section uses `backgroundImage: 'url(/view-royal-map.svg)'` -- a hand-drawn SVG map of View Royal's land mass, coastline, and neighbourhoods. The `ViewRoyalMap` component (`apps/web/app/components/home/view-royal-map.tsx`) is a 600-line SVG specifically depicting View Royal geography. Esquimalt users see View Royal's map outline behind their hero section.
 
-**Why it happens:** Email HTML is not web HTML. Email clients strip `<style>` tags, ignore CSS classes, and have wildly different rendering engines. Developers build beautiful templates in a browser preview, then they look broken in Gmail/Outlook. Worse, image-heavy or complex HTML emails get lower spam scores.
+**Prevention:** Either make the hero background municipality-aware (load a different asset per municipality) or replace with a generic/abstract background. The simplest fix: store a `hero_background` key in the municipality's `meta` JSONB field referencing the asset path, with a neutral default.
 
-**Prevention:**
-- **Use inline styles only.** No `<style>` blocks, no CSS classes. Every element gets its styles directly.
-- **Test with Resend's preview** and real email clients (Gmail web, Apple Mail, Outlook) before deploying.
-- **Keep the structure simple:** Single-column, table-based layout. No web fonts -- use system font stack.
-- **Don't add images** unless absolutely necessary (they increase email size and can trigger spam filters). Use styled HTML elements for visual hierarchy instead.
-- **Maintain the existing `send-alerts` Edge Function structure.** The current inline HTML approach is correct for email. Don't switch to a React email library that adds build complexity to a Deno Edge Function.
-
-**Phase:** Email alerts phase. Ship as a separate deploy from the web app.
+**Phase:** Branding phase.
 
 ---
 
-### Pitfall 9: LLM Reranking Inconsistency Across Identical Queries
+### Pitfall 8: Onboarding Hardcodes View Royal Neighbourhoods
 
-**What goes wrong:** LLM-based reranking produces different orderings for the same query on different runs because LLM outputs are non-deterministic. This confuses users who re-ask the same question and get different source orderings, or worse, different answers because the synthesis model sees sources in a different order.
+**What goes wrong:** `apps/web/app/routes/onboarding.tsx` has a hardcoded `NEIGHBOURHOODS` array with View Royal neighbourhoods ("Chilco", "Craigflower", "Eagle Creek", "Helmcken", etc.), placeholder text "e.g. 45 View Royal Ave", and heading "Where in View Royal?". Esquimalt users see View Royal neighbourhood names during signup.
 
-**Why it happens:** Gemini (and all LLMs) have inherent output variance even with temperature=0. The reranking prompt asks "rank these by relevance" and the model may assign different rankings each time. Combined with the current RRF scoring (which is deterministic), the reranked results look inconsistent.
+**Consequences:** Esquimalt users select View Royal neighbourhoods. Their subscription is created for the wrong area. Proximity-based alerts will reference wrong geography.
 
-**Prevention:**
-- **Use reranking as a filter, not a reorderer.** Ask the LLM to identify the top-N most relevant results from the candidate set, but preserve RRF ordering within those top-N. This reduces variance to binary (included/excluded) rather than continuous (rank position).
-- **Cache reranking results** for identical query+result combinations. If the same query hits the same RRF results, return the cached reranking.
-- **Set temperature to 0** for the reranking call (Gemini supports this). Won't eliminate variance entirely but reduces it.
+**Prevention:** Move neighbourhood lists to the municipality's `meta` JSONB field or a separate table. Load dynamically based on the current municipality context. The onboarding loader already has access to the municipality.
 
-**Phase:** RAG improvements phase.
+**Phase:** Must be addressed before Esquimalt users can sign up.
 
 ---
 
-### Pitfall 10: Observability Data Explosion
+### Pitfall 9: Legistar Video URL Format Unknown
 
-**What goes wrong:** Adding RAG observability (logging every tool call, reranking decision, source selection) creates a firehose of data that's expensive to store and hard to query. The current system logs minimally (PostHog `$ai_generation` events with basic metrics). Adding per-step tracing with full context blows up storage costs.
+**What goes wrong:** The scraper stores `event.get("EventVideoPath")` as the video URL. Esquimalt may use YouTube, Granicus MediaManager, or an inline player instead of Vimeo. The entire video infrastructure (Vimeo proxy Worker, video URL resolution in `vimeo.server.ts`, video player component) assumes Vimeo URLs.
 
-**Why it happens:** Observability is a "more is better" instinct. Every tool call result, every reranking decision, every source selection feels important to log. But at 10+ events per RAG query, with full tool results (which can be 10KB+ each), storage grows fast.
+**Evidence found:**
+- `apps/web/app/services/vimeo.server.ts` -- Vimeo-specific URL resolution
+- `apps/web/app/routes/api.vimeo-url.ts` -- Vimeo proxy API route
+- Pipeline source_config has `"video_source": {"type": "legistar_inline"}` but this is untested
+- The video source abstraction exists in the pipeline but web app video playback is Vimeo-centric
 
-**Prevention:**
-- **Log structured summaries, not full results.** For each tool call, log: tool name, argument hash, result count, latency. NOT the full result payload.
-- **Sample full traces.** Log complete traces for 10% of queries. For the other 90%, log only the summary metrics.
-- **Use PostHog's existing `$ai_generation` event** as the primary observability point. Add properties for reranking_applied, sources_before_rerank, sources_after_rerank, total_tool_calls. Don't create a new event type per tool call.
-- **Thumbs up/down feedback** is the highest-signal metric. Build that first, worry about detailed tracing later.
+**Consequences:** Video links may not resolve. The Vimeo proxy rejects non-Vimeo URLs. Video playback fails silently on meeting detail pages. Users see broken video sections.
 
-**Phase:** RAG improvements phase. Ship feedback buttons before detailed tracing.
+**Prevention:** Before building anything, make a test API call to Esquimalt's Legistar Events endpoint and examine `EventVideoPath` values. Determine the video hosting provider. Update the web app video player to handle non-Vimeo sources gracefully (direct URL embed, YouTube embed, or null state).
+
+**Phase:** Scraper validation phase -- investigate before coding.
+
+---
+
+### Pitfall 10: R2 Image URLs Hardcoded to images.viewroyal.ai
+
+**What goes wrong:** `apps/web/app/routes/document-viewer.tsx` hardcodes `https://images.viewroyal.ai/` in three places as the base URL for document images from R2 storage. If Esquimalt document images are stored in the same R2 bucket, the URL technically works but the domain is wrong for Esquimalt users. If separate buckets are used, images break completely.
+
+**Prevention:** Make the image base URL configurable via environment variable or municipality context. Use a shared domain or derive from the current municipality's configuration.
+
+**Phase:** Infrastructure phase.
+
+---
+
+### Pitfall 11: RAG System Prompt Defaults to "Town of View Royal"
+
+**What goes wrong:** `apps/web/app/services/rag.server.ts` lines 883 and 961 have default parameters `municipalityName = "Town of View Royal"` for the orchestrator and final system prompts. If the municipality name isn't passed through correctly, the AI answers Esquimalt questions while believing it's analyzing View Royal data.
+
+**Prevention:** Verify that the RAG pipeline receives the correct municipality context from the request. The default parameter is a fallback -- ensure the actual value is always passed.
+
+**Phase:** Municipality scoping phase.
+
+---
+
+### Pitfall 12: About Page and Legal Pages Have Hardcoded Content
+
+**What goes wrong:** `about.tsx` has hardcoded "ViewRoyal.ai" branding and refers to "Town of View Royal" in meta tags and body copy. `privacy.tsx` references "public records provided by [municipality]" with a View Royal fallback. The about page's "how it works" section references CivicWeb PDFs and Vimeo (View Royal's sources), not Legistar (Esquimalt's source). Contact email is `kyle@viewroyal.ai`.
+
+**Prevention:** Make these pages municipality-aware. The about page should describe the correct data sources per municipality. Legal pages already have fallback patterns but need the meta tags and body content updated.
+
+**Phase:** Branding phase, lower priority.
 
 ## Minor Pitfalls
 
-### Pitfall 11: Profile Page Redesign Losing Existing Functionality
+### Pitfall 13: Legistar Date Parsing Edge Cases
 
-**What goes wrong:** Redesigning the councillor profile page to add "at-a-glance cards" and policy positions risks removing or hiding existing features (voting history, speaking time charts, stance summaries) that users already use.
+**What goes wrong:** The scraper's date parsing (`event_date_str.replace("T", " ").split("+")[0].split("Z")[0]`) is fragile. Some Legistar instances return dates with unusual timezone offsets or formats the parser does not handle.
 
-**Prevention:**
-- **Inventory existing profile features** before designing the new layout: speaking time stats, speaking time by meeting chart, speaking time by topic, stance summaries with evidence, voting history link, key highlights, membership info.
-- **Add new cards above or alongside existing sections,** don't replace them. The profile page should grow, not transform.
-- **Progressive disclosure:** New AI-generated at-a-glance summary at the top, detailed existing sections below.
+**Prevention:** Use `dateutil.parser.parse()` or at minimum test with actual Esquimalt API response date formats before running the full scrape.
 
-**Phase:** Council member profile redesign phase.
+**Phase:** Scraper validation.
 
 ---
 
-### Pitfall 12: Upcoming Meeting Info in Emails Without Data Source
+### Pitfall 14: Legistar Attachment URLs May Point to HTML Viewer, Not PDFs
 
-**What goes wrong:** The email redesign includes "upcoming meeting attendance info" and "link to join in-progress meetings." But the pipeline scrapes CivicWeb, which only publishes agendas 3-7 days before meetings. "In-progress meeting" links require knowing the meeting is happening right now, which the batch pipeline can't provide.
+**What goes wrong:** Legistar `MatterAttachmentHyperlink` sometimes points to Legistar's HTML viewer page rather than a direct PDF download. The scraper's `_download_file` would download the HTML page and save it as if it were a PDF. The ingestion layer then fails or produces garbage when trying to parse the "PDF."
 
-**Prevention:**
-- **Scope email improvements to post-meeting digests** and pre-meeting alerts (which already exist). Don't promise real-time "join now" links.
-- **Pre-meeting alerts already work** (`mode: "pre_meeting"` in send-alerts). Enhance the template, don't add new real-time capabilities.
-- **For upcoming meeting info:** Use the existing scraped agenda data. The pre-meeting alert can include "Agenda posted: [link]" and "Meeting date: [date]". That's sufficient.
+**Prevention:** Check `Content-Type` response headers on downloads. If the response is `text/html` instead of `application/pdf`, follow redirects or extract the actual PDF URL from the HTML page. Validate file magic bytes after download.
 
-**Phase:** Email alerts phase.
+**Phase:** Scraper validation.
 
 ---
 
-### Pitfall 13: Overloading the Gemini API Budget
+### Pitfall 15: Unknown Subdomain 404 Not Implemented
 
-**What goes wrong:** v1.7 adds multiple new Gemini consumers: reranking (per-query), profile generation (per-councillor-topic), topic classification (per-agenda-item), and stance regeneration (per-change). Without budget tracking, Gemini costs spike unpredictably.
+**What goes wrong:** The milestone requires "Unknown subdomains return 404" but the current Worker entry point (`workers/app.ts`) has no hostname checking at all. If wildcard DNS and wildcard routes are set up, ANY subdomain (e.g., `garbage.viewroyal.ai`) will render the app with View Royal data (due to the default slug).
 
-**Prevention:**
-- **Track per-feature Gemini usage** separately. Add a `feature` label to cost logging (reranking, stance, profile, classification).
-- **Set per-feature daily caps.** Reranking: max 500 calls/day. Stance regeneration: max 100 calls/day. Profile generation: max 50 calls/day.
-- **Use `gemini-3-flash-preview` for all new features** (already the default). Don't accidentally use a more expensive model.
-- **Batch where possible.** Topic classification for all agenda items in a meeting can be a single prompt with JSON array output, not one call per item.
+**Prevention:** Add hostname validation early in the Worker fetch handler. Parse the subdomain, look it up against known municipality slugs. If unknown, return a 404 response immediately. This must come before the React Router handler.
 
-**Phase:** All phases. Establish cost monitoring in the first phase.
+**Phase:** Routing phase.
+
+---
+
+### Pitfall 16: DNS Propagation Window
+
+**What goes wrong:** Adding DNS records for `esquimalt.viewroyal.ai` (or a wildcard `*.viewroyal.ai`) takes time to propagate outside Cloudflare's network. During this window, the subdomain may be unreachable for some users.
+
+**Prevention:** Set up DNS records days before the launch announcement. Use Cloudflare's proxied records (orange cloud) which propagate quickly within Cloudflare's edge network. Test with `curl --resolve` to verify Worker routing before DNS propagation completes.
+
+**Phase:** Infrastructure phase, do early.
+
+---
+
+### Pitfall 17: Supabase Queries Missing Municipality Filter on Joined Tables
+
+**What goes wrong:** When adding `municipality_id` filters to service queries, it's easy to filter the primary table but forget joined tables. For example, filtering meetings by municipality but not filtering the people shown in meeting transcripts could still show cross-municipality people. The `people` table has no direct `municipality_id` column -- it uses memberships via organizations.
+
+**Prevention:** Follow the pattern already established in the OCD API endpoints (e.g., `apps/web/app/api/ocd/endpoints/people.ts`) which joins through `memberships.organizations.municipality_id`. Document which tables have direct `municipality_id` and which require joins.
+
+**Phase:** Municipality scoping phase.
 
 ## Phase-Specific Warnings
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| RAG reranking | Latency budget exceeded (#1, #9) | Feature flag, latency monitoring, rerank-as-filter not reorderer |
-| Conversation memory KV | Stale context, eventual consistency (#2) | Evaluate sessionStorage alternative, 30-min TTL, version counter |
-| Topic taxonomy | Three-system fragmentation (#6) | Extend existing 8-topic system, not replace |
-| Speaker fingerprinting | Diarization regression (#4) | Never auto-re-diarize old meetings, validation set of 10 meetings |
-| AI profile generation | Stale profiles (#5) | evidence_cutoff_date column, incremental regeneration |
-| Meeting summary cards | Duplication with existing summaries (#7) | Assemble from existing motions/attendance data, no new AI generation |
-| Email redesign | Broken rendering, scope creep (#8, #12) | Inline styles only, test in real clients, no real-time features |
-| Neighbourhood filtering | Ghost column (#3) | DB migration + pipeline geocoding must ship before frontend work |
-| Observability | Data explosion (#10) | Log summaries not payloads, sample full traces at 10% |
-| Profile redesign | Feature regression (#11) | Additive design, inventory existing features first |
-| Cross-cutting | Gemini cost spike (#13) | Per-feature cost tracking, daily caps, batch API calls |
+| Scraper validation | Legistar 1000-result limit (Pitfall 4) | Add OData pagination before first real scrape |
+| Scraper validation | Video URL format unknown (Pitfall 9) | Test Esquimalt Legistar API manually first, check EventVideoPath values |
+| Scraper validation | Organization name always municipality name (Pitfall 6) | Use EventBodyName for organization_name |
+| Scraper validation | Attachment URLs may point to HTML viewer (Pitfall 14) | Validate Content-Type on downloads |
+| Scraper validation | Date parsing edge cases (Pitfall 13) | Test with real API responses |
+| Infrastructure/DNS | Wrangler routes miss subdomains (Pitfall 5) | Add wildcard route pattern and DNS CNAME before anything else |
+| Infrastructure/DNS | DNS propagation delay (Pitfall 16) | Create DNS records days before launch |
+| Municipality scoping | Service layer returns all municipalities' data (Pitfall 1) | Add municipality_id filter to every service function BEFORE ingesting data |
+| Municipality scoping | getMunicipality defaults to view-royal (Pitfall 2) | Wire hostname to slug resolution |
+| Municipality scoping | Joined table queries miss municipality filter (Pitfall 17) | Follow OCD API patterns for joins through organizations |
+| Municipality scoping | RAG defaults to "Town of View Royal" (Pitfall 11) | Pass municipality context through to RAG system prompts |
+| Subdomain routing | Unknown subdomains served without 404 (Pitfall 15) | Validate hostname in Worker, return 404 for unknowns |
+| Branding | 30+ files with hardcoded "ViewRoyal.ai" (Pitfall 3) | Create branding utility, sweep all files |
+| Branding | Hero map is View Royal specific (Pitfall 7) | Make hero background municipality-aware or generic |
+| Branding | Onboarding has View Royal neighbourhoods (Pitfall 8) | Load neighbourhoods from municipality meta |
+| Branding | R2 image URLs hardcoded (Pitfall 10) | Make image base URL configurable |
+| Branding | About/legal pages hardcoded (Pitfall 12) | Update to use municipality context |
 
 ## Sources
 
-- Direct code inspection: `rag.server.ts`, `api.ask.tsx`, `stance_generator.py`, `clustering.py`, `send-alerts/index.ts`, `types.ts`, `profiling.ts`, `embeddings.server.ts`
-- Project documentation: `CLAUDE.md`, `PROJECT.md`
-- Known issue from CLAUDE.md and MEMORY.md: neighbourhood column does not exist in database
-- Existing geojson data: `data/vrneighbourhoods.geojson` (available for geocoding)
-- Architecture constraints: Cloudflare Workers (CPU limits, no process.env), KV eventual consistency, Supabase Edge Functions (Deno runtime)
+- Direct codebase inspection of `apps/web/app/services/`, `apps/web/app/routes/`, `apps/web/app/components/`, `apps/web/app/api/`, `apps/pipeline/pipeline/scrapers/`, `apps/web/workers/app.ts`, `apps/web/wrangler.toml`
+- [Legistar Web API Help Page](https://webapi.legistar.com/Help) -- 1000 result limit, OData pagination
+- [Legistar Web API Examples](https://webapi.legistar.com/Home/Examples) -- query conventions
+- [Cloudflare Workers Routes Documentation](https://developers.cloudflare.com/workers/configuration/routing/routes/) -- route pattern syntax, wildcard subdomain matching
+- [Cloudflare Workers Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) -- alternative to route patterns for subdomains
+- [Cloudflare Workers SDK Issue #4369](https://github.com/cloudflare/workers-sdk/issues/4369) -- wildcard subdomain routing discussion
+- [Esquimalt Legistar Portal](https://esquimalt.ca.legistar.com/) -- confirms Legistar usage with multiple body types
+- [Esquimalt Council Meetings Page](https://www.esquimalt.ca/government-bylaws/council-meetings/council-committee-meetings-online-legistar) -- confirms Legistar as primary platform

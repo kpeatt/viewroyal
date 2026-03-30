@@ -1,165 +1,178 @@
 # Project Research Summary
 
-**Project:** ViewRoyal.ai v1.7 -- LLM reranking, conversation memory, council member intelligence, email improvements, speaker fingerprinting
-**Domain:** Civic intelligence platform feature expansion
-**Researched:** 2026-03-05
+**Project:** v1.8 Esquimalt Launch — Legistar Ingestion + Subdomain Routing
+**Domain:** Multi-municipality civic intelligence platform expansion
+**Researched:** 2026-03-30
 **Confidence:** HIGH
 
 ## Executive Summary
 
-ViewRoyal.ai v1.7 is a feature expansion of an already-mature civic intelligence platform. The existing stack (React Router 7 on Cloudflare Workers, Supabase with pgvector, Python ETL pipeline, Gemini AI) is validated and requires almost no new dependencies. The only new library is Resemblyzer for speaker voice embeddings in the pipeline. Every other v1.7 capability -- LLM reranking, conversation memory, topic taxonomy, AI profiling, email improvements, observability -- builds on existing infrastructure through new schema, new prompts, and architectural refinements. This is a deliberate constraint: minimize dependency sprawl, maximize leverage of what already works.
+This milestone expands viewroyal.ai from a single-municipality platform (View Royal) to a multi-municipality one by adding Esquimalt as a second municipality. The work splits into two independent tracks: (1) a pipeline track that ingests Esquimalt council meeting data, and (2) a web app track that routes `esquimalt.viewroyal.ai` to Esquimalt-scoped data. The platform's multi-tenancy foundations (municipality_id on all core tables, pluggable scraper registry, slug-based municipality resolution) were built in earlier milestones. What remains is wiring them together and fixing the gaps.
 
-The recommended approach is a four-phase build that starts with database foundations and evaluation infrastructure, then improves the RAG search experience (the highest-traffic feature), then builds the council member intelligence layer (the deepest differentiator), and finally ships UX polish and pipeline improvements. The key insight from cross-referencing architecture and feature research is that RAG observability must come before RAG improvements (you need a baseline to measure against), and topic taxonomy must come before council profiles (profiles reference topics). These two dependency chains define the phase structure.
+The single highest-risk item is that the existing Legistar scraper uses the Legistar Web API, which is not enabled for Esquimalt. This is a confirmed, verified blocker — API calls return an explicit HTTP 500 error. The scraper must be rewritten to parse Legistar's ASP.NET InSite HTML pages (Calendar.aspx, MeetingDetail.aspx) using BeautifulSoup. No new dependencies are needed. The existing `StaticHtmlScraper` provides the correct pattern. The InSite HTML is server-rendered, so no headless browser is required.
 
-The primary risks are: (1) LLM reranking adding unacceptable latency to the already-streaming RAG pipeline -- mitigate with a latency budget, feature flag, and rerank-as-filter pattern; (2) speaker fingerprinting regressing existing diarization quality on the 700+ meeting corpus -- mitigate by applying fingerprinting only to new meetings with a strict cosine threshold and 10-meeting validation set; (3) AI-generated council profiles becoming stale and misleading without a freshness strategy -- mitigate with `evidence_cutoff_date` tracking and incremental regeneration. All three are manageable with the prevention strategies identified in research.
+The web app risks are concentrated in two places: service layer queries that currently have zero municipality scoping (allowing data leakage the moment Esquimalt data enters the DB), and 30+ files with hardcoded "ViewRoyal.ai" branding that will render on Esquimalt pages. The service layer scoping fix must happen before any Esquimalt data is ingested. The branding cleanup, while broad, is mechanical — grep-and-replace guided by the pitfalls research. The infrastructure changes (wrangler.toml wildcard route, DNS CNAME) are straightforward Cloudflare configuration with no novel complexity.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new web app dependencies. One new pipeline dependency (Resemblyzer). All other capabilities use existing infrastructure in new ways.
+No new packages are required for either the pipeline or the web app. BeautifulSoup4, requests, and yt-dlp are already in `pyproject.toml`. Subdomain routing uses the standard `URL` API available in Cloudflare Workers. Municipality context flows through `AppLoadContext` — an existing React Router pattern. The only Cloudflare-specific configuration change is adding a wildcard route pattern (`*.viewroyal.ai/*`) to `wrangler.toml` and a DNS CNAME record.
 
-**Core additions:**
-- **Cloudflare Workers KV**: Conversation memory -- zero new deps, TTL auto-expiration, co-located with Worker for zero-hop reads
-- **Gemini Flash pointwise scoring**: LLM reranking -- no new vendor, no new API key, adequate quality at 20-30 candidate scale
-- **Resemblyzer**: Speaker voice embeddings -- lightweight (256-dim d-vectors), PyTorch-compatible, purpose-built for embedding extraction
-- **Supabase PostgreSQL (existing)**: Topic taxonomy, key votes, RAG traces, feedback -- relational data belongs in the DB
-
-**What NOT to add:** LangChain/LlamaIndex (over-abstraction), dedicated vector DB (pgvector handles scale), Cohere/Voyage reranker (vendor sprawl), react-email (Deno Edge Function incompatibility), separate observability platform (PostHog already captures AI events).
+**Core technologies:**
+- **BeautifulSoup4**: HTML parsing for Legistar InSite pages — already installed, used by `StaticHtmlScraper`
+- **requests**: HTTP downloads of PDFs and HTML pages — already installed
+- **yt-dlp**: Granicus video extraction — already installed; Granicus support unconfirmed, needs testing
+- **Cloudflare Workers URL API**: hostname-to-slug resolution — built-in, no package needed
+- **Supabase**: municipality row + organizations seeding — existing infrastructure
 
 ### Expected Features
 
 **Must have (table stakes):**
-- LLM reranking of RAG results -- single highest-ROI retrieval improvement
-- Meeting summary cards -- pure frontend, data already exists
-- Meeting outcome badges -- colored status indicators for motions
-- RAG observability and feedback -- thumbs up/down, the eval foundation for everything else
-- Email digest design improvements -- mobile-friendly, scannable, meeting summary at top
+- Legistar HTML scraper (`legistar_insite` type) — the Web API is blocked, HTML scraping is the only path
+- Municipality scoping on all service layer queries — prevents data leakage between municipalities
+- Hostname routing in Worker + AppLoadContext passthrough — makes subdomain resolve to correct data
+- Esquimalt municipality and organizations rows in DB — prerequisite for everything else
+- Wildcard DNS + wrangler.toml route — makes the subdomain reachable at the infrastructure level
+- Unknown subdomain 404 — prevents garbage subdomains from serving View Royal data
+- Dynamic branding (page titles, OG tags, navbar, footer) — Esquimalt users must not see "ViewRoyal.ai"
+- Onboarding neighbourhood list from municipality context — Esquimalt users must not see View Royal neighbourhoods
 
 **Should have (differentiators):**
-- AI-generated council member profiles -- synthesized from voting, speaking, and stance data
-- Topic taxonomy with subcategories -- enables "show me everything about affordable housing"
-- Persistent conversation memory via KV -- survives page refresh within a session
-- RAG tool set redesign -- consolidate 9 overlapping tools to ~5 purposeful ones
-- Council member profile page redesign -- hero card, policy grid, voting patterns
-- Financial transparency per agenda item -- surface existing `financial_cost` fields
+- Granicus video links (as external links, no download/diarization) — feature parity with View Royal video
+- Structured data fast path for Legistar — agenda items arrive pre-structured, skip AI refinement
+- People auto-discovery from Legistar body member lists — avoids manual people seeding
+- Municipality landing page at apex domain — discovery for multiple municipalities
 
-**Defer:**
-- Full budget explorer (no pipeline data source)
-- Multi-municipality comparison (v1.8 scope)
-- Push/SMS notifications (overkill for current user base)
-- Real-time "join now" meeting links (batch pipeline cannot detect in-progress meetings)
-- Sentiment analysis badges on transcripts (civic tone analysis is misleading)
+**Defer (v2+):**
+- Granicus video download + MLX diarization — significant effort, not needed for document-only launch
+- Historical backfill beyond 6-12 months — validate scraper stability before committing to large backfill
+- Cross-municipality search — not useful at 2 municipalities
+- Custom domains per municipality (e.g., `esquimalt.civic.ai`) — Cloudflare for Platforms is over-engineered at this scale
 
 ### Architecture Approach
 
-The system operates across three deployment boundaries (Cloudflare Worker, Supabase Edge Functions, local Python pipeline) with Supabase PostgreSQL as the shared data store. v1.7 changes follow the existing patterns: lazy singletons for service clients, Supabase RPCs for complex queries, SSE streaming for AI responses, and independent pipeline steps with CLI flags. The major architectural change is inserting an LLM reranking step between evidence gathering and synthesis in the RAG pipeline, and adding KV as a second data store for ephemeral conversation state.
+The architecture is already multi-tenant. The Worker resolves municipality from hostname via a static in-code map (no DB lookup — municipalities change rarely and require a deploy anyway), passes the slug through `AppLoadContext`, and the root loader fetches the municipality object. All downstream routes and service queries already accept municipality ID. The changes are surgical: inject slug at the Worker layer, remove the hardcoded `"view-royal"` default from `getMunicipality()`, and add `municipality_id` filters to every service function. The pipeline needs a new `LegistarInsiteScraper` class registered as `"legistar_insite"` source type, keeping the existing `LegistarScraper` (Web API) intact for municipalities where the API does work.
 
-**Major components to build/modify:**
-1. **RAG tool redesign** (rag.server.ts) -- Consolidate 9 tools to ~5; unified `search_council_records` replaces 5 overlapping search tools
-2. **LLM reranking** (rag.server.ts) -- New `rerankSources` function between tool results and synthesis
-3. **KV conversation memory** (wrangler.toml + routes + rag.server.ts) -- Server-side session state with 24h TTL
-4. **Topic taxonomy** (new Supabase tables + pipeline classification) -- Hierarchical extension of existing 8-topic system
-5. **Speaker fingerprint storage** (new table + pipeline diarization integration) -- 256-dim embeddings for cross-meeting identification
-6. **Council profile pipeline** (stance_generator + profile_agent enhancements) -- Key vote detection, taxonomy integration, freshness tracking
-7. **RAG observability** (new tables + API route + feedback UI) -- rag_traces and rag_feedback tables, thumbs up/down
+**Major components:**
+1. `workers/app.ts` — NEW static hostname map + `resolveSlugFromHostname()`, slug passed into `AppLoadContext`
+2. `pipeline/scrapers/legistar_insite.py` — NEW HTML scraper using BeautifulSoup, registered as `"legistar_insite"` type
+3. `app/services/*.ts` — MODIFY all service functions to accept and filter by `municipality_id`
+4. `app/root.tsx` — MODIFY root loader to read slug from context, pass to required `getMunicipality()`
+5. `app/services/municipality.ts` — MODIFY `getMunicipality()` to require slug (remove default parameter)
+6. Supabase migration — NEW Esquimalt municipality row with `legistar_insite` source config
+7. `wrangler.toml` — MODIFY to add wildcard subdomain route and Esquimalt custom domain entry
 
 ### Critical Pitfalls
 
-1. **LLM reranking latency** -- Rerank once after all tools complete (not per-tool), use as a filter (top-N selection) not reorderer, set 15-second latency budget, build with feature flag
-2. **Speaker fingerprinting regression** -- Never auto-re-diarize old meetings, use strict 0.85 cosine threshold, validate on 10 known meetings before deploying, store rolling average embeddings
-3. **Stale AI profiles** -- Add `evidence_cutoff_date` to stances table, show "current as of [date]" in UI, incrementally regenerate only affected councillor-topic pairs
-4. **KV conversation context corruption** -- Cap at 3-5 turns, summarize older turns, use 30-min TTL, validate version counter on read, evaluate if `sessionStorage` is sufficient
-5. **Topic taxonomy fragmentation** -- Extend existing 8-topic system (not replace), keep `normalize_category_to_topic` compatible, plan for stance regeneration run
+1. **Service layer has zero municipality scoping** — Add `municipality_id` filter to every function in `apps/web/app/services/` before ingesting any Esquimalt data. The `apps/web/app/api/endpoints/` layer shows exactly how to do this.
+
+2. **Legistar Web API not available for Esquimalt** — Do not attempt Web API calls. Rewrite the scraper to parse InSite HTML. This is confirmed by direct API testing — not a configuration issue that can be fixed.
+
+3. **Wrangler routes only match apex domain** — Add `*.viewroyal.ai/*` wildcard pattern to `wrangler.toml` AND create a DNS CNAME record. Without both changes, the Worker never receives subdomain requests.
+
+4. **Hardcoded "ViewRoyal.ai" in 30+ files** — Create a branding utility derived from municipality context. Grep for `ViewRoyal` and `viewroyal.ai` across `apps/web/app/` (77 files match). Root meta function, navbar logo, footer, OG image generator, settings page, and about page all need updating.
+
+5. **Legistar organization name always set to municipality name** — Change `organization_name=self.municipality.name` to `organization_name=event.get("EventBodyName")` so Council, Committee of the Whole, Advisory Planning Commission, etc. become separate organizations rather than collapsing under one.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+The dependency graph dictates a 4-phase structure with two parallel tracks in phase 2.
 
-### Phase 1: Evaluation Foundation and Quick Wins
-**Rationale:** RAG observability must exist before measuring any RAG improvement. Quick wins (summary cards, badges) ship visible value immediately and build momentum.
-**Delivers:** Feedback collection infrastructure, visible UI improvements, database schema for downstream features
-**Addresses:** RAG observability/feedback (table stakes), meeting summary cards (table stakes), meeting outcome badges (table stakes), email digest improvements (table stakes)
-**Avoids:** Pitfall #10 (observability data explosion) -- ship feedback buttons first, detailed tracing later. Pitfall #7 (summary duplication) -- assemble cards from existing data, no new AI generation.
-**DB migrations:** `rag_traces`, `rag_feedback`, `topic_taxonomy`, `agenda_item_topic_tags`, `speaker_fingerprints`, `councillor_key_votes` (create all tables upfront even if populated later)
+### Phase 1: Foundation — DB Seeding + Service Layer Scoping
 
-### Phase 2: RAG Intelligence
-**Rationale:** Search/ask is the highest-traffic feature. Improvements here have the largest user-visible impact. Feedback baseline from Phase 1 enables measurement.
-**Delivers:** Better answer quality through reranking, fewer wasted tool calls through consolidation, persistent conversation context
-**Uses:** Gemini Flash (reranking), Cloudflare KV (conversation memory)
-**Implements:** RAG tool redesign, LLM reranking, KV conversation memory
-**Avoids:** Pitfall #1 (reranking latency) -- feature flag, latency budget. Pitfall #2 (KV stale context) -- 30-min TTL, turn cap. Pitfall #9 (reranking inconsistency) -- rerank as filter, cache results.
+**Rationale:** Two blocking prerequisites before anything else works. The municipality row must exist in DB before the pipeline can run or the web app can resolve to Esquimalt. The service layer must be scoped before Esquimalt data enters the DB — contamination is immediate and requires a DB wipe to reverse.
 
-### Phase 3: Council Member Intelligence
-**Rationale:** Deepest differentiator. Depends on topic taxonomy tables (Phase 1 migration) and benefits from improved speaker attribution.
-**Delivers:** AI-generated profiles, topic subcategories, key vote detection, redesigned profile pages
-**Uses:** Supabase PostgreSQL (taxonomy, profiles, key votes), Gemini (profile generation, topic classification)
-**Implements:** Topic taxonomy backfill, council profile pipeline enhancements, profile page redesign
-**Avoids:** Pitfall #5 (stale profiles) -- evidence_cutoff_date, incremental regen. Pitfall #6 (taxonomy mismatch) -- extend existing 8 topics. Pitfall #11 (profile page regression) -- additive design, inventory existing features.
+**Delivers:** Esquimalt municipality + organizations rows in DB; all service functions filtered by `municipality_id`; `getMunicipality()` signature updated to require slug.
 
-### Phase 4: Pipeline Improvements and Polish
-**Rationale:** Pipeline-only changes (fingerprinting, meeting summarization) can happen in parallel with web work but carry higher risk of regression. Ship after core web features are stable.
-**Delivers:** Cross-meeting speaker identification, improved meeting summaries, financial transparency, email improvements
-**Uses:** Resemblyzer (speaker embeddings), Gemini (meeting summarization)
-**Implements:** Speaker fingerprint pipeline, meeting summary generation, financial data surfacing
-**Avoids:** Pitfall #4 (fingerprinting regression) -- new meetings only, validation set, strict threshold. Pitfall #8 (email rendering) -- inline styles only, test in real clients. Pitfall #13 (Gemini cost spike) -- per-feature caps, batch classification.
+**Addresses:** Table stakes: Esquimalt DB row, municipality context, service scoping.
+
+**Avoids:** Pitfall 1 (data leakage between municipalities), Pitfall 2 (hardcoded `"view-royal"` slug default).
+
+### Phase 2: Scraper + Routing (parallel tracks)
+
+**Rationale:** Pipeline and web app routing are independent and can proceed in parallel once Phase 1 is complete. The scraper is the highest-risk track and benefits from an early start.
+
+**Track A — Pipeline:** New `LegistarInsiteScraper` parsing `Calendar.aspx` and `MeetingDetail.aspx`. Test run against recent 5-10 Esquimalt meetings. Fix bugs (org name mapping, date parsing, pagination for 1000+ event limit). Full pipeline run (scrape + ingest + embed). No diarization at launch.
+
+**Track B — Web App Routing:** Hostname resolver in `workers/app.ts` with static map. `AppLoadContext` type extension. Root loader reads slug from context. Fix all `getMunicipality()` call sites. Unknown subdomain 404. `wrangler.toml` wildcard route + DNS CNAME.
+
+**Addresses:** All remaining table stakes features.
+
+**Avoids:** Pitfall 4 (OData pagination for 1000-result limit), Pitfall 5 (wrangler routes miss subdomains), Pitfall 6 (org names collapse to municipality name), Pitfall 13 (date parsing edge cases), Pitfall 14 (attachment URLs pointing to HTML viewer), Pitfall 15 (unknown subdomains served without 404).
+
+### Phase 3: Branding Cleanup
+
+**Rationale:** Cannot ship a multi-municipality platform with "ViewRoyal.ai" hardcoded everywhere. This phase is broad (30+ files) but mechanical. Must complete before public launch.
+
+**Delivers:** Dynamic page titles, OG tags, navbar logo, footer derived from municipality context. Municipality-aware hero background. Onboarding neighbourhood list loaded from municipality meta JSONB. R2 image base URL configurable. RAG system prompts use correct municipality name.
+
+**Addresses:** Pitfall 3 (30+ hardcoded branding files), Pitfall 7 (hero map is View Royal geography), Pitfall 8 (onboarding hardcodes View Royal neighbourhoods), Pitfall 10 (R2 image URLs hardcoded to `images.viewroyal.ai`), Pitfall 11 (RAG defaults to "Town of View Royal").
+
+**Note:** Create DNS records during this phase — do not wait until Phase 4. DNS propagation takes time and should be done well before go-live.
+
+### Phase 4: Verification + Ship
+
+**Rationale:** End-to-end verification catches integration issues before public launch. Checks that both subdomains work, data is isolated, and no hardcoded branding remains.
+
+**Delivers:** `viewroyal.ai` still serves View Royal; `esquimalt.viewroyal.ai` serves Esquimalt; unknown subdomains return 404; data does not leak between municipalities; branding is correct on both subdomains; Granicus video links resolve.
+
+**Avoids:** Pitfall 16 (DNS propagation delay — records already created in Phase 3).
 
 ### Phase Ordering Rationale
 
-- **Phase 1 before Phase 2:** You cannot measure RAG improvements without a feedback baseline. The observability table and feedback UI must exist first.
-- **Phase 1 migrations before Phase 3:** Topic taxonomy tables must exist before the pipeline can classify agenda items into subcategories or profiles can reference them.
-- **Phase 2 before Phase 3:** RAG tool redesign improves the search experience that profile pages link into. Better RAG answers also improve profile-related questions.
-- **Phase 4 last:** Speaker fingerprinting carries regression risk and needs the most validation. Meeting summarization improves quality but is not blocking any web features (existing summaries work). Financial transparency requires verifying that `financial_cost` fields are actually populated in the DB.
+- DB seeding comes before the scraper because the pipeline needs `municipality_id` to insert data
+- Service scoping comes before data ingestion because contamination is immediate and requires a DB wipe to fix
+- Scraper and routing are parallel because they share no code and neither blocks the other
+- Branding cleanup comes after routing because it depends on municipality context flowing correctly end-to-end
+- DNS records are created in Phase 3 (not Phase 4) to allow propagation time before go-live
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 2 (RAG tool redesign):** The consolidation of 9 tools to 5 requires careful prompt engineering for the orchestrator. The merged `search_council_records` tool needs internal routing logic that should be prototyped.
-- **Phase 3 (topic taxonomy backfill):** LLM-assisted classification of 700+ meetings' agenda items into subcategories is a batch operation that needs prompt tuning and cost estimation.
-- **Phase 4 (speaker fingerprinting):** Resemblyzer integration with the MLX diarization pipeline needs a spike to verify embedding compatibility and threshold tuning.
+- **Phase 2 Track A (scraper):** Granicus video URL extraction via yt-dlp is unconfirmed. Test actual `EventVideoPath` values from Legistar HTML before coding video support. May need a custom Granicus extractor if yt-dlp does not support the platform.
+- **Phase 2 Track B (routing):** The exact behavior of a `custom_domain = true` route entry coexisting with the existing bare-domain route entry in `wrangler.toml` is rated MEDIUM confidence. Verify on first deploy to staging before touching production.
 
-Phases with standard patterns (skip deep research):
-- **Phase 1 (quick wins + migrations):** Meeting summary cards, outcome badges, and feedback UI are straightforward frontend work. DB migrations follow established Supabase patterns.
-- **Phase 2 (KV conversation memory):** Cloudflare KV is well-documented with clear binding patterns. The main question (KV vs sessionStorage) is an implementation decision, not a research question.
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (DB + service scoping):** Supabase SQL inserts and adding `.eq("municipality_id", id)` filters are mechanical. No research needed.
+- **Phase 3 (branding):** Grep-and-replace pattern guided by the pitfalls research. No novel architecture decisions.
+- **Phase 4 (verification):** Standard deployment checklist.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Almost no new dependencies; recommendations validated against existing codebase; only Resemblyzer is new and it is well-documented |
-| Features | HIGH | Feature list derived from direct codebase analysis of existing data/schema; dependency graph is clear; anti-features well-reasoned |
-| Architecture | HIGH | Based on direct inspection of all touched files; integration points are specific to line numbers and function signatures |
-| Pitfalls | HIGH | Pitfalls grounded in actual codebase constraints (Cloudflare Workers limits, KV consistency model, existing diarization thresholds, ghost neighbourhood column) |
+| Stack | HIGH | No new packages. Legistar Web API blockage confirmed by direct API calls with explicit error messages. |
+| Features | HIGH | Blockers are concrete (API error, observed code). Table stakes list derived from direct codebase inspection. |
+| Architecture | HIGH | Based on direct codebase analysis of all affected files. Static hostname map pattern well-justified. One MEDIUM item: `custom_domain` route interaction in wrangler.toml needs deploy-time verification. |
+| Pitfalls | HIGH | All critical pitfalls verified with specific file/line references. Not inferred — directly observed in the codebase. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Financial cost field population:** The `financial_cost` fields exist in TypeScript types but may not be populated in the actual database. Must verify with a query before planning financial transparency UI. If unpopulated, this becomes a pipeline extraction task that should move earlier.
-- **Resemblyzer + MLX compatibility:** The pipeline uses MLX for diarization (Apple Silicon specific). Resemblyzer uses PyTorch. Both should coexist but a quick spike should verify no dependency conflicts.
-- **KV vs sessionStorage decision:** Research identified sessionStorage as a simpler alternative for conversation memory. This is an implementation-time decision that could simplify Phase 2 significantly. Evaluate during phase planning.
-- **Gemini cost projection:** Multiple new Gemini consumers (reranking, classification, profile generation, summarization). Need to estimate monthly costs at current query volume before committing to all features.
-- **Neighbourhood column strategy:** The ghost column (Pitfall #3) was flagged but neighbourhood filtering is NOT in the v1.7 feature list. If it surfaces during planning, the pipeline geocoding work must precede any frontend work. The `vrneighbourhoods.geojson` file is available.
+- **yt-dlp Granicus support:** Unverified. Test against `esquimalt.ca.granicus.com` video URL before deciding whether to rely on yt-dlp or build a custom Granicus extractor. This decision gates Phase 2 Track A video work.
+- **Legistar InSite HTML structure variation:** Research describes the predictable Telerik RadGrid pattern, but actual scraper implementation will encounter Esquimalt-specific field variations. Expect 1-2 days of iteration on the HTML parser during Phase 2.
+- **wrangler.toml custom_domain + wildcard route interaction:** Rated MEDIUM confidence on whether `custom_domain = true` on a subdomain route coexists cleanly with a wildcard pattern route. Verify on first staging deploy before production.
+- **People table scoping for Esquimalt:** The `people` table has no direct `municipality_id` — it joins through memberships/organizations. The service layer scoping fix must handle this join correctly (follow the OCD API endpoint patterns). See Pitfall 17.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis of `rag.server.ts`, `api.ask.tsx`, `api.search.tsx`, `stance_generator.py`, `profile_agent.py`, `clustering.py`, `send-alerts/index.ts`, `types.ts`, `bootstrap.sql`, `wrangler.toml`
-- Cloudflare Workers KV documentation (platform docs)
-- Supabase pgvector documentation (platform docs)
-- Project documentation: `CLAUDE.md`, `PROJECT.md`
+- Direct codebase inspection of `workers/app.ts`, `root.tsx`, `municipality.ts`, `services/*.ts`, `api/endpoints/`, `scrapers/legistar.py`, `scrapers/__init__.py`, `orchestrator.py`, `wrangler.toml` — architecture and pitfall findings
+- Legistar Web API error responses (tested 2026-03-30): HTTP 500 for all Esquimalt client ID variants — API blockage confirmation
+- [Cloudflare Workers Routes docs](https://developers.cloudflare.com/workers/configuration/routing/routes/) — wildcard subdomain route pattern syntax
+- [Wrangler Configuration Reference](https://developers.cloudflare.com/workers/wrangler/configuration/) — custom_domain route entries
 
 ### Secondary (MEDIUM confidence)
-- [ZeroEntropy reranking guides](https://www.zeroentropy.dev/articles/ultimate-guide-to-choosing-the-best-reranking-model-in-2025) -- LLM reranking benchmarks and trade-offs
-- [InsertRank paper](https://arxiv.org/html/2506.14086v1) -- BM25 score injection for 3-16% reranking gains
-- [Voyage AI case against LLM rerankers](https://blog.voyageai.com/2025/10/22/the-case-against-llms-as-rerankers/) -- LLM reranking variance concerns
-- [Resemblyzer documentation](https://github.com/resemble-ai/Resemblyzer) -- speaker embedding extraction
-- [NLP for Local Governance](https://arxiv.org/html/2602.08162v1) -- academic survey of municipal meeting NLP
+- [Cloudflare Workers Custom Domains docs](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) — custom_domain route behavior
+- [Esquimalt Legistar Portal](https://esquimalt.ca.legistar.com/) — verified HTML scraping surface and body types
+- [opencivicdata/python-legistar-scraper](https://github.com/opencivicdata/python-legistar-scraper) — HTML scraping reference implementation
+- [Legistar Web API Help](https://webapi.legistar.com/Help) — 1000-result pagination limit documented
 
 ### Tertiary (LOW confidence)
-- Email template best practices (Postmark, SendPulse) -- general guidance, not civic-specific
-- CivicPatterns.org -- civic technology design patterns (general reference)
+- yt-dlp Granicus support — inferred from yt-dlp's broad platform support; needs testing against actual Esquimalt Granicus URLs before relying on it
 
 ---
-*Research completed: 2026-03-05*
+*Research completed: 2026-03-30*
 *Ready for roadmap: yes*

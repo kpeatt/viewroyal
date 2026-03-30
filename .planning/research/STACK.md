@@ -1,243 +1,207 @@
-# Technology Stack: v1.7 View Royal Intelligence
+# Technology Stack
 
-**Project:** ViewRoyal.ai v1.7 -- LLM reranking, conversation memory, council member intelligence, email improvements, speaker fingerprinting
-**Researched:** 2026-03-05
-**Scope:** Stack additions/changes for NEW v1.7 capabilities only. Existing validated stack (React Router 7, Cloudflare Workers, Supabase, Gemini, fastembed, Hono, PostHog, Resend) is not re-evaluated.
+**Project:** v1.8 Esquimalt Launch -- Legistar Ingestion + Subdomain Routing
+**Researched:** 2026-03-30
 
-## Recommended Stack Additions
+## Critical Finding: Legistar Web API Unavailable for Esquimalt
 
-### Conversation Memory: Cloudflare Workers KV
+The existing `LegistarScraper` in `pipeline/scrapers/legistar.py` uses the Legistar Web API (`webapi.legistar.com/v1/{client}/...`). **This API is NOT enabled for Esquimalt.** Tested client IDs `esquimalt`, `Esquimalt`, `esquimalt.ca` -- all return `LegistarConnectionString setting is not set up in InSite for client`. The InSite HTML frontend at `esquimalt.ca.legistar.com` works fine. The existing scraper must be rewritten to scrape InSite HTML pages instead of calling the Web API.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Cloudflare Workers KV | (platform service) | Persistent conversation memory for RAG follow-ups | Already on Cloudflare; zero new dependencies; 1 GB free tier covers thousands of conversations; TTL-based auto-expiration eliminates cleanup logic |
+**Confidence: HIGH** -- verified by direct API calls returning explicit error messages.
 
-**Current state:** Conversation history lives in a client-side `useRef` array capped at 5 turns, passed as a `context` query param to the API. This is lost on page refresh, tab close, or navigation.
+## Stack Changes Required
 
-**What KV adds:**
-- Server-side conversation storage keyed by `session_id` (generated client-side, stored in `sessionStorage`)
-- Survives page refreshes within a session
-- TTL of 3600s (1 hour) auto-expires stale conversations -- no cleanup cron needed
-- Value: JSON-serialized array of `{role, content}` turns, capped at 10 turns server-side
-- KV's eventual consistency is fine -- a single user's conversation is read/written from a single PoP
+### No New Dependencies Needed
 
-**Why NOT Supabase for this:**
-- Conversation memory is ephemeral (1-hour lifespan), not relational data
-- KV reads are free up to 100K/day -- Supabase RPC calls cost more in latency
-- No schema migration needed; conversations don't need SQL queries
+The v1.8 milestone requires zero new npm packages and zero new Python packages. Everything needed already exists in the stack.
 
-**Why NOT Durable Objects:**
-- Overkill for simple key-value with TTL; DO's coordination features aren't needed
-- KV is simpler to reason about and cheaper
+| Capability | Already Have | Version | Notes |
+|------------|-------------|---------|-------|
+| HTML scraping | beautifulsoup4 | >=4.14.3 | In pyproject.toml, used by StaticHtmlScraper |
+| HTTP requests | requests | >=2.32.5 | In pyproject.toml, used by all scrapers |
+| Video download | yt-dlp | >=2025.12.8 | In pyproject.toml, handles Granicus/YouTube/Vimeo |
+| Subdomain routing | Cloudflare Workers | -- | `request.url` hostname available in fetch handler |
+| Municipality lookup | Supabase | >=2.27.2 | `municipalities` table with slug column already exists |
 
-**Configuration in `wrangler.toml`:**
+### Pipeline: Legistar InSite HTML Scraper
+
+**What changes:** Replace `LegistarScraper._get()` (Web API calls) with BeautifulSoup HTML parsing of InSite pages.
+
+**Source type in registry:** Register as `"legistar_insite"` (new type) to distinguish from the Web API scraper (keep `"legistar"` for municipalities where the API works).
+
+**Data sources on Esquimalt InSite:**
+
+| Page | URL Pattern | Data Available |
+|------|-------------|---------------|
+| Calendar | `esquimalt.ca.legistar.com/Calendar.aspx` | Meeting list with dates, body names, agenda/minutes/video links |
+| Meeting Detail | `esquimalt.ca.legistar.com/MeetingDetail.aspx?ID={id}&GUID={guid}` | Agenda items with file#, title, type, action, result; video links |
+| Agenda PDF | `esquimalt.ca.legistar.com/View.ashx?M=A&ID={id}&GUID={guid}` | Full agenda package PDF |
+| Attachment | `esquimalt.ca.legistar.com/View.ashx?M=AO&ID={id}&GUID={guid}` | Individual attachment PDF |
+| Video | `esquimalt.ca.legistar.com/Video.aspx?Mode=Granicus&ID1={id}&Mode2=Video` | Granicus-hosted video player |
+
+**Video source:** Esquimalt uses Granicus streaming (`esquimalt.ca.granicus.com`). The InSite pages call `running_events.php` via JSONP and have onclick handlers like `Video.aspx?Mode=Granicus&ID1=1335&Mode2=Video`. The video source abstraction already supports multiple types -- add `"granicus"` as a new video source type. `yt-dlp` may handle Granicus URLs directly (it supports many video platforms); test this first before building a custom extractor.
+
+**source_config for Esquimalt:**
+```json
+{
+  "type": "legistar_insite",
+  "insite_url": "https://esquimalt.ca.legistar.com",
+  "timezone": "America/Vancouver",
+  "video_source": {"type": "granicus", "base_url": "https://esquimalt.ca.granicus.com"}
+}
+```
+
+**Implementation approach:** Use the `StaticHtmlScraper` as the pattern. The InSite pages use Telerik RadGrid controls with predictable HTML structure. Parse the Calendar page for meeting links, then parse each MeetingDetail page for agenda items. BeautifulSoup handles this well -- no headless browser needed since the calendar data is server-rendered in the HTML.
+
+### Web App: Subdomain Routing
+
+**What changes:** Modify `workers/app.ts` fetch handler to extract hostname, map subdomain to municipality slug, pass to React Router and Hono contexts.
+
+**Cloudflare Workers configuration (wrangler.toml):**
+
+Current:
 ```toml
-[[kv_namespaces]]
-binding = "CONVERSATIONS"
-id = "<created-via-wrangler>"
+routes = [
+  { pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" }
+]
 ```
 
-**Cost:** Free tier (1 GB storage, 100K reads/day, 1K writes/day) is more than sufficient. At peak, expect <100 conversations/day.
+Change to:
+```toml
+routes = [
+  { pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" },
+  { pattern = "*.viewroyal.ai/*", zone_name = "viewroyal.ai" }
+]
+```
 
-### LLM Reranking: Gemini Pointwise Scoring (No New Dependency)
+This makes the same Worker handle both `viewroyal.ai` and `esquimalt.viewroyal.ai`. The Worker reads `new URL(request.url).hostname` to determine which municipality to serve. No custom domain configuration needed -- wildcard routes handle it.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| @google/genai (existing) | ^1.42.0 | Pointwise relevance scoring of retrieved chunks | Already installed; Gemini Flash is fast enough for reranking 20-30 chunks; avoids adding a separate reranker API/model |
+**DNS:** Add a CNAME record for `*.viewroyal.ai` pointing to the Worker (or use Cloudflare proxy). Since the zone is already on Cloudflare, this is a one-click DNS record addition.
 
-**Approach: Pointwise scoring with Gemini Flash, not a dedicated cross-encoder.**
-
-**Why Gemini Flash for reranking instead of a dedicated reranker (Cohere, Voyage, Jina):**
-- Already paying for Gemini API calls -- no new billing relationship
-- Gemini Flash latency is ~200-400ms for a pointwise batch, acceptable for search
-- Research shows dedicated rerankers outperform LLMs by ~13%, but the absolute quality at our scale (20-30 candidates, civic domain) makes LLM reranking more than adequate
-- No new SDK, no new API key, no new secret to manage
-- Can inject BM25 scores into the reranking prompt for a documented ~3-16% accuracy boost
-
-**Implementation pattern:**
+**Hostname-to-slug mapping logic in `workers/app.ts`:**
 ```typescript
-// Score each chunk with a simple relevance prompt
-const scores = await Promise.all(chunks.map(async (chunk) => {
-  const response = await genAI.models.generateContent({
-    model: "gemini-2.0-flash",
-    contents: `Rate relevance 0-10. Query: "${query}" Document: "${chunk.text}"`,
-  });
-  return { chunk, score: parseFloat(response.text) };
-}));
-// Sort by score, take top-k
+function getMunicipalitySlug(hostname: string): string {
+  // esquimalt.viewroyal.ai -> "esquimalt"
+  // viewroyal.ai -> "view-royal" (default)
+  // localhost -> "view-royal" (dev)
+  const parts = hostname.split(".");
+  if (parts.length >= 3 && parts[1] === "viewroyal") {
+    return parts[0]; // subdomain
+  }
+  return "view-royal"; // default
+}
 ```
 
-**Why NOT Vertex AI Ranking API:**
-- Requires GCP project setup, service account, different auth flow
-- Adds operational complexity for marginal quality gain over Gemini Flash pointwise
+**Integration points:**
+1. `workers/app.ts` -- extract slug from hostname, pass in `AppLoadContext`
+2. `root.tsx` loader -- use slug from context instead of hardcoded `"view-royal"`
+3. `app/api/index.ts` -- Hono API already resolves municipality from URL param; no change needed for API routes
+4. `getMunicipality()` in `services/municipality.ts` -- already accepts slug parameter, just needs the right slug passed in
 
-**Why NOT Cohere Rerank / Voyage Reranker:**
-- New billing relationship, new API key, new dependency
-- Dedicated rerankers shine at 100+ candidate sets; we have 20-30 candidates from hybrid search
+**No new npm packages required.** Standard `URL` API is available in Cloudflare Workers.
 
-### Topic Taxonomy: Supabase PostgreSQL (No New Dependency)
+### Web App: Municipality Context Flow
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Supabase PostgreSQL (existing) | - | Topic taxonomy storage, stance aggregation, profile generation | Already have a `topics` table and `normalize_topic_category()` SQL function; taxonomy is relational data that belongs in the DB |
-| @google/genai (existing) | ^1.42.0 | AI-generated profile summaries, stance analysis, key vote detection | Gemini already used for stance generation; extending to richer profiles is a prompt change, not a stack change |
-
-**Current state:** 8 normalized topic categories via `normalize_topic_category()` IMMUTABLE SQL function. `councillor_stances` table stores AI-generated stance text per person per topic.
-
-**What v1.7 adds:**
-- Deeper topic hierarchy (subtopics within the 8 categories) -- new `subtopics` table with FK to `topics`
-- `councillor_profiles` table for AI-generated at-a-glance profile cards (generated by pipeline, not on-demand)
-- `key_votes` table flagging significant/controversial votes per person
-- Pipeline Gemini calls to generate profiles and detect key votes -- same SDK, new prompts
-
-**No new libraries needed.** This is schema + prompt work on existing infrastructure.
-
-### Speaker Fingerprinting: Resemblyzer
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| resemblyzer | >=0.1.4 | Speaker voice embedding extraction for cross-meeting identification | Lightweight (PyTorch-based), well-documented for exactly this use case, generates d-vector embeddings that can be compared via cosine similarity |
-
-**Current state:** MLX diarization pipeline assigns `SPEAKER_00`, `SPEAKER_01` labels per meeting. These labels don't persist across meetings. The existing `SpeakerClusterer` in `pipeline/diarization/clustering.py` already does agglomerative clustering with cosine similarity -- Resemblyzer fits naturally into this architecture.
-
-**Why Resemblyzer over SpeechBrain/pyannote:**
-- Resemblyzer is purpose-built for speaker embedding comparison (not full diarization)
-- Lightweight: ~50MB model vs SpeechBrain's multi-GB ecosystem
-- Runs at 1000x real-time, reliable for audio >= 2.63 seconds
-- Already uses PyTorch (compatible with existing pipeline dependencies)
-- Produces 256-dim d-vector embeddings ideal for cosine similarity matching
-
-**Why NOT pyannote/embedding:**
-- Requires HuggingFace auth token, model download agreement
-- Heavier dependency chain (pyannote-audio pulls in many transitive deps)
-- Resemblyzer does exactly what we need: extract a voice fingerprint, compare it
-
-**Why NOT building on existing MLX diarization embeddings:**
-- MLX diarization is Apple Silicon specific and runs scribe via uvx (external tool)
-- Embeddings from scribe's internal model aren't easily extractable for cross-meeting comparison
-- Resemblyzer gives us a clean, extractable embedding per speaker segment
-
-**Installation:**
-```bash
-# In apps/pipeline/
-uv add resemblyzer
+**Current flow:**
+```
+request -> workers/app.ts -> root.tsx loader -> getMunicipality(supabase) [hardcoded "view-royal"]
 ```
 
-**Workflow:**
-1. After diarization, extract Resemblyzer embeddings for each speaker cluster
-2. Store embeddings in `speaker_fingerprints` table (person_id nullable initially)
-3. Compare new meeting speakers against stored fingerprints via cosine similarity
-4. Above threshold (0.85) -> auto-assign person_id; below -> flag for review
-5. Known councillors get fingerprints seeded from meetings where roll call identifies them
+**New flow:**
+```
+request -> workers/app.ts [extract slug from hostname] -> AppLoadContext.municipalitySlug
+-> root.tsx loader -> getMunicipality(supabase, context.municipalitySlug)
+```
 
-### Email Template Design: Inline HTML (No New Library)
+**AppLoadContext type change:**
+```typescript
+interface AppLoadContext {
+  cloudflare: {
+    env: Env;
+    ctx: ExecutionContext;
+  };
+  municipalitySlug: string; // NEW
+}
+```
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Inline HTML templates (existing) | - | Email digest and pre-meeting alert design | Current approach works, runs in Deno (Supabase Edge Functions), and avoids react-email/Cloudflare compatibility issues |
+## What NOT to Add
 
-**Current state:** Email templates are inline HTML string builders (`buildDigestHtml`, `buildPreMeetingHtml`) in the Supabase Edge Function. They produce well-structured, responsive emails with highlighting, badges, and attendance info.
-
-**Why NOT react-email:**
-- Emails are sent from a **Supabase Edge Function** (Deno runtime), not Cloudflare Workers
-- react-email has documented compatibility issues with Cloudflare Workers (GitHub issues #1508, #587)
-- Current inline HTML approach is battle-tested and already handles personalized subscription highlighting
-- Template complexity doesn't justify a build step -- these are ~100-line HTML builders, not multi-component layouts
-- Adding react-email would require either: (a) pre-rendering at build time, or (b) bundling React into the Edge Function
-
-**What v1.7 improves (no new deps):**
-- Extract shared HTML components (header, footer, CTA button) into helper functions
-- Add meeting summary card section to digest
-- Add "join in progress" live-stream link when meeting is happening
-- Improve mobile responsiveness with better table fallbacks
-- Add attendance icons (in-person vs remote) with cleaner layout
-
-### Observability: PostHog (Existing, Extended)
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| posthog-js (existing) | ^1.357.2 | RAG observability, feedback capture, tool call tracking | Already integrated; $ai_generation events already tracked; extend with feedback thumbs up/down and per-tool timing |
-
-**What v1.7 adds:**
-- Thumbs up/down feedback on AI answers -> `$ai_feedback` custom event
-- Per-tool-call latency tracking in existing `$ai_generation` events
-- Reranking quality metrics (original rank vs reranked position)
-- Conversation turn depth tracking
-
-**No new library needed.** PostHog's `$ai_generation` event schema already supports custom properties.
+| Technology | Why Not |
+|------------|---------|
+| `python-legistar-scraper` (pip) | Heavyweight OCD-focused library; we only need calendar + meeting detail parsing. Our BaseScraper interface is simpler and already works. |
+| `legistar-scrape` (pip) | Deprecated in favor of python-legistar-scraper. |
+| `cdp-scrapers` (pip) | CDP project tooling; different data model. Too opinionated for our pipeline. |
+| Puppeteer/Playwright for InSite | Overkill. InSite pages are server-rendered HTML. BeautifulSoup handles them fine. |
+| Cloudflare Workers for Platforms | Enterprise feature for true multi-tenant SaaS. We have 2-3 municipalities; simple hostname parsing is sufficient. |
+| Wildcard SSL certificate | Cloudflare automatically provisions SSL for routes. No manual cert management. |
+| Redis/KV for municipality cache | Municipality lookups hit Supabase. At 2-3 municipalities, caching is premature optimization. |
+| Separate Workers per municipality | One Worker with hostname routing is simpler, cheaper, and shares code. |
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Conversation memory | Cloudflare KV | Supabase table | Ephemeral data; KV's TTL auto-cleanup is cleaner than scheduled deletes on a DB table |
-| Conversation memory | Cloudflare KV | Durable Objects | Overkill; KV is cheaper and simpler for key-value with TTL |
-| Conversation memory | Cloudflare KV | Client-side only (current) | Lost on refresh; can't support longer conversations or server-side analysis |
-| LLM reranking | Gemini Flash pointwise | Cohere Rerank v3 | New vendor, new API key, new billing; marginal quality gain at our candidate set size |
-| LLM reranking | Gemini Flash pointwise | Jina Reranker v2 | Same vendor-sprawl concern; Gemini is already paid for |
-| LLM reranking | Gemini Flash pointwise | Cross-encoder (local) | Can't run ML models on Cloudflare Workers; would need a separate service |
-| Speaker fingerprinting | Resemblyzer | pyannote/embedding | Heavier deps, HF auth required, more than we need |
-| Speaker fingerprinting | Resemblyzer | SpeechBrain ecapa-tdnn | Full speech toolkit overkill; we just need embedding extraction |
-| Email templates | Inline HTML helpers | react-email | Compatibility issues with Deno Edge Functions; current approach works well |
-| Email templates | Inline HTML helpers | MJML | Build step complexity; overkill for 2 email templates |
-| Observability | PostHog (existing) | LangSmith/LangFuse | New vendor; PostHog already captures AI events; we need feedback, not full LLM tracing |
+| Esquimalt scraping | Custom InSite HTML scraper (BeautifulSoup) | python-legistar-scraper library | Different data model, heavy dependency, we need 2 pages parsed not a full OCD pipeline |
+| Subdomain routing | Wildcard route in wrangler.toml + hostname parsing | Cloudflare Custom Domains per municipality | Routes are simpler for subdomains under one zone; Custom Domains better for separate TLDs |
+| Subdomain routing | Wildcard route in wrangler.toml | Path-based routing (/esquimalt/*) | Subdomains are cleaner for municipality identity; path-based requires URL rewrites everywhere |
+| Municipality context | AppLoadContext injection | Cookie/header-based | Hostname is authoritative; cookies can be wrong or missing |
+| Video extraction | yt-dlp (test first) | Custom Granicus extractor | yt-dlp supports many platforms; only build custom if yt-dlp fails |
 
-## What NOT to Add
+## Configuration Changes
 
-| Technology | Why Skip |
-|------------|----------|
-| LangChain/LlamaIndex | Over-abstraction for our custom RAG agent; adds thousands of lines of dependency for features we don't use |
-| Dedicated vector DB (Pinecone, Weaviate) | pgvector + Supabase handles our scale; adding a vector DB creates data sync complexity |
-| Redis/Upstash | KV covers our caching needs; Redis adds a new service to manage |
-| react-email | Deno Edge Function incompatibility; current inline HTML is sufficient |
-| Cohere/Voyage/Jina reranker | Vendor sprawl for marginal gain at our scale |
-| OpenAI Embeddings | fastembed with nomic-embed-text-v1.5 is free, local, and already validated |
-| Separate observability platform | PostHog already captures what we need; extend, don't replace |
-
-## Installation Summary
-
-### Web App (apps/web/) -- No New Dependencies
-
-No new npm packages needed. KV is a Cloudflare platform binding, not an npm package.
-
-Only change: add KV namespace binding to `wrangler.toml`:
+### wrangler.toml
 ```toml
-[[kv_namespaces]]
-binding = "CONVERSATIONS"
-id = "<created-via-wrangler>"
+# Add wildcard route for subdomains
+routes = [
+  { pattern = "viewroyal.ai/*", zone_name = "viewroyal.ai" },
+  { pattern = "*.viewroyal.ai/*", zone_name = "viewroyal.ai" }
+]
 ```
 
-### Pipeline (apps/pipeline/) -- One New Dependency
-
-```bash
-cd apps/pipeline && uv add resemblyzer
+### Cloudflare DNS
+```
+Type: CNAME
+Name: *
+Target: viewroyal-intelligence.{account}.workers.dev
+Proxy: Yes (orange cloud)
 ```
 
-This pulls in Resemblyzer (and its transitive PyTorch dependency, which is already present via the existing pipeline deps).
+### Supabase municipalities table
+```sql
+INSERT INTO municipalities (slug, name, short_name, province, classification, website_url, source_config)
+VALUES (
+  'esquimalt',
+  'Township of Esquimalt',
+  'Esquimalt',
+  'BC',
+  'Township',
+  'https://www.esquimalt.ca',
+  '{
+    "type": "legistar_insite",
+    "insite_url": "https://esquimalt.ca.legistar.com",
+    "timezone": "America/Vancouver",
+    "video_source": {"type": "granicus", "base_url": "https://esquimalt.ca.granicus.com"}
+  }'::jsonb
+);
+```
 
-## Integration Points
+## Confidence Assessment
 
-| New Capability | Touches | Integration Notes |
-|----------------|---------|-------------------|
-| KV conversation memory | `wrangler.toml`, `rag.server.ts`, `api.ask.tsx`, `search.tsx` | KV binding accessed via `env.CONVERSATIONS`; session ID generated client-side |
-| LLM reranking | `rag.server.ts` | New `rerankWithGemini()` function called after hybrid search, before context assembly |
-| Topic taxonomy | `bootstrap.sql` migrations, pipeline `ai_refiner.py`, web `services/people.ts` | New tables + pipeline Gemini calls + profile page queries |
-| Speaker fingerprinting | Pipeline `diarization/`, new `speaker_fingerprints` table | Post-diarization step; stores embeddings in Supabase for cross-meeting matching |
-| Email improvements | `supabase/functions/send-alerts/index.ts` | Refactor existing HTML builders; no new deps |
-| RAG observability | `rag.server.ts`, `search.tsx` | Extend existing PostHog `$ai_generation` events with feedback + rerank metrics |
+| Decision | Confidence | Basis |
+|----------|------------|-------|
+| Legistar Web API unavailable | HIGH | Direct API testing, explicit error messages |
+| InSite HTML scrapable with BeautifulSoup | HIGH | Verified server-rendered HTML structure, predictable Telerik grid layout |
+| Wildcard routes in wrangler.toml | HIGH | Cloudflare official docs confirm `*.domain.com/*` pattern |
+| No new dependencies needed | HIGH | beautifulsoup4, requests, yt-dlp all in pyproject.toml already |
+| yt-dlp handles Granicus video | MEDIUM | yt-dlp has wide platform support but Granicus not confirmed; needs testing |
+| Hostname available in Worker request | HIGH | Standard Web API URL parsing, confirmed in existing `workers/app.ts` code |
 
 ## Sources
 
-- [Cloudflare Workers KV docs](https://developers.cloudflare.com/kv/)
-- [KV pricing](https://developers.cloudflare.com/workers/platform/pricing/)
-- [KV bindings configuration](https://developers.cloudflare.com/kv/concepts/kv-bindings/)
-- [KV performance improvements (Aug 2025)](https://developers.cloudflare.com/changelog/2025-08-22-kv-performance-improvements/)
-- [LLM as reranker guide - ZeroEntropy](https://www.zeroentropy.dev/articles/llm-as-reranker-guide)
-- [Ultimate reranking model guide 2026 - ZeroEntropy](https://www.zeroentropy.dev/articles/ultimate-guide-to-choosing-the-best-reranking-model-in-2025)
-- [Case against LLMs as rerankers - Voyage AI](https://blog.voyageai.com/2025/10/22/the-case-against-llms-as-rerankers/)
-- [Vertex AI reranking docs](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/rag-engine/retrieval-and-ranking)
-- [Resemblyzer on PyPI](https://pypi.org/project/Resemblyzer/)
-- [Resemblyzer GitHub](https://github.com/resemble-ai/Resemblyzer)
-- [Speaker identification with Resemblyzer](https://kmeanskaran.medium.com/build-an-audio-driven-speaker-recognition-system-using-open-source-technologies-resemblyzer-and-6499cf0246eb)
-- [react-email Cloudflare issues #1508](https://github.com/resend/react-email/issues/1508)
-- [React Email](https://react.email)
+- [Cloudflare Workers Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
+- [Cloudflare Workers Routes](https://developers.cloudflare.com/workers/configuration/routing/routes/)
+- [Legistar Web API Help](https://webapi.legistar.com/Help)
+- [Esquimalt Legistar InSite](https://esquimalt.ca.legistar.com/)
+- [Esquimalt Municipality Page](https://www.esquimalt.ca/government-bylaws/council-meetings/council-committee-meetings-online-legistar)
+- [CDP Scrapers - Finding Legistar ID](https://councildataproject.org/cdp-scrapers/finding_legistar_id.html)
+- [python-legistar-scraper](https://github.com/opencivicdata/python-legistar-scraper)
