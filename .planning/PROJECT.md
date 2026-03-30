@@ -103,10 +103,19 @@ Citizens can understand what their council decided, why, and who said what — w
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to define v1.8 or next priorities)
+## Current Milestone: v1.8 Esquimalt Launch
+
+**Goal:** Validate the Legistar scraper against Esquimalt, ingest recent meetings through the full pipeline, add hostname-based municipality routing, and deploy Esquimalt at esquimalt.viewroyal.ai with the full feature set.
+
+**Target features:**
+- Validate and fix Legistar scraper against real Esquimalt data
+- Full pipeline run for recent Esquimalt meetings (scrape → ingest → embed)
+- Hostname-based subdomain routing (subdomain → municipality context in Worker)
+- Esquimalt live at esquimalt.viewroyal.ai with full feature parity
+- Unknown subdomains return 404
 
 ### Out of Scope
-- RDOS / multi-municipality ingestion — deferred to v1.8
+- RDOS ingestion — deferred beyond v1.8
 - Push notifications / native app — overkill for current user base size
 - Social features (comments, reactions, forums) — undermines official record credibility
 - Real-time live meeting notifications — architecture mismatch (batch pipeline)
@@ -188,4 +197,4 @@ v1.0: 6 phases, 11 plans. v1.1: 6 phases, 20 plans. v1.2: 3 phases, 5 plans. v1.
 | fumadocs baseUrl: '/' for root-level serving | Docs served at docs.viewroyal.ai root, not /docs/ subpath | ✓ Good |
 
 ---
-*Last updated: 2026-03-24 after v1.7 View Royal Intelligence milestone completed*
+*Last updated: 2026-03-30 after v1.8 Esquimalt Launch milestone started*
