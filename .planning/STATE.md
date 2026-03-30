@@ -1,33 +1,35 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: View Royal Intelligence
-status: completed
-stopped_at: "Completed quick-23: fix tab bar overflow"
-last_updated: "2026-03-24T23:02:08.611Z"
+milestone: v1.8
+milestone_name: Esquimalt Launch
+status: active
+stopped_at: ""
+last_updated: "2026-03-30"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-24)
+See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** Planning next milestone
+**Current focus:** v1.8 Esquimalt Launch
 
 ## Current Position
 
-Milestone v1.7 View Royal Intelligence: SHIPPED 2026-03-24
-Next step: `/gsd:new-milestone` to define next priorities
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-30 — Milestone v1.8 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
