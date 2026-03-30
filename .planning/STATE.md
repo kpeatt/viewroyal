@@ -6,9 +6,9 @@ status: active
 stopped_at: ""
 last_updated: "2026-03-30"
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 7
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Citizens can understand what their council decided, why, and who said what -- without attending meetings or reading hundreds of pages of PDFs.
-**Current focus:** v1.8 Esquimalt Launch
+**Current focus:** Phase 41 - Data Isolation (v1.8 Esquimalt Launch)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-30 — Milestone v1.8 started
+Phase: 41 (1 of 4 in v1.8)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-30 -- Roadmap created for v1.8 Esquimalt Launch
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,11 @@ Progress: [░░░░░░░░░░] 0%
 ### Decisions
 
 All v1.0-v1.7 decisions archived -- see PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- [v1.8 planning]: Legistar Web API confirmed unavailable for Esquimalt (HTTP 500) -- must use InSite HTML scraping
+- [v1.8 planning]: Service layer scoping must complete before any Esquimalt data ingestion to prevent contamination
+- [v1.8 planning]: Phases 42 and 43 can execute in parallel (scraper and routing are independent tracks)
 
 ### Pending Todos
 
@@ -64,7 +69,8 @@ All v1.0-v1.7 decisions archived -- see PROJECT.md Key Decisions table.
 - bootstrap.sql is out of date with 30+ applied migrations
 - Email delivery requires external Resend configuration
 - Phase 7.1 Gemini Batch API backfill paused -- waiting on quota
-- Gemini cost projection: reranking + classification + profiling add new API consumers
+- yt-dlp Granicus support unverified -- test against esquimalt.ca.granicus.com before coding video extraction (SCRP-05)
+- wrangler.toml custom_domain + wildcard route interaction rated MEDIUM confidence -- verify on staging first (ROUT-02)
 
 ### Quick Tasks Completed
 
@@ -96,9 +102,9 @@ All v1.0-v1.7 decisions archived -- see PROJECT.md Key Decisions table.
 
 ## Session Continuity
 
-Last session: 2026-03-24T23:02:08.609Z
-Stopped at: Completed quick-23: fix tab bar overflow
+Last session: 2026-03-30
+Stopped at: Roadmap created for v1.8 Esquimalt Launch milestone
+Resume file: None
 
 ### Paused Work: Phase 7.1
-Resume file: None
 Status: 309 meetings queued for re-extraction. 40,805 sections need embeddings. Waiting on Gemini quota.
