@@ -382,19 +382,59 @@ def build_boundary_jsonl(uploaded: dict[str, tuple[str, str]]) -> str:
 def build_content_jsonl(
     uploaded: dict[str, tuple[str, str]],
     page_ranges: dict[str, tuple[int, int]],
+    images_by_key: dict[str, list[dict]] | None = None,
 ) -> str:
     """Build JSONL for content extraction batch.
 
     Each line references an uploaded page-range PDF + content prompt.
+    When images_by_key is provided, includes image thumbnails as inline_data
+    parts so Gemini can reference them as [Image N: desc].
     """
-    from pipeline.ingestion.gemini_extractor import CONTENT_PROMPT_TEMPLATE
+    import base64
+
+    from pipeline.ingestion.gemini_extractor import (
+        CONTENT_PROMPT_TEMPLATE,
+        CONTENT_WITH_IMAGES_PROMPT,
+        _create_thumbnail,
+    )
 
     lines = []
     for key, (file_name, file_uri) in uploaded.items():
         ps, pe = page_ranges[key]
-        # Pages are renumbered starting at 1 in the extracted PDF
         num_pages = pe - ps + 1
-        prompt = CONTENT_PROMPT_TEMPLATE.format(page_start=1, page_end=num_pages)
+
+        parts = [
+            {
+                "file_data": {
+                    "file_uri": file_uri,
+                    "mime_type": "application/pdf",
+                }
+            },
+        ]
+
+        images = (images_by_key or {}).get(key, [])
+        if images:
+            for i, img in enumerate(images, 1):
+                try:
+                    thumb_bytes, mime = _create_thumbnail(img["data"])
+                    parts.append({"text": f"Image {i}:"})
+                    parts.append({
+                        "inline_data": {
+                            "data": base64.b64encode(thumb_bytes).decode(),
+                            "mime_type": mime,
+                        }
+                    })
+                except Exception as e:
+                    logger.warning("Failed to create thumbnail for image %d in %s: %s", i, key, e)
+                    parts.append({"text": f"Image {i}: [thumbnail unavailable]"})
+
+            prompt = CONTENT_WITH_IMAGES_PROMPT.format(
+                page_start=1, page_end=num_pages, n_images=len(images),
+            )
+        else:
+            prompt = CONTENT_PROMPT_TEMPLATE.format(page_start=1, page_end=num_pages)
+
+        parts.append({"text": prompt})
 
         request = {
             "key": key,
@@ -402,15 +442,7 @@ def build_content_jsonl(
                 "contents": [
                     {
                         "role": "user",
-                        "parts": [
-                            {
-                                "file_data": {
-                                    "file_uri": file_uri,
-                                    "mime_type": "application/pdf",
-                                }
-                            },
-                            {"text": prompt},
-                        ],
+                        "parts": parts,
                     }
                 ],
             },
@@ -607,8 +639,8 @@ def insert_meeting_results(
         _split_markdown_into_sections,
     )
     from pipeline.ingestion.image_extractor import (
+        assign_images_by_number,
         extract_images,
-        match_images_to_sections,
         upload_images_to_r2,
     )
 
@@ -742,7 +774,7 @@ def insert_meeting_results(
                 images = []
 
             if images and inserted_sections:
-                images = match_images_to_sections(inserted_sections, images)
+                images = assign_images_by_number(inserted_sections, images)
 
             if images:
                 uploaded_imgs = upload_images_to_r2(images, meeting_id, extracted_doc_id)
@@ -974,9 +1006,12 @@ def run_batch_extraction(
                     job_name = existing_wave["job_name"]
                     print(f"  Resuming existing batch: {job_name}")
                 else:
-                    # Upload page-range PDFs
+                    from pipeline.ingestion.image_extractor import extract_images
+
+                    # Upload page-range PDFs and extract images
                     uploaded = {}
                     page_ranges = {}
+                    images_by_key = {}
                     wave_file_names = []
 
                     for key, tmp_path, source_pdf, fsize in tqdm(
@@ -992,6 +1027,14 @@ def run_batch_extraction(
                             parts = key.split("_p")[-1].split("-")
                             ps, pe = int(parts[0]), int(parts[1])
                             page_ranges[key] = (ps, pe)
+
+                            # Extract images from source PDF for Gemini matching
+                            try:
+                                imgs = extract_images(source_pdf, ps, pe)
+                                if imgs:
+                                    images_by_key[key] = imgs
+                            except Exception as e:
+                                logger.warning("Image extraction failed for %s: %s", key, e)
                         except Exception as e:
                             logger.error("Upload failed for %s: %s", key, e)
                             state["errors"][key] = str(e)
@@ -1009,8 +1052,10 @@ def run_batch_extraction(
                         logger.warning("Wave %d: no files uploaded", wave_idx)
                         continue
 
-                    # Build and upload JSONL
-                    jsonl_content = build_content_jsonl(uploaded, page_ranges)
+                    # Build and upload JSONL (with image thumbnails)
+                    jsonl_content = build_content_jsonl(
+                        uploaded, page_ranges, images_by_key,
+                    )
                     jsonl_file = upload_jsonl(
                         client, jsonl_content, f"content_wave{wave_idx}"
                     )

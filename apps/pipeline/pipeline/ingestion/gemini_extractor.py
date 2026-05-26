@@ -8,6 +8,7 @@ Pass 2 (content extraction): For each document boundary, extract clean
 structured markdown content for those pages.
 """
 
+import io
 import json
 import logging
 import os
@@ -92,6 +93,48 @@ Output clean, well-structured markdown:
 - Preserve all dollar amounts, dates, addresses, and bylaw numbers exactly
 
 Return ONLY the markdown content, no commentary."""
+
+CONTENT_WITH_IMAGES_PROMPT = """Extract the full content of the document on pages {page_start} to {page_end} from this PDF.
+
+I have provided {n_images} extracted images from these pages, numbered Image 1 through Image {n_images}.
+
+Output clean, well-structured markdown:
+- Use ## for main headings, ### for sub-headings
+- Render tables as markdown tables
+- Preserve numbered/bulleted lists
+- Include staff recommendations verbatim
+- Skip headers/footers, page numbers, and watermarks
+- Where an image appears in the document, insert [Image N: brief description] matching the numbered image
+- Reference EVERY meaningful image (maps, charts, diagrams, photos, renderings)
+- Do NOT reference logos, signatures, letterheads, headers/footers, crests, watermarks, stamps, or seals
+- If multiple images form a collage or visual group, reference each one individually at the location where the group appears
+- Preserve all dollar amounts, dates, addresses, and bylaw numbers exactly
+
+Return ONLY the markdown content, no commentary."""
+
+
+# ── Helper: create thumbnail for Gemini ───────────────────────────────────
+
+def _create_thumbnail(image_bytes: bytes, max_size: int = 768) -> tuple[bytes, str]:
+    """Resize image to fit within max_size and convert to WebP for Gemini.
+
+    Returns (webp_bytes, mime_type). Falls back to original on error.
+    """
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_size:
+        if w >= h:
+            new_w, new_h = max_size, int(h * max_size / w)
+        else:
+            new_h, new_w = max_size, int(w * max_size / h)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="WEBP", quality=75)
+    return buf.getvalue(), "image/webp"
 
 
 # ── Helper: parse JSON from Gemini response ──────────────────────────────
@@ -563,21 +606,24 @@ def extract_content(
     page_start: int,
     page_end: int,
     doc_title: str = "",
+    images: list[dict] | None = None,
 ) -> str:
     """Pass 2: Extract clean markdown content for a page range from the PDF.
 
     Sends the full PDF with a page-specific prompt. Gemini handles the
-    page selection natively.
+    page selection natively. When images are provided, includes them as
+    numbered thumbnails so Gemini can reference them as [Image N: desc].
 
     Returns markdown string, or empty string on failure.
     """
     client = get_gemini_client()
 
     logger.info(
-        "Extracting content: '%s' (pages %d-%d)",
+        "Extracting content: '%s' (pages %d-%d, %d images)",
         doc_title[:50] if doc_title else "untitled",
         page_start,
         page_end,
+        len(images) if images else 0,
     )
 
     file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)
@@ -590,26 +636,44 @@ def extract_content(
         if pdf_part is None:
             logger.error("Cannot extract pages %d-%d from PDF", page_start, page_end)
             return ""
-        # Extracted pages are renumbered starting at 1
-        prompt = CONTENT_PROMPT_TEMPLATE.format(
-            page_start=1,
-            page_end=page_end - page_start + 1,
-        )
+        effective_start = 1
+        effective_end = page_end - page_start + 1
     else:
         try:
             pdf_part = _prepare_pdf_part(pdf_path, client)
         except ValueError as e:
             logger.error("Cannot extract content: %s", e)
             return ""
+        effective_start = page_start
+        effective_end = page_end
 
-        prompt = CONTENT_PROMPT_TEMPLATE.format(
-            page_start=page_start,
-            page_end=page_end,
+    # Build contents with or without images
+    if images:
+        prompt = CONTENT_WITH_IMAGES_PROMPT.format(
+            page_start=effective_start,
+            page_end=effective_end,
+            n_images=len(images),
         )
+        contents = [pdf_part]
+        for i, img in enumerate(images, 1):
+            try:
+                thumb_bytes, mime = _create_thumbnail(img["data"])
+                contents.append(f"Image {i}:")
+                contents.append(types.Part.from_bytes(data=thumb_bytes, mime_type=mime))
+            except Exception as e:
+                logger.warning("Failed to create thumbnail for image %d: %s", i, e)
+                contents.append(f"Image {i}: [thumbnail unavailable]")
+        contents.append(prompt)
+    else:
+        prompt = CONTENT_PROMPT_TEMPLATE.format(
+            page_start=effective_start,
+            page_end=effective_end,
+        )
+        contents = [pdf_part, prompt]
 
     text = _call_gemini(
         client,
-        [pdf_part, prompt],
+        contents,
         label=f"content-p{page_start}-{page_end}",
     )
 
