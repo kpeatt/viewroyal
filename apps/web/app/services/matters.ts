@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Matter, AgendaItem } from "../lib/types";
+import type { Matter, Municipality, AgendaItem } from "../lib/types";
 
-export async function getMatters(supabase: SupabaseClient) {
+export async function getMatters(supabase: SupabaseClient, municipality: Municipality) {
   const allData: any[] = [];
   const pageSize = 1000;
   let offset = 0;
@@ -23,6 +23,7 @@ export async function getMatters(supabase: SupabaseClient) {
         agenda_items(related_address, geo_location)
       `,
       )
+      .eq("municipality_id", municipality.id)
       .order("last_seen", { ascending: false, nullsFirst: false })
       .range(offset, offset + pageSize - 1);
 
@@ -70,13 +71,14 @@ export async function getMatters(supabase: SupabaseClient) {
   });
 }
 
-export async function getMatterById(supabase: SupabaseClient, id: string) {
+export async function getMatterById(supabase: SupabaseClient, municipality: Municipality, id: string) {
   const { data: matter, error: matterError } = await supabase
     .from("matters")
     .select(
       "id, title, identifier, description, category, plain_english_summary, status, first_seen, last_seen, bylaw_id, meta, created_at, bylaw:bylaws(id, title, bylaw_number, year, category, status, plain_english_summary, full_text, created_at), agenda_items(id, meeting_id, item_order, title, description, category, debate_summary, plain_english_summary, is_controversial, is_consent_agenda, discussion_start_time, financial_cost, funding_source, related_address, matter_status_snapshot, meetings(id, title, meeting_date, organizations(name)), motions(id, meeting_id, agenda_item_id, mover, seconder, mover_id, seconder_id, text_content, result, disposition, yes_votes, no_votes, abstain_votes, absent_votes, votes(id, motion_id, person_id, vote, recusal_reason, person:people(id, name, image_url))))",
     )
     .eq("id", id)
+    .eq("municipality_id", municipality.id)
     .single();
 
   if (matterError) throw matterError;
@@ -91,6 +93,7 @@ export async function getMatterById(supabase: SupabaseClient, id: string) {
 
 export async function getDocumentsForAgendaItems(
   supabase: SupabaseClient,
+  municipality: Municipality,
   agendaItemIds: number[],
 ) {
   if (agendaItemIds.length === 0) return [];
@@ -107,13 +110,14 @@ export async function getDocumentsForAgendaItems(
   return data ?? [];
 }
 
-export async function getHotTopics(supabase: SupabaseClient) {
+export async function getHotTopics(supabase: SupabaseClient, municipality: Municipality) {
   const { data, error } = await supabase
     .from("agenda_items")
     .select(
-      "id, meeting_id, title, description, category, debate_summary, plain_english_summary, is_controversial, discussion_start_time, created_at, meetings(id, title, meeting_date, organizations(name))",
+      "id, meeting_id, title, description, category, debate_summary, plain_english_summary, is_controversial, discussion_start_time, created_at, meetings!inner(id, title, meeting_date, municipality_id, organizations(name))",
     )
     .eq("is_controversial", true)
+    .eq("meetings.municipality_id", municipality.id)
     .order("created_at", { ascending: false });
 
   if (error) throw error;

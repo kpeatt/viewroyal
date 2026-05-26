@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Meeting,
+  Municipality,
   AgendaItem,
   TranscriptSegment,
   SpeakerAlias,
@@ -31,6 +32,7 @@ export interface GetMeetingsOptions {
 
 export async function getMeetings(
   supabase: SupabaseClient,
+  municipality: Municipality,
   options: GetMeetingsOptions = {},
 ) {
   const {
@@ -50,7 +52,8 @@ export async function getMeetings(
     .from("meetings")
     .select(
       "id, organization_id, title, meeting_date, type, status, video_url, minutes_url, agenda_url, video_duration_seconds, summary, has_agenda, has_minutes, has_transcript, created_at, updated_at, organization:organizations(*)",
-    );
+    )
+    .eq("municipality_id", municipality.id);
 
   if (status) {
     query = query.eq("status", status);
@@ -92,7 +95,9 @@ export async function getMeetings(
   // Fetch meeting stats (motion counts + topics) from RPC
   let statsMap: Record<number, MeetingStats> = {};
   try {
-    const { data: statsData } = await supabase.rpc("get_meetings_with_stats");
+    const { data: statsData } = await supabase.rpc("get_meetings_with_stats", {
+      filter_municipality_id: municipality.id,
+    });
     if (statsData) {
       for (const row of statsData as any[]) {
         statsMap[row.meeting_id] = {
@@ -111,7 +116,7 @@ export async function getMeetings(
   return { meetings, statsMap };
 }
 
-export async function getMeetingById(supabase: SupabaseClient, id: string) {
+export async function getMeetingById(supabase: SupabaseClient, municipality: Municipality, id: string) {
   // 1. Fetch meeting, agenda, aliases, attendance
   const [meetingRes, agendaRes, aliasRes, attendanceRes] = await Promise.all([
     supabase
@@ -120,6 +125,7 @@ export async function getMeetingById(supabase: SupabaseClient, id: string) {
         "id, organization_id, title, meeting_date, type, status, has_agenda, has_minutes, has_transcript, video_url, minutes_url, agenda_url, video_duration_seconds, chair_person_id, archive_path, summary, meta, created_at, updated_at, organization:organizations(*), chair:people(*)",
       )
       .eq("id", id)
+      .eq("municipality_id", municipality.id)
       .single(),
     supabase
       .from("agenda_items")
@@ -255,7 +261,7 @@ export async function getMeetingById(supabase: SupabaseClient, id: string) {
   };
 }
 
-export async function getDividedDecisions(supabase: SupabaseClient) {
+export async function getDividedDecisions(supabase: SupabaseClient, municipality: Municipality) {
   const { data: votes, error } = await supabase
     .from("votes")
     .select(
@@ -268,10 +274,11 @@ export async function getDividedDecisions(supabase: SupabaseClient) {
         text_content,
         result,
         meeting_id,
-        meetings(meeting_date, title, organizations(name))
+        meetings!inner(meeting_date, title, municipality_id, organizations(name))
       )
     `,
     )
+    .eq("motion.meetings.municipality_id", municipality.id)
     .in("vote", ["Yes", "No"]);
 
   if (error) throw error;
@@ -305,6 +312,7 @@ export async function getDividedDecisions(supabase: SupabaseClient) {
 
 export async function getDocumentSectionsForMeeting(
   supabase: SupabaseClient,
+  municipality: Municipality,
   meetingId: string,
 ): Promise<DocumentSection[]> {
   // First get document IDs for this meeting
@@ -334,6 +342,7 @@ export async function getDocumentSectionsForMeeting(
 
 export async function getExtractedDocumentsForDocument(
   supabase: SupabaseClient,
+  municipality: Municipality,
   documentId: string,
 ): Promise<ExtractedDocument[]> {
   const { data, error } = await supabase
@@ -354,6 +363,7 @@ export async function getExtractedDocumentsForDocument(
 
 export async function getExtractedDocumentsForMeeting(
   supabase: SupabaseClient,
+  municipality: Municipality,
   meetingId: string,
 ): Promise<ExtractedDocument[]> {
   // First get document IDs for this meeting
