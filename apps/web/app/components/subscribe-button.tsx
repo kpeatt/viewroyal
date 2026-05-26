@@ -3,6 +3,7 @@ import { useRouteLoaderData, Link } from "react-router";
 import { Bell, BellOff, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { SubscriptionType } from "../lib/types";
+import { trackEvent } from "../lib/analytics";
 
 interface SubscribeButtonProps {
   type: SubscriptionType;
@@ -91,6 +92,11 @@ export function SubscribeButton({
           body: JSON.stringify({ subscription_id: subscriptionId }),
         });
         if (!res.ok) { console.error("Unsubscribe failed:", res.status); return; }
+        trackEvent("subscribe toggled", {
+          action: "unsubscribe",
+          type,
+          target_id: targetId,
+        });
         setSubscribed(false);
         setSubscriptionId(null);
       } else {
@@ -113,6 +119,11 @@ export function SubscribeButton({
         });
         if (!res.ok) { console.error("Subscribe failed:", res.status); return; }
         const data = (await res.json()) as { subscription?: { id: number } };
+        trackEvent("subscribe toggled", {
+          action: "subscribe",
+          type,
+          target_id: targetId,
+        });
         setSubscribed(true);
         setSubscriptionId(data.subscription?.id || null);
       }

@@ -23,7 +23,8 @@ export function PostHogProvider() {
     if (!key) return; // Graceful no-op when key is missing (e.g. local dev)
 
     posthog.init(key, {
-      api_host: "https://us.i.posthog.com",
+      api_host: "https://k.viewroyal.ai",
+      ui_host: "https://us.i.posthog.com",
       person_profiles: "identified_only",
       capture_pageview: false, // We track route changes manually (SPA)
     });
