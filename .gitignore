@@ -28,6 +28,12 @@ Dockerfile
 # React Router
 .react-router/
 
+# Supabase CLI
+supabase/.temp/
+
+# TypeScript build cache
+*.tsbuildinfo
+
 # Python
 __pycache__/
 *.py[oc]
@@ -44,7 +50,9 @@ reports/
 logs/
 embeddings_*.csv
 backfill_progress.json
+backfill_images_progress.json
 batch_extraction_state.json
+start_chat_log.md
 
 # MCP config (local paths/keys)
 .mcp.json
