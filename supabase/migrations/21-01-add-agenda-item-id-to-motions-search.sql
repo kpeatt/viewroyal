@@ -1,6 +1,8 @@
 -- Quick Task 21: Add agenda_item_id to hybrid_search_motions RPC
 -- This enables search result cards to deep-link to the specific agenda item
 
+DROP FUNCTION IF EXISTS hybrid_search_motions(text, halfvec(384), int, float, float, int, date, date);
+
 CREATE OR REPLACE FUNCTION hybrid_search_motions(
   query_text text,
   query_embedding halfvec(384),
