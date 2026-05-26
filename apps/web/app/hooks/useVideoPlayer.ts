@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { trackEvent } from "../lib/analytics";
 // import Player from "@vimeo/player"; // No longer needed with dynamic import
 
 interface UseVideoPlayerOptions {
   directVideoUrl?: string | null;
   directAudioUrl?: string | null;
   initialVolume?: number;
+  meetingId?: number;
   onTimeUpdate?: (time: number) => void;
   onError?: (error: { type: string; details: string }) => void;
 }
@@ -38,6 +40,7 @@ export function useVideoPlayer({
   directVideoUrl,
   directAudioUrl,
   initialVolume = 0,
+  meetingId,
   onTimeUpdate,
   onError,
 }: UseVideoPlayerOptions): UseVideoPlayerReturn {
@@ -277,15 +280,32 @@ export function useVideoPlayer({
   const togglePlay = useCallback(() => {
     if (videoRef.current) {
       if (videoRef.current.paused) {
+        trackEvent("video played", {
+          meeting_id: meetingId,
+          current_time: videoRef.current.currentTime,
+        });
         videoRef.current.play();
       } else {
+        trackEvent("video paused", {
+          meeting_id: meetingId,
+          current_time: videoRef.current.currentTime,
+        });
         videoRef.current.pause();
       }
     }
-  }, []);
+  }, [meetingId]);
 
   const seekTo = useCallback(
     (time: number) => {
+      const fromTime = videoRef.current?.currentTime ?? 0;
+      if (Math.abs(time - fromTime) >= 2) {
+        trackEvent("video seeked", {
+          meeting_id: meetingId,
+          from_time: fromTime,
+          to_time: time,
+        });
+      }
+
       if (!videoEnabled) {
         setVideoEnabled(true);
         setIsPlaying(true);
@@ -305,7 +325,7 @@ export function useVideoPlayer({
         }
       }
     },
-    [videoEnabled],
+    [videoEnabled, meetingId],
   );
 
   const setVolume = useCallback(
