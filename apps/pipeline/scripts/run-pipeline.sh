@@ -4,10 +4,20 @@
 
 set -euo pipefail
 
-# Project paths
-PIPELINE_DIR="$HOME/development/viewroyal/apps/pipeline"
+# Homebrew (launchd doesn't inherit shell PATH)
+export PATH="/opt/homebrew/bin:$PATH"
 
-# Load environment variables (.env in pipeline dir has Supabase, Gemini, Moshi tokens)
+# Project paths
+PROJECT_DIR="$HOME/development/viewroyal"
+PIPELINE_DIR="$PROJECT_DIR/apps/pipeline"
+
+# Load environment variables (root .env has all keys)
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
+fi
+# Override with pipeline-specific .env if present
 if [ -f "$PIPELINE_DIR/.env" ]; then
     set -a
     source "$PIPELINE_DIR/.env"

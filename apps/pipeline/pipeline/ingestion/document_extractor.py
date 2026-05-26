@@ -35,8 +35,8 @@ def extract_and_store_documents(
     """
     from pipeline.ingestion.gemini_extractor import detect_boundaries, extract_content
     from pipeline.ingestion.image_extractor import (
+        assign_images_by_number,
         extract_images,
-        match_images_to_sections,
         upload_images_to_r2,
     )
 
@@ -46,6 +46,34 @@ def extract_and_store_documents(
         "sections_created": 0,
         "images_extracted": 0,
     }
+
+    # Clean up existing data for this document to prevent duplicates on re-runs
+    try:
+        existing = (
+            supabase.table("extracted_documents")
+            .select("id")
+            .eq("document_id", document_id)
+            .execute()
+        )
+        if existing.data:
+            ed_ids = [row["id"] for row in existing.data]
+            for ed_id in ed_ids:
+                supabase.table("document_sections").delete().eq(
+                    "extracted_document_id", ed_id
+                ).execute()
+            for ed_id in ed_ids:
+                supabase.table("document_images").delete().eq(
+                    "extracted_document_id", ed_id
+                ).execute()
+            supabase.table("extracted_documents").delete().eq(
+                "document_id", document_id
+            ).execute()
+            logger.info(
+                "Cleaned up %d existing extracted_documents for doc %d",
+                len(ed_ids), document_id,
+            )
+    except Exception as e:
+        logger.warning("Cleanup before insert failed for doc %d: %s", document_id, e)
 
     # Step 1: Detect document boundaries via Gemini
     try:
@@ -96,15 +124,26 @@ def extract_and_store_documents(
 
         stats["documents_extracted"] += 1
 
-        # Step 3: Extract markdown content via Gemini
+        # Step 3: Extract images FIRST (needed for content extraction)
+        images = []
+        if page_start and page_end:
+            try:
+                images = extract_images(pdf_path, page_start, page_end)
+            except Exception as e:
+                logger.warning("Image extraction failed for '%s': %s", title, e)
+
+        # Step 4: Extract markdown content via Gemini (with images for matching)
         markdown = ""
         if page_start and page_end:
             try:
-                markdown = extract_content(pdf_path, page_start, page_end, title)
+                markdown = extract_content(
+                    pdf_path, page_start, page_end, title,
+                    images=images if images else None,
+                )
             except Exception as e:
                 logger.error("Content extraction failed for '%s': %s", title, e)
 
-        # Step 4: Split markdown into sections and insert
+        # Step 5: Split markdown into sections and insert
         if markdown:
             sections = _split_markdown_into_sections(markdown)
         else:
@@ -147,39 +186,32 @@ def extract_and_store_documents(
                     section.get("section_title", "?"), title, e,
                 )
 
-        # Step 5: Extract and upload images (section-aware matching)
-        if page_start and page_end:
-            try:
-                images = extract_images(pdf_path, page_start, page_end)
-            except Exception as e:
-                logger.warning("Image extraction failed for '%s': %s", title, e)
-                images = []
+        # Step 6: Assign images to sections by number (Gemini's [Image N:] tags)
+        if images and inserted_sections:
+            images = assign_images_by_number(inserted_sections, images)
 
-            if images and inserted_sections:
-                images = match_images_to_sections(inserted_sections, images)
+        # Step 7: Upload images and insert metadata
+        if images:
+            uploaded = upload_images_to_r2(images, meeting_id, extracted_doc_id)
 
-            if images:
-                uploaded = upload_images_to_r2(images, meeting_id, extracted_doc_id)
-
-                # Insert image metadata into document_images
-                for img_meta in uploaded:
-                    try:
-                        img_data = {
-                            "extracted_document_id": extracted_doc_id,
-                            "r2_key": img_meta["r2_key"],
-                            "page": img_meta["page"],
-                            "width": img_meta["width"],
-                            "height": img_meta["height"],
-                            "format": img_meta["format"],
-                            "file_size": img_meta["file_size"],
-                            "description": img_meta.get("description"),
-                            "document_section_id": img_meta.get("section_id"),
-                            "municipality_id": municipality_id,
-                        }
-                        supabase.table("document_images").insert(img_data).execute()
-                        stats["images_extracted"] += 1
-                    except Exception as e:
-                        logger.warning("Failed to insert image metadata: %s", e)
+            for img_meta in uploaded:
+                try:
+                    img_data = {
+                        "extracted_document_id": extracted_doc_id,
+                        "r2_key": img_meta["r2_key"],
+                        "page": img_meta["page"],
+                        "width": img_meta["width"],
+                        "height": img_meta["height"],
+                        "format": img_meta["format"],
+                        "file_size": img_meta["file_size"],
+                        "description": img_meta.get("description"),
+                        "document_section_id": img_meta.get("section_id"),
+                        "municipality_id": municipality_id,
+                    }
+                    supabase.table("document_images").insert(img_data).execute()
+                    stats["images_extracted"] += 1
+                except Exception as e:
+                    logger.warning("Failed to insert image metadata: %s", e)
 
     logger.info(
         "Document extraction complete for document %d: %d boundaries, %d extracted, "
