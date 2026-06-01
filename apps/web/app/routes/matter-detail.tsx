@@ -1,6 +1,7 @@
 import type { Route } from "./+types/matter-detail";
 import { getMatterById, getDocumentsForAgendaItems } from "../services/matters";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { getMunicipality } from "../services/municipality";
 import { Link } from "react-router";
 import { SubscribeButton } from "../components/subscribe-button";
 import { ogImageUrl, ogUrl } from "../lib/og";
@@ -67,11 +68,12 @@ export async function loader({ params }: Route.LoaderArgs) {
 
   try {
     const supabase = getSupabaseAdminClient();
-    const matter = await getMatterById(supabase, id);
+    const municipality = await getMunicipality(supabase);
+    const matter = await getMatterById(supabase, municipality, id);
 
     // Fetch documents for all agenda items in this matter (batch query)
     const agendaItemIds = (matter.agenda_items || []).map((ai) => ai.id);
-    const matterDocuments = await getDocumentsForAgendaItems(supabase, agendaItemIds);
+    const matterDocuments = await getDocumentsForAgendaItems(supabase, municipality, agendaItemIds);
 
     return { matter, matterDocuments };
   } catch (error) {

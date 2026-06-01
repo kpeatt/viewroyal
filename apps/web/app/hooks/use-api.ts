@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useRouteLoaderData } from "react-router";
+import type { Municipality } from "../lib/types";
 import * as meetingService from "../services/meetings";
 import * as peopleService from "../services/people";
 import * as orgService from "../services/organizations";
@@ -46,14 +48,18 @@ export function useQuery<T, Args extends any[]>(
  * Centralized API hook to access all data sources.
  */
 export function useApi() {
+  const rootData = useRouteLoaderData("root") as
+    | { municipality?: Municipality }
+    | undefined;
+  const municipality = rootData?.municipality as Municipality;
   return {
     meetings: {
       list: meetingService.getMeetings,
       get: meetingService.getMeetingById,
       useList: (options?: meetingService.GetMeetingsOptions) =>
-        useQuery(meetingService.getMeetings, supabase, options),
+        useQuery(meetingService.getMeetings, supabase, municipality, options),
       useGet: (id: string) =>
-        useQuery(meetingService.getMeetingById, supabase, id),
+        useQuery(meetingService.getMeetingById, supabase, municipality, id),
     },
     people: {
       list: peopleService.getPeopleWithStats,
@@ -71,10 +77,11 @@ export function useApi() {
       list: matterService.getMatters,
       get: matterService.getMatterById,
       getHotTopics: matterService.getHotTopics,
-      useList: () => useQuery(matterService.getMatters, supabase),
+      useList: () => useQuery(matterService.getMatters, supabase, municipality),
       useGet: (id: string) =>
-        useQuery(matterService.getMatterById, supabase, id),
-      useHotTopics: () => useQuery(matterService.getHotTopics, supabase),
+        useQuery(matterService.getMatterById, supabase, municipality, id),
+      useHotTopics: () =>
+        useQuery(matterService.getHotTopics, supabase, municipality),
     },
 
     search: {
@@ -105,7 +112,7 @@ export function useApi() {
     decisions: {
       getDivided: meetingService.getDividedDecisions,
       useDivided: () =>
-        useQuery(meetingService.getDividedDecisions, supabase),
+        useQuery(meetingService.getDividedDecisions, supabase, municipality),
     },
   };
 }

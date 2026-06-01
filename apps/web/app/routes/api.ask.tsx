@@ -38,7 +38,13 @@ function getClientIP(request: Request): string {
 }
 
 // Helper to create the streaming response
-function createStreamingResponse(question: string, context?: string, municipalityName?: string, clientIP?: string) {
+function createStreamingResponse(
+  question: string,
+  context?: string,
+  municipalityName?: string,
+  clientIP?: string,
+  waitUntil?: (promise: Promise<any>) => void,
+) {
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -160,7 +166,8 @@ function createStreamingResponse(question: string, context?: string, municipalit
   });
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request, context: actionContext }: Route.ActionArgs) {
+  const waitUntil = actionContext.cloudflare?.ctx?.waitUntil?.bind(actionContext.cloudflare.ctx);
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
@@ -178,7 +185,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { supabase } = createSupabaseServerClient(request);
   const municipality = await getMunicipality(supabase);
-  return createStreamingResponse(question, context, municipality.name, getClientIP(request));
+  return createStreamingResponse(question, context, municipality.name, getClientIP(request), waitUntil);
 }
 
 // Also support GET for simple queries
@@ -223,5 +230,5 @@ export async function loader({ request, context: loaderContext }: Route.LoaderAr
 
   const { supabase } = createSupabaseServerClient(request);
   const municipality = await getMunicipality(supabase);
-  return createStreamingResponse(question, context, municipality.name, getClientIP(request));
+  return createStreamingResponse(question, context, municipality.name, getClientIP(request), waitUntil);
 }

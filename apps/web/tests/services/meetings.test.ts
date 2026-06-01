@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getMeetings, getMeetingById } from "~/services/meetings";
 import type { GetMeetingsOptions } from "~/services/meetings";
+import type { Municipality } from "~/lib/types";
+
+// Minimal municipality stub — services only read `.id` for scoping.
+const mockMunicipality = { id: 1 } as unknown as Municipality;
 
 // Helper to create a chainable mock Supabase query builder
 function createMockQueryBuilder(returnData: any = [], returnError: any = null) {
@@ -43,7 +47,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase);
+    await getMeetings(supabase, mockMunicipality);
 
     expect(supabase.from).toHaveBeenCalledWith("meetings");
     expect(builder.select).toHaveBeenCalledWith(
@@ -55,7 +59,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase);
+    await getMeetings(supabase, mockMunicipality);
 
     const selectString = builder.select.mock.calls[0][0];
     expect(selectString).not.toContain("neighborhood");
@@ -65,7 +69,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase);
+    await getMeetings(supabase, mockMunicipality);
 
     expect(builder.order).toHaveBeenCalledWith("meeting_date", {
       ascending: false,
@@ -76,7 +80,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, {
+    await getMeetings(supabase, mockMunicipality, {
       orderBy: "title",
       orderDirection: "asc",
     });
@@ -88,7 +92,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, { limit: 10 });
+    await getMeetings(supabase, mockMunicipality, { limit: 10 });
 
     expect(builder.limit).toHaveBeenCalledWith(10);
   });
@@ -97,7 +101,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase);
+    await getMeetings(supabase, mockMunicipality);
 
     expect(builder.limit).not.toHaveBeenCalled();
   });
@@ -106,7 +110,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, { status: "published" });
+    await getMeetings(supabase, mockMunicipality, { status: "published" });
 
     expect(builder.eq).toHaveBeenCalledWith("status", "published");
   });
@@ -115,7 +119,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, { organization_id: 5 });
+    await getMeetings(supabase, mockMunicipality, { organization_id: 5 });
 
     expect(builder.eq).toHaveBeenCalledWith("organization_id", 5);
   });
@@ -124,7 +128,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, { has_transcript: true });
+    await getMeetings(supabase, mockMunicipality, { has_transcript: true });
 
     expect(builder.eq).toHaveBeenCalledWith("has_transcript", true);
   });
@@ -133,7 +137,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, {
+    await getMeetings(supabase, mockMunicipality, {
       startDate: "2025-01-01",
       endDate: "2025-12-31",
     });
@@ -146,7 +150,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase, {
+    await getMeetings(supabase, mockMunicipality, {
       status: "published",
       has_transcript: true,
       limit: 5,
@@ -163,7 +167,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder(null);
     const supabase = createMockSupabase({ meetings: builder });
 
-    const result = await getMeetings(supabase);
+    const result = await getMeetings(supabase, mockMunicipality);
 
     expect(result.meetings).toEqual([]);
     expect(result.statsMap).toEqual({});
@@ -177,7 +181,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder(mockMeetings);
     const supabase = createMockSupabase({ meetings: builder });
 
-    const result = await getMeetings(supabase);
+    const result = await getMeetings(supabase, mockMunicipality);
 
     expect(result.meetings).toEqual(mockMeetings);
   });
@@ -188,7 +192,7 @@ describe("getMeetings", () => {
     });
     const supabase = createMockSupabase({ meetings: builder });
 
-    await expect(getMeetings(supabase)).rejects.toThrow(
+    await expect(getMeetings(supabase, mockMunicipality)).rejects.toThrow(
       "Database connection error",
     );
   });
@@ -197,7 +201,7 @@ describe("getMeetings", () => {
     const builder = createMockQueryBuilder([]);
     const supabase = createMockSupabase({ meetings: builder });
 
-    await getMeetings(supabase);
+    await getMeetings(supabase, mockMunicipality);
 
     const selectString = builder.select.mock.calls[0][0] as string;
     const expectedColumns = [
@@ -260,7 +264,7 @@ describe("getMeetingById", () => {
       }),
     } as any;
 
-    await getMeetingById(supabase, "1");
+    await getMeetingById(supabase, mockMunicipality, "1");
 
     expect(supabase.from).toHaveBeenCalledWith("meetings");
     expect(meetingBuilder.eq).toHaveBeenCalledWith("id", "1");
@@ -294,7 +298,7 @@ describe("getMeetingById", () => {
       }),
     } as any;
 
-    await expect(getMeetingById(supabase, "999")).rejects.toThrow(
+    await expect(getMeetingById(supabase, mockMunicipality, "999")).rejects.toThrow(
       "Meeting Not Found",
     );
   });
@@ -334,7 +338,7 @@ describe("getMeetingById", () => {
       }),
     } as any;
 
-    await getMeetingById(supabase, "1");
+    await getMeetingById(supabase, mockMunicipality, "1");
 
     expect(supabase.from).toHaveBeenCalledWith("agenda_items");
     expect(agendaBuilder.eq).toHaveBeenCalledWith("meeting_id", "1");
@@ -379,7 +383,7 @@ describe("getMeetingById", () => {
       }),
     } as any;
 
-    const result = await getMeetingById(supabase, "1");
+    const result = await getMeetingById(supabase, mockMunicipality, "1");
 
     expect(result).toHaveProperty("meeting");
     expect(result).toHaveProperty("agendaItems");

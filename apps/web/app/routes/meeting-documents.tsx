@@ -1,6 +1,7 @@
 import type { Route } from "./+types/meeting-documents";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
 import { getExtractedDocumentsForMeeting } from "../services/meetings";
+import { getMunicipality } from "../services/municipality";
 import { Link } from "react-router";
 import type { ExtractedDocument } from "../lib/types";
 import {
@@ -40,6 +41,7 @@ export async function loader({ params }: Route.LoaderArgs) {
   if (!meetingId) throw new Response("Missing params", { status: 400 });
 
   const supabase = getSupabaseAdminClient();
+  const municipality = await getMunicipality(supabase);
 
   const [meetingRes, docsRes, extractedDocs] = await Promise.all([
     supabase
@@ -52,7 +54,7 @@ export async function loader({ params }: Route.LoaderArgs) {
       .select("id, title, category, source_url, page_count")
       .eq("meeting_id", meetingId)
       .order("title"),
-    getExtractedDocumentsForMeeting(supabase, meetingId),
+    getExtractedDocumentsForMeeting(supabase, municipality, meetingId),
   ]);
 
   if (meetingRes.error || !meetingRes.data)

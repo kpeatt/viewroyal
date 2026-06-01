@@ -1,6 +1,7 @@
 import type { Route } from "./+types/meeting-explorer";
 import { getMeetingById } from "../services/meetings";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { getMunicipality } from "../services/municipality";
 import { Link, useSearchParams } from "react-router";
 import { useState, useMemo, useRef } from "react";
 import {
@@ -63,7 +64,8 @@ export async function loader({ params }: Route.LoaderArgs) {
   const { id } = params;
   try {
     const supabase = getSupabaseAdminClient();
-    const data = await getMeetingById(supabase, id);
+    const municipality = await getMunicipality(supabase);
+    const data = await getMeetingById(supabase, municipality, id);
     return data;
   } catch (error: any) {
     if (error.message === "Meeting Not Found") {
