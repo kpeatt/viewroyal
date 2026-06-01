@@ -149,11 +149,11 @@ export async function loader({ params, request }: Route.LoaderArgs) {
 
   try {
     const { supabase } = createSupabaseServerClient(request);
-    const [data, documentSections, extractedDocuments, municipality] = await Promise.all([
-      getMeetingById(supabase, id),
-      getDocumentSectionsForMeeting(supabase, id),
-      getExtractedDocumentsForMeeting(supabase, id),
-      getMunicipality(supabase).catch(() => null),
+    const municipality = await getMunicipality(supabase);
+    const [data, documentSections, extractedDocuments] = await Promise.all([
+      getMeetingById(supabase, municipality, id),
+      getDocumentSectionsForMeeting(supabase, municipality, id),
+      getExtractedDocumentsForMeeting(supabase, municipality, id),
     ]);
 
     // Only show attendance info for future meetings (Vancouver timezone)

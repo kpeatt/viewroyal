@@ -1,6 +1,7 @@
 import type { Route } from "./+types/matters";
 import { getMatters } from "../services/matters";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { getMunicipality } from "../services/municipality";
 import { Link, useRouteLoaderData } from "react-router";
 import type { Municipality } from "../lib/types";
 import {
@@ -42,7 +43,8 @@ export const meta: Route.MetaFunction = () => {
 export async function loader() {
   try {
     const supabase = getSupabaseAdminClient();
-    const matters = await getMatters(supabase);
+    const municipality = await getMunicipality(supabase);
+    const matters = await getMatters(supabase, municipality);
     return { matters };
   } catch (error) {
     console.error("Error fetching matters:", error);

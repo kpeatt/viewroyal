@@ -1,6 +1,7 @@
 import type { Route } from "./+types/meetings";
 import { getMeetings } from "../services/meetings";
 import { getSupabaseAdminClient } from "../lib/supabase.server";
+import { getMunicipality } from "../services/municipality";
 import { getMunicipalityFromMatches } from "../lib/municipality-helpers";
 import type { Meeting } from "../lib/types";
 import { cn } from "../lib/utils";
@@ -61,7 +62,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const supabase = getSupabaseAdminClient();
-    const { meetings, statsMap } = await getMeetings(supabase, {
+    const municipality = await getMunicipality(supabase);
+    const { meetings, statsMap } = await getMeetings(supabase, municipality, {
       startDate: `${selectedYear}-01-01`,
       endDate: `${selectedYear}-12-31`,
     });

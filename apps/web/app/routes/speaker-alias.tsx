@@ -42,6 +42,7 @@ import {
 import { cn } from "../lib/utils";
 import { getVimeoVideoData } from "../services/vimeo.server";
 import { getMeetingById } from "../services/meetings";
+import { getMunicipality } from "../services/municipality";
 import { useVideoPlayer } from "../hooks/useVideoPlayer";
 
 // Types
@@ -124,7 +125,8 @@ export async function loader({ request }: { request: Request }) {
       // 4. Fetch Meeting Details (Transcript & Aliases) via Service
       try {
         const adminClient = getSupabaseAdminClient();
-        const meetingData = await getMeetingById(adminClient, meetingId);
+        const municipality = await getMunicipality(adminClient);
+        const meetingData = await getMeetingById(adminClient, municipality, meetingId);
         aliases = meetingData.speakerAliases;
 
         // Create alias map for fallback
