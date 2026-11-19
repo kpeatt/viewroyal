@@ -231,19 +231,13 @@ class VimeoClient:
         # 2. Download Transcript via API (Disabled by user request)
         # self._download_transcript_api(video_data, output_folder)
 
-        ytdlp_url = (
-            self._get_player_url(video_data)
-            if include_video or download_audio
-            else None
-        )
-
         # 3. Download Video Binary (if requested)
         if include_video:
-            self._download_mp4_ytdlp(ytdlp_url, output_folder)
+            self._download_mp4_ytdlp(video_data["url"], output_folder)
 
         # 4. Download Audio Binary (if requested)
         if download_audio:
-            self._download_audio_ytdlp(ytdlp_url, output_folder)
+            self._download_audio_ytdlp(video_data["url"], output_folder)
 
             # Find the file we just downloaded
             # We look for the most recently created file in the folder matching expected extensions
@@ -258,35 +252,6 @@ class VimeoClient:
                 return max(files, key=os.path.getctime)
 
         return None
-
-    def _get_player_url(self, video_data):
-        """
-        Returns the player embed URL (with privacy hash) for yt-dlp.
-
-        Town videos are embed-whitelisted, so the vimeo.com page 404s or
-        yields no formats; the player URL plus VIMEO_EMBED_REFERER works.
-        Falls back to the public URL if the API lookup fails.
-        """
-        public_url = video_data["url"]
-        uri = video_data.get("uri")
-        if not uri:
-            m = re.search(r"vimeo\.com/(?:video/)?(\d+)", public_url)
-            uri = f"/videos/{m.group(1)}" if m else None
-        if not uri or not self.token:
-            return public_url
-
-        try:
-            resp = requests.get(
-                f"https://api.vimeo.com{uri}",
-                headers=self.headers,
-                params={"fields": "player_embed_url"},
-            )
-            if resp.status_code == 200 and resp.json().get("player_embed_url"):
-                return resp.json()["player_embed_url"]
-            print(f"    [!] Player URL lookup failed ({resp.status_code}), using public URL")
-        except Exception as e:
-            print(f"    [!] Player URL lookup error: {e}")
-        return public_url
 
     def _download_transcript_api(self, video_data, output_folder, retry=True):
         """
@@ -394,7 +359,6 @@ class VimeoClient:
             "no_overwrites": True,
             "ignoreerrors": True,
             "cookiesfrombrowser": (config.COOKIE_BROWSER,),
-            "http_headers": {"Referer": config.VIMEO_EMBED_REFERER},
             "concurrent_fragment_downloads": 25,
         }
         try:
@@ -420,7 +384,6 @@ class VimeoClient:
             "no_overwrites": True,
             "ignoreerrors": True,
             "cookiesfrombrowser": (config.COOKIE_BROWSER,),
-            "http_headers": {"Referer": config.VIMEO_EMBED_REFERER},
             "concurrent_fragment_downloads": 15,
         }
         try:
