@@ -8,6 +8,8 @@ load_dotenv()  # Run this
 # Base URLs
 CIVICWEB_BASE_URL = "https://viewroyalbc.civicweb.net"
 VIMEO_PROFILE_URL = "https://vimeo.com/viewroyal"
+# Town videos are embed-whitelisted: yt-dlp must load the player URL with this referer
+VIMEO_EMBED_REFERER = "https://www.viewroyal.ca/"
 
 # API Credentials
 VIMEO_ACCESS_TOKEN = os.environ.get("VIMEO_TOKEN")
