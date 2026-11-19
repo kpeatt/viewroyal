@@ -44,3 +44,9 @@ DELAY_BETWEEN_REQUESTS = 0.1
 # Cookie Settings for Vimeo
 # Options: 'chrome', 'firefox', 'safari', 'opera', 'edge', 'brave'
 COOKIE_BROWSER = "chrome"
+# Real cookie DB for COOKIE_BROWSER. yt-dlp otherwise picks the newest "Cookies"
+# file anywhere under the profile, which can be Chrome's built-in Gemini store
+# (Default/Storage/ext/glic/.../Cookies) with no Vimeo session.
+COOKIE_DB_PATH = os.path.expanduser(
+    "~/Library/Application Support/Google/Chrome/Default/Cookies"
+)

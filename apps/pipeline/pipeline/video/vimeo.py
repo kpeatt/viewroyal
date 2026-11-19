@@ -1,12 +1,32 @@
 import glob
 import os
 import re
+import tempfile
 import time
 
 import requests
 import yt_dlp
 
 from pipeline import config, utils
+
+
+def _cookies_from_browser():
+    """
+    yt-dlp `cookiesfrombrowser` tuple pinned to config.COOKIE_DB_PATH.
+
+    yt-dlp walks the profile dir and uses the newest "Cookies" file, so we
+    hand it a dir containing only a symlink to the real database.
+    """
+    if not os.path.isfile(config.COOKIE_DB_PATH):
+        return (config.COOKIE_BROWSER,)
+    cookie_dir = os.path.join(tempfile.gettempdir(), "viewroyal-ytdlp-cookies")
+    os.makedirs(cookie_dir, exist_ok=True)
+    link = os.path.join(cookie_dir, "Cookies")
+    if os.path.realpath(link) != os.path.realpath(config.COOKIE_DB_PATH):
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(config.COOKIE_DB_PATH, link)
+    return (config.COOKIE_BROWSER, cookie_dir)
 
 
 class VimeoClient:
@@ -358,7 +378,7 @@ class VimeoClient:
             "no_warnings": True,
             "no_overwrites": True,
             "ignoreerrors": True,
-            "cookiesfrombrowser": (config.COOKIE_BROWSER,),
+            "cookiesfrombrowser": _cookies_from_browser(),
             "concurrent_fragment_downloads": 25,
         }
         try:
@@ -383,7 +403,7 @@ class VimeoClient:
             "no_warnings": True,
             "no_overwrites": True,
             "ignoreerrors": True,
-            "cookiesfrombrowser": (config.COOKIE_BROWSER,),
+            "cookiesfrombrowser": _cookies_from_browser(),
             "concurrent_fragment_downloads": 15,
         }
         try:
