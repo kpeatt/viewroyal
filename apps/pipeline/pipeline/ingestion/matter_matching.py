@@ -370,6 +370,15 @@ class MatterMatcher:
             matter = list(candidates.values())[0]
             return matter["id"], f"identifier_exact:{parts[0]}", 1.0
 
+        # A matter whose full identifier equals the incoming one is the same
+        # matter (identifiers are unique per municipality), even if compound
+        # matters like "Schedule A; Schedule B" also share a sub-part.
+        incoming_full = [p.lower() for p in parts]
+        for m in candidates.values():
+            m_full = [p.lower() for p in parse_compound_identifier(m.get("identifier", ""))]
+            if m_full == incoming_full:
+                return m["id"], f"identifier_exact_full:{identifier}", 1.0
+
         # Multiple candidates — disambiguation needed
         # Check if the incoming identifier has multiple sub-parts that narrow things down
         # e.g., "Bylaw 1160; REZ 2025-01" — a matter matching BOTH is a strong match
