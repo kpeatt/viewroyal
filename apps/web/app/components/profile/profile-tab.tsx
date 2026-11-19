@@ -1,6 +1,6 @@
 import { Sparkles, VoteIcon, Mic, Calendar, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
-import { cn, formatDate } from "../../lib/utils";
+import { cn, formatTimestamp } from "../../lib/utils";
 import type { CouncillorHighlights } from "../../services/profiling";
 
 interface ProfileTabProps {
@@ -49,9 +49,9 @@ export function ProfileTab({
             <span>
               AI-generated profile
               {highlights?.narrative_generated_at
-                ? ` - Updated ${formatDate(highlights.narrative_generated_at)}`
+                ? ` - Updated ${formatTimestamp(highlights.narrative_generated_at)}`
                 : highlights?.generated_at
-                  ? ` - Updated ${formatDate(highlights.generated_at)}`
+                  ? ` - Updated ${formatTimestamp(highlights.generated_at)}`
                   : ""}
             </span>
           </div>

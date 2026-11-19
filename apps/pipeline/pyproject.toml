@@ -22,7 +22,7 @@ dependencies = [
     "supabase>=2.27.2",
     "surya-ocr>=0.13.1",
     "tqdm>=4.67.1",
-    "yt-dlp>=2026.6.9",
+    "yt-dlp>=2026.8.19",
 ]
 
 [tool.uv.sources]
