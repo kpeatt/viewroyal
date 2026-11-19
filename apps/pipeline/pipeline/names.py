@@ -14,14 +14,19 @@ CANONICAL_NAMES = [
     "Sid Tobias", "David Screech", "Damian Kowalewich", "John Rogers",
     "Alison MacKenzie", "Ron Mattson", "Gery Lemon", "Don Brown",
     "Graham Hill", "Heidi Rast", "Andrew Britton", "Aaron Weisgerber",
-    "Nicholas Anderson"
+    "Nicholas Anderson",
+    # 2026-2030 term
+    "Volker Dammann", "Amy McCooey", "Sacha Christensen", "Carolynne Clark",
+    "Cam Harris"
 ]
 
 # Subset for voting validation (Confirmed from DB)
 COUNCIL_NAMES = [
     "Aaron Weisgerber", "Alison MacKenzie", "Andrew Britton", "Damian Kowalewich",
     "David Screech", "Don Brown", "Geri Anderson", "Gery Lemon", "Graham Hill",
-    "Heidi Rast", "John Rogers", "Ron Mattson", "Sid Tobias"
+    "Heidi Rast", "John Rogers", "Ron Mattson", "Sid Tobias",
+    "Volker Dammann", "Amy McCooey", "Sacha Christensen", "Carolynne Clark",
+    "Cam Harris"
 ]
 
 # Manual name variants and common typos for high-confidence mapping
@@ -39,6 +44,18 @@ NAME_VARIANTS = {
     "screech": "David Screech",
     "tobias": "Sid Tobias",
     "weisgerber": "Aaron Weisgerber",
+    "dammann": "Volker Dammann",
+    "damman": "Volker Dammann",
+    "mccooey": "Amy McCooey",
+    "mccooy": "Amy McCooey",
+    "mccoey": "Amy McCooey",
+    "christensen": "Sacha Christensen",
+    "sasha christensen": "Sacha Christensen",
+    "clark": "Carolynne Clark",
+    "clarke": "Carolynne Clark",
+    "carolyn clark": "Carolynne Clark",
+    "harris": "Cam Harris",
+    "cameron harris": "Cam Harris",
     "anema": "Kim Anema",
     "amena": "Kim Anema",
     "k anema": "Kim Anema",

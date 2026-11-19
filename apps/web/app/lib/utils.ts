@@ -25,6 +25,21 @@ export function formatDate(dateStr: string, options: Intl.DateTimeFormatOptions 
 }
 
 /**
+ * Formats a full timestamp string (e.g. Postgres `timestamptz`) into a localized date.
+ * Unlike formatDate, this expects a parseable ISO/timestamp string, not a bare YYYY-MM-DD.
+ */
+export function formatTimestamp(timestampStr: string | null | undefined, options: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+}) {
+  if (!timestampStr) return "";
+  const date = new Date(timestampStr);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, options);
+}
+
+/**
  * Formats a date string as relative time ("3 days ago", "2 weeks ago").
  * Intentionally simple -- no i18n, English only, covers all needed buckets.
  */

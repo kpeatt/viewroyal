@@ -244,9 +244,9 @@ def _build_prompt(person_name: str, topic: str, evidence: dict) -> str:
             'like "Consistently supports..." or "Has repeatedly opposed..."'
         )
 
-    return f"""You are analyzing a municipal councillor's position on a specific topic based on their statements, votes, and motions.
+    return f"""You are analyzing a View Royal Town Council member's or candidate's position on a specific topic based on their statements, votes, and motions. They may currently or formerly be Mayor, a Councillor, or a candidate/public participant who has never held office -- do not assume a title.
 
-Councillor: {person_name}
+Person: {person_name}
 Topic: {topic}
 Total evidence items: {statement_count}
 
@@ -259,7 +259,7 @@ Respond with a JSON object (no markdown fencing):
 {{
   "position": "supports" | "opposes" | "mixed" | "neutral",
   "position_score": -1.0 to 1.0 (negative = opposes, positive = supports),
-  "summary": "2-3 sentences describing the councillor's position on this topic, citing specific evidence. Use qualifier language matching the confidence level.",
+  "summary": "2-3 sentences describing this person's position on this topic, citing specific evidence. Refer to them by name only -- do not assume or state a title (e.g. Councillor, Mayor) unless the evidence provided clearly confirms it. Use qualifier language matching the confidence level.",
   "key_quotes": [{{"text": "...", "meeting_date": "...", "segment_id": null}}],
   "confidence_note": "Brief explanation of data basis (e.g., 'Based on 12 statements across 8 meetings')"
 }}
@@ -758,20 +758,20 @@ def _build_narrative_prompt(person_name: str, evidence: dict) -> str:
 
     evidence_text = "\n".join(sections) if sections else "Limited data available."
 
-    return f"""You are writing a profile narrative for a municipal councillor based on their voting record, speaking patterns, and policy positions.
+    return f"""You are writing a profile narrative for a person's record on View Royal Town Council, based on their voting record, speaking patterns, and policy positions. They may currently or formerly be Mayor, a Councillor, or a candidate/public participant who has never held office -- do NOT assume a title unless the evidence makes it clear.
 
-Councillor: {person_name}
+Person: {person_name}
 
 Evidence:
 {evidence_text}
 
 Write a 2-3 paragraph narrative profile that covers:
-1. Overall priorities and what this councillor cares about most
+1. Overall priorities and what this person cares about most
 2. Notable patterns in voting and speaking behavior
 3. Evolution over time (if detectable from the data)
 
 Rules:
-- Write in third person ("Councillor {person_name}...")
+- Write in third person using their name (e.g. "{person_name}..."). Only use a title like "Councillor" or "Mayor" if the evidence text clearly establishes they currently or formerly held that specific role -- if unsure, just use their name with no title.
 - Ground all claims in specific evidence (topics, vote patterns, position scores)
 - Use measured, neutral language -- describe positions without editorializing
 - If evidence is limited, say so explicitly rather than speculating

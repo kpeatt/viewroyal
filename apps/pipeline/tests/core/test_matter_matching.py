@@ -223,6 +223,22 @@ class TestMatterMatcher:
         assert "identifier_exact" in result[1]
         assert result[2] == 1.0
 
+    def test_find_match_exact_full_identifier_beats_compound(self, mock_supabase):
+        matcher = MatterMatcher(mock_supabase)
+        matcher._loaded = True
+        matcher.matters = [
+            {"id": 1, "title": "External Appointments", "identifier": "Schedule B",
+             "status": "Active", "category": "General", "_addresses": set()},
+            {"id": 2, "title": "Council Appointments", "identifier": "Schedule A; Schedule B; Schedule C",
+             "status": "Active", "category": "General", "_addresses": set()},
+        ]
+        matcher._build_identifier_index()
+        matcher._build_address_index()
+
+        result = matcher.find_match("Schedule B", "Regional and External Appointments")
+        assert result[0] == 1
+        assert "identifier_exact_full" in result[1]
+
     def test_find_match_no_match(self, mock_supabase):
         matcher = MatterMatcher(mock_supabase)
         matcher._loaded = True
